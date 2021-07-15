@@ -12,7 +12,7 @@ from typing import Optional, Union
 from .tools import int_to_bytes, bytes_to_int, make_folder_iv
 from .constants import DB_PATH, DOWNLOAD_PATH
 from .crypto import aes_encrypt, aes_decrypt
-from .keys import Key, MainKey, FileKey
+from .keys import Key, MainKey, FileKey, ImportKey, BaseKey
 
 def get_box_salt(db_path: str=DB_PATH) -> bytes:
     '''Returns box salt. Note that for first you need to make LocalBox.'''
@@ -56,18 +56,34 @@ def get_session(mainkey: Optional[MainKey] = None, db_path: str=DB_PATH) -> byte
     else:
         return session
        
-def make_db(db_path: str=DB_PATH) -> None:
-    mkdir(db_path)
+def make_db(db_path: str=DB_PATH) -> str:
+    '''Creates `db_path` DIR and returns `db_path`'''
+    mkdir(db_path); return db_path
 
 def init_db(
-        session: str, box_channel_id: int, mainkey: MainKey, 
-        box_salt: bytes, db_path: str=DB_PATH) -> None:
+        session: str, box_channel_id: int, mainkey: Union[MainKey, ImportKey],
+        box_salt: bytes, db_path: str=DB_PATH, download_path: str=DOWNLOAD_PATH, 
+        basekey: Optional[BaseKey] = None) -> str:
+    '''
+    Will init DB with SESSION, BOX_SALT, BOX_CR_TIME & etc.
+    If you want to clone other RemoteBox then you need to
+    specify `basekey`, as your SESSION and MAINKEY file
+    will be encrypted with this key, and other BOX_DATA with `mainkey`.
     
+    Returns `db_path`.
+    '''
     mkdir(path_join(db_path,'BOX_DATA'))
-    mkdir(DOWNLOAD_PATH)
-
+    mkdir(download_path)
+    
+    if basekey:
+        with open(path_join(db_path,'BOX_DATA','MAINKEY'),'wb') as f:
+            f.write(b''.join(aes_encrypt(mainkey.key, basekey)))
+    
     with open(path_join(db_path,'BOX_DATA','SESSION'),'wb') as f:
-        f.write(b''.join(aes_encrypt(session.encode(), mainkey)))
+        if basekey:
+            f.write(b''.join(aes_encrypt(session.encode(), basekey)))
+        else:
+            f.write(b''.join(aes_encrypt(session.encode(), mainkey)))
     
     with open(path_join(db_path,'BOX_DATA','BOX_SALT'),'wb') as f:
         f.write(box_salt)
@@ -76,7 +92,7 @@ def init_db(
         f.write(b''.join(aes_encrypt(int_to_bytes(box_channel_id), mainkey)))
 
     with open(path_join(db_path,'BOX_DATA','NO_FOLDER'),'wb') as f:
-        f.write(b''.join(aes_encrypt('NO_FOLDER', mainkey, 
+        f.write(b''.join(aes_encrypt(b'NO_FOLDER', mainkey, 
             make_folder_iv(mainkey), concat_iv=False)
         ))
     with open(path_join(db_path,'BOX_DATA','BOX_CR_TIME'),'wb') as f:
@@ -84,8 +100,10 @@ def init_db(
 
     with open(path_join(db_path,'BOX_DATA','LAST_FILE_ID'),'wb') as f:
         f.close()
+    
+    return db_path
         
-def make_db_folder(foldername: str, key: Key, db_path: str=DB_PATH) -> None:
+def make_db_folder(foldername: str, key: Key, db_path: str=DB_PATH) -> str:
     foldername = foldername.encode() if not isinstance(foldername, bytes) else foldername
     folder_iv = make_folder_iv(key)
     
@@ -94,11 +112,14 @@ def make_db_folder(foldername: str, key: Key, db_path: str=DB_PATH) -> None:
     # ^ We don't concat IV to the foldernames to reduce name length.
     #   We can simply get IV that we need by making sha256 of the mainkey.
     
-    mkdir(path_join(db_path, enc_b64_fon))
+    folder_path = path_join(db_path, enc_b64_fon)
+    mkdir(folder_path)
 
     with open(path_join(db_path, enc_b64_fon, 'FOLDER_CR_TIME'),'wb') as f:
         f.write(b''.join(aes_encrypt(int_to_bytes(int(time())), key)))
-
+    
+    return folder_path
+    
 def make_db_file_folder(
         filename: str, foldername: str, mainkey: MainKey, 
         filekey: FileKey, db_path: str=DB_PATH) -> str:
@@ -123,7 +144,7 @@ def make_db_file_folder(
 
     return file_folder_path
 
-def rm_db_folder(enc_foldername: str, db_path: str=DB_PATH) -> None:
+def rm_db_folder(enc_foldername: str, db_path: str=DB_PATH) -> None: # todo
     '''
     Removes folder in LocalBox without decryption.
     Caution: **THIS WILL REMOVE ALL LocalBox FILE INFO IN THIS FOLDER**.
@@ -136,7 +157,7 @@ def rm_db_folder(enc_foldername: str, db_path: str=DB_PATH) -> None:
 
 def rm_db_file_folder(
         enc_filename: str, enc_foldername: str,
-        db_path: str=DB_PATH) -> None:
+        db_path: str=DB_PATH) -> None: # todo
     '''
     Removes file in LocalBox without decryption.
     Caution: **THIS WILL REMOVE ALL FILE INFO IN LocalBox**.

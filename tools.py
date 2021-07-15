@@ -172,11 +172,11 @@ def make_folder_iv(key: Key) -> bytes:
         
 def int_to_bytes(int_: int) -> bytes:
     '''Converts int to bytes with Big byteorder.'''
-    return int.to_bytes(int_, (int_.bit_length() + 7) // 8, 'big')
+    return int.to_bytes(int_, (int_.bit_length() + 8) // 8, 'big', signed=True)
 
 def bytes_to_int(bytes_: bytes) -> int:
     '''Converts bytes to int with Big byteorder.'''
-    return int.from_bytes(bytes_, 'big')
+    return int.from_bytes(bytes_, 'big', signed=True)
 
 def float_to_bytes(float_: float) -> bytes:
     '''Converts float to bytes.'''
