@@ -981,13 +981,15 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         )
         preview_bypassed = False
         async for chunk in iter_down:
-            if not any((self._size <= 5008, ignore_preview, skip_preview, preview_bypassed)):
+            if not any((self._size >= 5008, ignore_preview, skip_preview, preview_bypassed)):
                 try:
                     maybe_preview = decrypt_preview(chunk[:5008], self._filekey)
                     assert maybe_preview[:2 ] == b'\xff\xd8' # JPEG start prefix.
                     assert maybe_preview[-2:] == b'\xff\xd9' # JPEG end prefix.
                     chunk = chunk[5008:]
+                    print(maybe_preview[:2 ], maybe_preview[-2:])
                 except (ValueError, AssertionError):
+                    input('not a preview')
                     pass # Not preview
                 
                 preview_bypassed = True
@@ -1713,8 +1715,10 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             '''This function was inherited from `EncryptedLocalBoxFile` '''
             '''and cannot be used on `DecryptedLocalBoxFile`.'''
         )
-    def get_remote(
-            self, decrypt: bool=True, 
+    """ # TODO: NOFIX: TOREMOVE?
+    async def get_remote(
+            self, decrypt: bool=True,
+            ta: Optional[TelegramAccount] = None,
             box_path: str=DB_PATH) -> Union[
                 DecryptedRemoteBoxFile, 
                 EncryptedRemoteBoxFile, None
@@ -1728,10 +1732,11 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         if not self._id:
             return None
         else:
-            rb = get_remote_box(self)
-            return rb.get_file(
+            rb = await get_remote_box(ta=ta)
+            return await rb.get_file(
                 self._id, self._filekey, decrypt=decrypt
             )
+    """
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         '''
         Returns `ShareKey` for this file.
