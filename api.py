@@ -34,7 +34,8 @@ from .constants import (
 )
 from .db import (
     init_db, make_db, make_db_folder, 
-    make_db_file_folder, get_session
+    make_db_file_folder, get_session,
+    rm_db_folder, rm_db_file_folder
 )
 from .tools import (
     int_to_bytes, bytes_to_int, make_image_preview, 
@@ -59,7 +60,7 @@ from base64 import (
     urlsafe_b64encode as b64encode, # We use urlsafe base64.
     urlsafe_b64decode as b64decode
 )
-#__all__ = [] TODO: export box / test rmfiles + add. / square previews.
+#__all__ = [] TODO: test rmfiles + add. / square previews.
 
 TelegramClient.__version__ = VERSION
 
@@ -1010,7 +1011,6 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         ff_path = path_join(
             box_path, folder, self._erbf._file_name
         )
-        # totest: with imported
         if path_exists(ff_path):
             with open(path_join(ff_path,'FILE_PATH'),'wb') as f:
                 f.write(b''.join(aes_encrypt(outfile.name.encode(), self._filekey)))
@@ -1034,8 +1034,6 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             )
         else:
             return make_sharekey(filekey=self._filekey)
-    
-    # todo: omit decrypt
         
 class EncryptedLocalBox:
     def __init__(self, box_path: str=DB_PATH):
@@ -1441,6 +1439,17 @@ class EncryptedLocalBoxFolder:
     def decrypt(self, mainkey: [MainKey, ImportKey]) -> 'DecryptedLocalBoxFolder':
         '''Returns decrypted by `mainkey` `DecryptedLocalBoxFolder`.'''
         return DecryptedLocalBoxFolder(self, mainkey)
+    
+    def delete(self, db_path: str=DB_PATH) -> None:
+        '''
+        Will delete this folder with all files from your LocalBox.
+        All files will stay in `RemoteBox`, so you can restore
+        all your folders via importing files.
+        '''
+        if hasattr(self, '_elbf'): # We're into DecryptedLocalBoxFolder
+            rm_db_folder(self._elbf._foldername, db_path=db_path)
+        else:
+            rm_db_folder(self._foldername, db_path=db_path)
 
 class DecryptedLocalBoxFolder(EncryptedLocalBoxFolder):
     def __init__(self, elbf: EncryptedLocalBoxFolder, mainkey: [MainKey, ImportKey]):
@@ -1631,7 +1640,25 @@ class EncryptedLocalBoxFile:
 
     def decrypt(self, key: Union[FileKey, ImportKey, MainKey]) -> 'DecryptedLocalBoxFile':
         return DecryptedLocalBoxFile(self, key)
-
+    
+    def delete(self, db_path: str=DB_PATH) -> None:
+        '''
+        Will delete this file from your LocalBox.
+        You can re-import it from `RemoteBox` with
+        `import_file`. To remove your file totally
+        please use same function on RemoteBoxFile.
+        '''
+        self._file_name = self._file_path.split(path_sep)[-1]
+        self._folder = self._file_path.split(path_sep)[-2]
+        
+        if hasattr(self, '_elbfi'): # We're into DecryptedLocalBoxFile
+            rm_db_file_folder(self._elbfi._file_name, 
+                self._elbfi._folder, db_path=db_path
+            )
+        else:
+            rm_db_file_folder(self._file_name, 
+                self._folder, db_path=db_path
+            )
 class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
     def __init__(
             self, elbfi: EncryptedLocalBoxFile, 

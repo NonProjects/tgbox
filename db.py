@@ -147,7 +147,7 @@ def make_db_file_folder(
 
 def rm_db_folder(enc_foldername: str, db_path: str=DB_PATH) -> None: # todo
     '''
-    Removes folder in LocalBox without decryption.
+    Removes folder in LocalBox encrypted filename (folder).
     Caution: **THIS WILL REMOVE ALL LocalBox FILE INFO IN THIS FOLDER**.
     You can re-download it from RemoteBox.
 
@@ -160,7 +160,7 @@ def rm_db_file_folder(
         enc_filename: str, enc_foldername: str,
         db_path: str=DB_PATH) -> None: # todo
     '''
-    Removes file in LocalBox without decryption.
+    Removes file in LocalBox by encrypted filename (folder).
     Caution: **THIS WILL REMOVE ALL FILE INFO IN LocalBox**.
     You can re-download it from RemoteBox.
 
