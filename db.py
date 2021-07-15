@@ -63,7 +63,7 @@ def make_db(db_path: str=DB_PATH) -> str:
 def init_db(
         session: str, box_channel_id: int, mainkey: Union[MainKey, ImportKey],
         box_salt: bytes, db_path: str=DB_PATH, download_path: str=DOWNLOAD_PATH, 
-        basekey: Optional[BaseKey] = None) -> str:
+        basekey: Optional[BaseKey] = None, box_cr_time: Optional[int] = None) -> str:
     '''
     Will init DB with SESSION, BOX_SALT, BOX_CR_TIME & etc.
     If you want to clone other RemoteBox then you need to
@@ -96,7 +96,8 @@ def init_db(
             make_folder_iv(mainkey), concat_iv=False)
         ))
     with open(path_join(db_path,'BOX_DATA','BOX_CR_TIME'),'wb') as f:
-        f.write(b''.join(aes_encrypt(int_to_bytes(int(time())), mainkey)))
+        box_cr_time = box_cr_time if box_cr_time else int(time())
+        f.write(b''.join(aes_encrypt(int_to_bytes(box_cr_time), mainkey)))
 
     with open(path_join(db_path,'BOX_DATA','LAST_FILE_ID'),'wb') as f:
         f.close()

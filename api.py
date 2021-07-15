@@ -232,21 +232,25 @@ def make_local_box(
     return EncryptedLocalBox(box_path).decrypt(mainkey)
 
 def get_local_box(
-        mainkey: Optional[MainKey] = None, box_path: str=DB_PATH
+        key: Optional[Union[MainKey, BaseKey]] = None, box_path: str=DB_PATH
         ) -> Union['EncryptedLocalBox', 'DecryptedLocalBox']:
     '''
     Returns LocalBox.
     
-    mainkey (`MainKey`, optional):
+    key (`MainKey`, `BaseKey`, optional):
         Returns `DecryptedLocalBox` if specified,
         `EncryptedLocalBox` otherwise (default).
+        
+        You can specify `key` as `BaseKey` if it's
+        was cloned from `RemoteBox` and has BOX_DATA/MAINKEY
+        file. If it's your LocalBox, then use `MainKey`.
     
     box_path (`str`, optional):
         Path to the LocalBox DB.
         `.constants.DB_PATH` by default.
     '''
-    if mainkey:
-        return EncryptedLocalBox(box_path=box_path).decrypt(mainkey)
+    if key:
+        return EncryptedLocalBox(box_path=box_path).decrypt(key)
     else:
         return EncryptedLocalBox(box_path=box_path)
 
@@ -338,10 +342,14 @@ class RemoteBox:
             clone_path, self._box_channel.title.split(': ')[1]
         ))
         box_salt = self._box_salt if self._box_salt else await self.get_box_salt()
+        box_cr_time = await self._ta.TelegramClient.get_messages(self._box_channel, ids=1)
+        box_cr_time = int(box_cr_time.date.timestamp())
+        
         dlb = EncryptedLocalBox(init_db(
             session=self._ta.get_session(), box_channel_id=self._box_channel_id,
             mainkey=mainkey, box_salt=box_salt, db_path=db_path, basekey=basekey,
-            download_path=path_join(db_path, 'BOX_DATA', 'DOWNLOADS')
+            download_path=path_join(db_path, 'BOX_DATA', 'DOWNLOADS'),
+            box_cr_time = box_cr_time
         )).decrypt(basekey)
         
         async for drbf in self.files(key=mainkey, decrypt=True, reverse=True):
