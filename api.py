@@ -987,9 +987,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     assert maybe_preview[:2 ] == b'\xff\xd8' # JPEG start prefix.
                     assert maybe_preview[-2:] == b'\xff\xd9' # JPEG end prefix.
                     chunk = chunk[5008:]
-                    print(maybe_preview[:2 ], maybe_preview[-2:])
                 except (ValueError, AssertionError):
-                    input('not a preview')
                     pass # Not preview
                 
                 preview_bypassed = True
