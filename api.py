@@ -343,6 +343,8 @@ class RemoteBox:
             clone_path, self._box_channel.title.split(': ')[1]
         ))
         box_salt = self._box_salt if self._box_salt else await self.get_box_salt()
+        last_file_id = (await self._ta.TelegramClient.get_messages(self._box_channel))[0].id
+        
         box_cr_time = await self._ta.TelegramClient.get_messages(self._box_channel, ids=1)
         box_cr_time = int(box_cr_time.date.timestamp())
         
@@ -350,7 +352,7 @@ class RemoteBox:
             session=self._ta.get_session(), box_channel_id=self._box_channel_id,
             mainkey=mainkey, box_salt=box_salt, db_path=db_path, basekey=basekey,
             download_path=path_join(db_path, 'BOX_DATA', 'DOWNLOADS'),
-            box_cr_time = box_cr_time
+            box_cr_time=box_cr_time, last_file_id=last_file_id
         )).decrypt(basekey)
         
         async for drbf in self.files(key=mainkey, decrypt=True, reverse=True):
@@ -840,6 +842,21 @@ class EncryptedRemoteBoxFile:
                     if self._cache_preview:
                         self._preview = preview
                     return preview if isinstance(preview, bytes) else preview.tobytes()
+    
+    async def delete(self) -> None:
+        '''
+        TOTALLY removes file from RemoteBox. You and all
+        participants of the `RemoteBox` will
+        lose access to it FOREVER. This action can't be
+        undone. You need to have rights for this.
+        
+        Please note that if you want to delete file
+        only from your LocalBox then you can use the
+        same `delete()` func on your LocalBoxFile.
+        '''
+        await self._ta.TelegramClient.delete_messages(
+            self._box_channel_id, [self._id]
+        )
     
     def get_requestkey(self, mainkey: Optional[MainKey] = None) -> RequestKey:
         '''

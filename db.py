@@ -63,7 +63,8 @@ def make_db(db_path: str=DB_PATH) -> str:
 def init_db(
         session: str, box_channel_id: int, mainkey: Union[MainKey, ImportKey],
         box_salt: bytes, db_path: str=DB_PATH, download_path: str=DOWNLOAD_PATH, 
-        basekey: Optional[BaseKey] = None, box_cr_time: Optional[int] = None) -> str:
+        basekey: Optional[BaseKey] = None, box_cr_time: Optional[int] = None,
+        last_file_id: Optional[int] = None) -> str:
     '''
     Will init DB with SESSION, BOX_SALT, BOX_CR_TIME & etc.
     If you want to clone other RemoteBox then you need to
@@ -100,7 +101,8 @@ def init_db(
         f.write(b''.join(aes_encrypt(int_to_bytes(box_cr_time), mainkey)))
 
     with open(path_join(db_path,'BOX_DATA','LAST_FILE_ID'),'wb') as f:
-        f.close()
+        if last_file_id:
+            f.write(b''.join(aes_encrypt(int_to_bytes(last_file_id), mainkey)))
     
     return db_path
         
@@ -145,7 +147,7 @@ def make_db_file_folder(
 
     return file_folder_path
 
-def rm_db_folder(enc_foldername: str, db_path: str=DB_PATH) -> None: # todo
+def rm_db_folder(enc_foldername: str, db_path: str=DB_PATH) -> None:
     '''
     Removes folder in LocalBox encrypted filename (folder).
     Caution: **THIS WILL REMOVE ALL LocalBox FILE INFO IN THIS FOLDER**.
@@ -158,7 +160,7 @@ def rm_db_folder(enc_foldername: str, db_path: str=DB_PATH) -> None: # todo
 
 def rm_db_file_folder(
         enc_filename: str, enc_foldername: str,
-        db_path: str=DB_PATH) -> None: # todo
+        db_path: str=DB_PATH) -> None:
     '''
     Removes file in LocalBox by encrypted filename (folder).
     Caution: **THIS WILL REMOVE ALL FILE INFO IN LocalBox**.
