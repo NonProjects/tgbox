@@ -229,7 +229,7 @@ def make_local_box(
         
     make_db(box_path); init_db(
         ta.get_session(), rb._box_channel_id, 
-        mainkey, box_salt, box_path=db_path
+        mainkey, box_salt, db_path=box_path
     )
     return EncryptedLocalBox(box_path).decrypt(mainkey)
 
