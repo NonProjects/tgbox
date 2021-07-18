@@ -228,7 +228,8 @@ def make_local_box(
         box_salt: bytes, box_path: str=DB_PATH) -> 'DecryptedLocalBox':
         
     make_db(box_path); init_db(
-        ta.get_session(), rb._box_channel_id, mainkey, box_salt
+        ta.get_session(), rb._box_channel_id, 
+        mainkey, box_salt, box_path=db_path
     )
     return EncryptedLocalBox(box_path).decrypt(mainkey)
 
@@ -272,7 +273,7 @@ class TelegramAccount:
     async def send_code_request(self) -> None:
         await self.TelegramClient.send_code_request(self._phone_number)
 
-    async def sign_in(self, password: str=None, code: int=None) -> None:
+    async def sign_in(self, password: str=None, code: int=None) -> None: # todo: return True/False
         if not await self.TelegramClient.is_user_authorized():
             try:
                 await self.TelegramClient.sign_in(self._phone_number, code)
