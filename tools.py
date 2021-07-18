@@ -217,12 +217,12 @@ async def get_media_duration(file_path: str) -> float:
         await sleep(0.1)
     return float(p.stdout.read())
 
-async def make_media_preview(file_path: str, output_path: str='', x: int=110, y: int=110) -> bytes:
+async def make_media_preview(file_path: str, output_path: str='', x: int=128, y: int=-1) -> bytes: # todo
     '''Makes x:y sized thumbnail of the video/audio with ffmpeg.'''
     thumbnail_path = path_join(output_path, hex(randrange(2**128))[2:]) + '.jpg'
     p = Popen(
-        f'''ffmpeg -i {file_path} -filter:v scale=-{x}:{y} -an '''
-        f'''-loglevel quiet {thumbnail_path}'''.split(' ')
+        f'''ffmpeg -i {file_path} -filter:v scale={x}:{y} -an '''
+        f'''-loglevel quiet -q:v 31 {thumbnail_path}'''.split(' ')
     )
     while p.poll() == None:
         await sleep(0.1)
@@ -232,13 +232,13 @@ async def make_media_preview(file_path: str, output_path: str='', x: int=110, y:
     except FileNotFoundError as e: # if something goes wrong then file not created
         raise TypeError('Not a video.') from e
             
-async def make_image_preview(file_path: str, output_path: str='', x: int=110, y: int=110) -> bytes:
+async def make_image_preview(file_path: str, output_path: str='', x: int=128, y: int=-1) -> bytes: # todo
     '''Makes resized to x:y copy of the image with ffmpeg.'''
     thumbnail_path = path_join(output_path, hex(randrange(2**128))[2:]) + '.jpg'
     p = Popen(
         f'''ffmpeg -i {file_path} -vf scale={x}:{y} '''
-        f'''-loglevel quiet {thumbnail_path}'''.split(' ')
-    ) # todo
+        f'''-loglevel quiet -q:v 31 {thumbnail_path}'''.split(' ')
+    )
     while p.poll() == None:
         await sleep(0.1)
     try:

@@ -60,7 +60,7 @@ from base64 import (
     urlsafe_b64encode as b64encode, # We use urlsafe base64.
     urlsafe_b64decode as b64decode
 )
-#__all__ = [] TODO: test rmfiles + add. / square previews.
+#__all__ = [] TODO: square previews.
 
 TelegramClient.__version__ = VERSION
 
@@ -1268,6 +1268,10 @@ class DecryptedLocalBox(EncryptedLocalBox):
                         preview = b''
 
                     duration = b'\x00'*4
+        
+        if len(preview) > 5008:
+            preview = b'' # todo: Maybe we need to somehow limit image size.
+            
         data = {
             'ID': b'', # Empty because file isn't uploaded.
             'UPLOAD_TIME': b'', # Empty because file isn't uploaded.
