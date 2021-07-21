@@ -91,6 +91,10 @@ async def _search_func(
             if message.document:
                 try:
                     bf = EncryptedRemoteBoxFile(message, ta) # bf is BoxFile
+                    if mainkey: 
+                        pass
+                    elif hasattr(lb, '_mainkey'): 
+                        mainkey = lb._mainkey
                     bf = bf if not mainkey else bf.decrypt(mainkey)
                 except IndexError:
                     continue # Not a tgbox file.
@@ -134,14 +138,14 @@ async def _search_func(
 
         if sf.min_size:
             for size in sf.min_size:
-                if file_size <= size:
+                if file_size >= size:
                     break
             else: 
                 continue
 
         if sf.max_size:
             for size in sf.max_size:
-                if file_size >= size:
+                if file_size <= size:
                     break
             else: 
                 continue
@@ -166,7 +170,7 @@ async def _search_func(
             else: 
                 continue
 
-        if sf.file_name:
+        if sf.file_name: # todo: check SearchFilter with file_name and min_size.
             for file_name in sf.file_name:
                 if re_search(file_name, bf.file_name):
                     break
