@@ -14,6 +14,13 @@ from .constants import DB_PATH, DOWNLOAD_PATH
 from .crypto import aes_encrypt, aes_decrypt
 from .keys import Key, MainKey, FileKey, ImportKey, BaseKey
 
+def is_cloned(db_path: str=DB_PATH) -> bool:
+    '''
+    Returns `True` if BOX_DATA of LocalBox on `db_path`
+    has MAINKEY file. `False` otherwise.
+    '''
+    return exists(path_join(db_path, 'BOX_DATA', 'MAINKEY'))
+
 def get_box_salt(db_path: str=DB_PATH) -> bytes:
     '''Returns box salt. Note that for first you need to make LocalBox.'''
     return open(path_join(db_path,'BOX_DATA','BOX_SALT'),'rb').read() # Make box firstly.

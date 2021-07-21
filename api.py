@@ -17,7 +17,7 @@ from telethon.tl.functions.channels import (
 )
 from telethon.tl.types import (
     Channel, InputFile, InputFileBig, 
-    Message, PeerChannel, InputPeerChannel
+    Message, PeerChannel
 )
 from .crypto import (
     aes_decrypt, aes_encrypt, AESwState,
@@ -204,23 +204,27 @@ async def make_remote_box(
     return RemoteBox(channel, ta)
 
 async def get_remote_box(
-        dlb: 'DecryptedLocalBox', 
-        ta: Optional['TelegramAccount'] = None) -> 'RemoteBox':
+        dlb: Optional['DecryptedLocalBox'] = None, 
+        ta: Optional['TelegramAccount'] = None,
+        entity: Optional[Union[int, str]] = None) -> 'RemoteBox':
     '''
     Returns `RemoteBox` (`Channel`).
     
     Note that `ta` must be already connected 
     with Telegram via `await ta.connect()`.
+    
+    Must be specified at least `dlb` or
+    `ta` with `entity`. `entity` will be used 
+    if specified. Can be Channel ID or Username.
     '''
     if ta:
         account = ta
     else:
         account = TelegramAccount(session=dlb._session)
         await account.connect()
-
-    channel_entity = await account.TelegramClient.get_entity(
-        PeerChannel(dlb._box_channel_id)
-    )
+    
+    entity = entity if entity else PeerChannel(dlb._box_channel_id)
+    channel_entity = await account.TelegramClient.get_entity(entity)
     return RemoteBox(channel_entity, account)
 
 def make_local_box(
@@ -298,9 +302,10 @@ class TelegramAccount:
 class RemoteBox:
     def __init__(self, box_channel: Channel, ta: TelegramAccount):
         self._ta = ta
+        
         self._box_channel = box_channel
         self._box_channel_id = box_channel.id
-        
+
         self._box_salt = None # We can't use await in __init__, 
                               # ^ so you must call get_box_salt for first.
 
