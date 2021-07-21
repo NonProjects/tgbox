@@ -478,7 +478,7 @@ class RemoteBox:
         
         async for rbf in self.files(key, dlb=dlb, decrypt=decrypt, ids=id): 
             pass # Will iter only over one file
-        return rbf
+        return rbf # May raise UnboundLocalError if there is no file with specified ID.
 
     async def files(
             self, key: Optional[Union[MainKey, FileKey]] = None, dlb: Optional['DecryptedLocalBox'] = None, *, 
@@ -592,6 +592,9 @@ class RemoteBox:
             ids=ids, reverse=reverse
         )
         async for m in it_messages:
+            if not m and ignore_errors:
+                continue 
+                
             if m.document: # May raise error if you specified file that doesn't exist.
                 try:
                     if decrypt:
@@ -918,6 +921,42 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         else:
             self._comment = b''
     
+    async def download_preview(
+            self, *, outfile: Union[str, BinaryIO] = DOWNLOAD_PATH) -> BinaryIO:
+        '''
+        Downloads and saves preview of the 
+        remote box file to the `outfile`.
+        
+        If `cache_preview` is enabled, then preview
+        will be cached in object after you call this func.
+        
+        Will raise `Exception` if this file has no preview.
+        
+        oufile (`str`, `BinaryIO`, optional):
+            Path or File-like object to which file will be downloaded.
+            `.constants.DOWNLOAD_PATH` by default.
+            
+            If `outfile` has `.write()` method then we will use it.
+        '''
+        if isinstance(outfile, str):
+            try:
+                mkdir(path_join(outfile, self._folder))
+            except: pass
+            file_name = f'preview_{self._file_name}.jpg'
+            outfile = open(path_join(
+                outfile, self._folder, file_name), 'wb')
+            
+        elif isinstance(outfile, BinaryIO) or hasattr(outfile, 'write'):
+            pass # We already can write (at least hope with us).
+        else:
+            raise TypeError('outfile not Union[BinaryIO, str].')
+        
+        preview = await self.get_preview()
+        if not preview:
+            raise Exception('This file has no preview.')
+        else:
+            outfile.write(preview)
+        
     async def download(
             self, *, outfile: Union[str, BinaryIO] = DOWNLOAD_PATH, 
             hide_folder: bool=False, hide_name: bool=False,
@@ -931,7 +970,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             Path or File-like object to which file will be downloaded.
             `.constants.DOWNLOAD_PATH` by default.
             
-            If `outfile` has `.write()` method then we use it.
+            If `outfile` has `.write()` method then we will use it.
         
         hide_folder (`bool`, optional):
             Saves to folder which this file belongs to if False,
