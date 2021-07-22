@@ -6,7 +6,7 @@ API_ID: int=2210681; API_HASH: str='33755adb5ba3c296ccf0dd5220143841'
 VERSION: str='1.0'
 VERSION_BYTE: bytes=b'\x01'   
 
-DB_PATH: str='LocalTgbox'
+DB_PATH: str='Tgbox'
     
 BOX_IMAGE_PATH: str=path_join(
     abspath(''), 'tgbox', 'other', 'tgbox_logo.png'
