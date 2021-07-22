@@ -390,8 +390,8 @@ class RemoteBox:
             
     async def push_file(
             self, dlbfi: 'DecryptedLocalBoxFile', 
-            mainkey: Optional[MainKey] = None, 
-            box_path: str=DB_PATH) -> 'DecryptedRemoteBoxFile':
+            mainkey: Optional[MainKey] = None
+            ) -> 'DecryptedRemoteBoxFile':
         '''
         Encrypts & Uploads `DecryptedLocalBoxFile` to the `RemoteBox`.
         
@@ -403,9 +403,6 @@ class RemoteBox:
             info about local file (i.e ID). Must be specified
             if `not isinstance(dlbfi._key, MainKey)`, typically 
             you shouldn't worry about this.
-        
-        box_path (`str`, optional):
-            Path to your LocalBox. `.constants.DB_PATH` by default.
         '''
         try:
             mainkey = mainkey if mainkey else dlbfi._key
@@ -437,7 +434,7 @@ class RemoteBox:
             caption=datastring, force_document=True
         )        
         file_path = path_join(
-            box_path, dlbfi._elbfi._folder, 
+            dlbfi._box_path, dlbfi._elbfi._folder, 
             dlbfi._elbfi._file_name
         )
         current_time = int(file_message.date.timestamp())
@@ -453,7 +450,7 @@ class RemoteBox:
         with open(path_join(file_path, 'ID'),'wb') as f:
             f.write(post_id_enc)
         
-        with open(path_join(box_path,'BOX_DATA','LAST_FILE_ID'),'wb') as f:
+        with open(path_join(dlbfi._box_path,'BOX_DATA','LAST_FILE_ID'),'wb') as f:
             f.write(post_id_enc_mainkey)
         
         dlbfi._elbfi._upload_time = current_time_enc
@@ -1253,7 +1250,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
         )
     async def add_file(
             self, file: Union[BinaryIO, BytesIO, bytes], foldername: str='NO_FOLDER',
-            comment: bytes=b'', make_preview: bool=True) -> 'EncryptedLocalBoxFile':
+            comment: bytes=b'', make_preview: bool=True,
+            ignore_limit_errors: bool=False) -> Union['EncryptedLocalBoxFile', None]:
         '''
         file (`BinaryIO`, `BytesIO`):
             `file` data to add to the LocalBox. In most
@@ -1261,24 +1259,55 @@ class DecryptedLocalBox(EncryptedLocalBox):
             something else, then you need to implement class
             that have `read` & `name` methods.
             
-            The program needs to know size of the `file`, so
+            The method needs to know size of the `file`, so
             it will try to ask system what size of file on path
             `file.name`. If it's impossible, then program tries to
             get size by `len()` (from `__len__` dunder). If both fails,
             it tries to get `len(file.read())` (with load to RAM).
             
+            File name length must be <= 45 symbols.
             If file has no `name` then it will be `urandom(6).hex()`
-        '''
-        assert len(comment) <= 300 # Comment length must be <= 300 bytes.
+            
+            File can't be empty, program will raise `ValueError`
+            if you will try to upload it. If `ignore_limit_errors == True`,
+            then file data will be extended to 1 byte, b'\x00'.
+            
+        foldername (`str`, optional):
+            Folder to add this file to.
         
+        comment (`bytes`, optional):
+            File comment. Must be <= 300 bytes.
+        
+        make_preview (`bool`, optional):
+            Will add file preview to the encrypted 
+            file if `True` (default).
+        
+        ignore_limit_erors (`bool`, optional):
+            Will ignore all `ValueError`s if file
+            data won't fit the limit. I.e, if filename
+            length is more than 45, we will cut it to 
+            fit the limit. `False` by default.
+        '''
+        # todo: set foldername length limit.
+        
+        if len(comment) > 300:
+            if not ignore_limit_errors:
+                raise ValueError('Comment length must be <= 300 bytes.')
+            else:
+                comment = comment[:300]
+                
         file_salt, file_iv = urandom(32), urandom(16)
         filekey = make_filekey(self._mainkey, file_salt)
         
         if hasattr(file, 'name'):
             file_name = file.name.split(path_sep)[-1]
+            if len(file_name) > 45:
+                if not ignore_limit_errors:
+                    raise ValueError('File name length must be <= 45 symbols.')
+                else:
+                    file_name = file_name[:45]
         else:
             file_name = urandom(6).hex()
-            
         try:
             file_size = getsize(file.name)
         except:
@@ -1292,12 +1321,19 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 file = BytesIO(file)
             else:
                 raise ValueError('file is not (bytes, BinaryIO).')
-
+        
+        if file_size == 0:
+            if ignore_limit_errors:
+                file_size, file = 1, BytesIO(b'\x00')
+            else:
+                raise ValueError('File can\'t be empty.')
+        
         ff = make_db_file_folder(
             file_name, foldername, self._mainkey, 
             filekey, db_path=self._box_path
         )
         preview, duration = b'', b'\x00'*4
+        
         if make_preview:
             gtype = guess_type(file_name)
             if gtype[0]:
@@ -1306,7 +1342,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 if type_ in ('audio','video'):
                     try:
                         preview = await make_media_preview(file.name)
-                    except TypeError:
+                    except (TypeError, AttributeError):
                         preview = b''
 
                     duration = float_to_bytes(await get_media_duration(file.name))
@@ -1314,7 +1350,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 elif type_ == 'image':
                     try:
                         preview = await make_image_preview(file.name)
-                    except TypeError:
+                    except (TypeError, AttributeError):
                         preview = b''
 
                     duration = b'\x00'*4
@@ -1545,6 +1581,7 @@ class EncryptedLocalBoxFile:
         
         self._file_name = self._file_path.split(path_sep)[-1]
         self._folder = self._file_path.split(path_sep)[-2]
+        self._box_path = file_path.split(path_sep)[-3]
         
         self._comment = open(path_join(self._file_path, 'COMMENT'),'rb').read()
         self._size = open(path_join(self._file_path, 'SIZE'),'rb').read()
@@ -1591,6 +1628,10 @@ class EncryptedLocalBoxFile:
         is encrypted with filekey.
         '''
         return self._file
+    
+    @property
+    def box_path(self) -> bool:
+        return self._box_path
     
     @property
     def exported(self) -> bool:
