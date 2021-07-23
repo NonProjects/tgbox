@@ -209,8 +209,8 @@ def restore_datastring(datastring: str) -> List[bytes]:
 async def get_media_duration(file_path: str) -> float:
     '''Returns video/audio duration with ffprobe.'''
     p = Popen(
-        '''ffprobe -v error -show_entries format=duration -of '''
-        f'''default=noprint_wrappers=1:nokey=1 {file_path}'''.split(' '),
+        ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', 
+         '-of', 'default=noprint_wrappers=1:nokey=1', file_path],
         stdout=PIPE, stderr=STDOUT
     )
     while p.poll() == None:
@@ -219,10 +219,11 @@ async def get_media_duration(file_path: str) -> float:
 
 async def make_media_preview(file_path: str, output_path: str='', x: int=128, y: int=-1) -> bytes: # todo
     '''Makes x:y sized thumbnail of the video/audio with ffmpeg.'''
-    thumbnail_path = path_join(output_path, hex(randrange(2**128))[2:]) + '.jpg'
+    thumbnail_path = path_join(output_path, hex(randrange(2**128))[2:]) + '.jpg' 
+    
     p = Popen(
-        f'''ffmpeg -i {file_path} -filter:v scale={x}:{y} -an '''
-        f'''-loglevel quiet -q:v 31 {thumbnail_path}'''.split(' ')
+        ['ffmpeg', '-i', file_path, '-filter:v', f'scale={x}:{y}', '-an',
+        '-loglevel', 'quiet', '-q:v', '31', thumbnail_path]
     )
     while p.poll() == None:
         await sleep(0.1)
@@ -235,9 +236,10 @@ async def make_media_preview(file_path: str, output_path: str='', x: int=128, y:
 async def make_image_preview(file_path: str, output_path: str='', x: int=128, y: int=-1) -> bytes: # todo
     '''Makes resized to x:y copy of the image with ffmpeg.'''
     thumbnail_path = path_join(output_path, hex(randrange(2**128))[2:]) + '.jpg'
+    
     p = Popen(
-        f'''ffmpeg -i {file_path} -vf scale={x}:{y} '''
-        f'''-loglevel quiet -q:v 31 {thumbnail_path}'''.split(' ')
+        ['ffmpeg', '-i', file_path, '-vf', f'scale={x}:{y}', 
+         '-loglevel', 'quiet', '-q:v', '31', thumbnail_path]
     )
     while p.poll() == None:
         await sleep(0.1)
