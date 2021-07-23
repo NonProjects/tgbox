@@ -39,10 +39,9 @@ from .db import (
 )
 from .tools import (
     int_to_bytes, bytes_to_int, make_image_preview, 
-    make_media_preview, dump_to_datastring, 
+    make_media_preview, dump_to_datastring, SearchFilter,
     restore_datastring, OpenPretender, make_folder_iv,
     get_media_duration, float_to_bytes, bytes_to_float,
-    SearchFilter
 )
 from os.path import (
     getsize, join as path_join, sep as path_sep,
@@ -52,7 +51,7 @@ from typing import (
     BinaryIO, Union, NoReturn, 
     Generator, List, Optional
 )
-from os import listdir, mkdir, urandom
+from os import listdir, mkdir, makedirs, urandom
 from mimetypes import guess_type
 from io import BytesIO
 
@@ -940,16 +939,13 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             If `outfile` has `.write()` method then we will use it.
         '''
         if isinstance(outfile, str):
-            try:
-                mkdir(path_join(outfile, self._folder))
-            except: pass
+            if not path_exists(path_join(outfile, self._folder)):
+                makedirs(path_join(outfile, self._folder))
+                
             file_name = f'preview_{self._file_name}.jpg'
-            outfile = open(path_join(
-                outfile, self._folder, file_name), 'wb')
+            outfile = open(path_join(outfile, self._folder, file_name), 'wb')
             
-        elif isinstance(outfile, BinaryIO) or hasattr(outfile, 'write'):
-            pass # We already can write (at least hope with us).
-        else:
+        elif not (isinstance(outfile, BinaryIO) or hasattr(outfile, 'write')):
             raise TypeError('outfile not Union[BinaryIO, str].')
         
         preview = await self.get_preview()
@@ -1022,15 +1018,17 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             Path to Box DB Folder. `.constants.DB_PATH` by default.
         '''
         assert not all((ignore_preview, skip_preview)) # Please choose one kwarg.
+        
         if decrypt:
             aws = AESwState(self._filekey, self._file_iv)
         
         if isinstance(outfile, str):
             folder = 'UNKNOWN_FOLDER' if hide_folder else self._folder
             name = self._erbf._file_name if hide_name else self._file_name
-            try:
-                mkdir(path_join(outfile, folder))
-            except: pass
+            
+            if not path_exists(path_join(outfile, self._folder)):
+                makedirs(path_join(outfile, self._folder))
+                
             outfile = open(path_join(outfile, folder, name), 'wb')
             
         elif isinstance(outfile, BinaryIO) or hasattr(outfile, 'write'):
