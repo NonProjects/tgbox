@@ -79,6 +79,7 @@ async def _search_func(
     Otherwise imported file will be ignored.
     '''
     lb_files, lb_folders = None, None
+    in_func = re_search if sf.re else lambda p,s: p in s
     
     while True:
         if it_messages:
@@ -157,28 +158,28 @@ async def _search_func(
                 continue
         if sf.comment:
             for comment in sf.comment:
-                if bf.comment and re_search(comment, bf.comment):
+                if bf.comment and in_func(comment, bf.comment):
                     break
             else: 
                 continue
 
         if sf.folder:
             for folder in sf.folder:
-                if re_search(folder, bf.folder):
+                if in_func(folder, bf.folder):
                     break
             else: 
                 continue
 
         if sf.file_name: # todo: check SearchFilter with file_name and min_size.
             for file_name in sf.file_name:
-                if re_search(file_name, bf.file_name):
+                if in_func(file_name, bf.file_name):
                     break
             else: 
                 continue
 
         if sf.file_salt:
             for file_salt in sf.file_salt:
-                if re_search(file_salt, rbf.file_salt):
+                if in_func(file_salt, rbf.file_salt):
                     break
             else:
                 continue
@@ -1298,12 +1299,14 @@ class DecryptedLocalBox(EncryptedLocalBox):
         filekey = make_filekey(self._mainkey, file_salt)
         
         if hasattr(file, 'name'):
-            file_name = file.name.split(path_sep)[-1]
+            file_name = file.name.split(path_sep)[-1].encode()
             if len(file_name) > 45:
                 if not ignore_limit_errors:
                     raise ValueError('File name length must be <= 45 symbols.')
                 else:
-                    file_name = file_name[:45]
+                    file_name = file_name[:-45]
+            file_name = file_name.decode()
+            
         else:
             file_name = urandom(6).hex()
         try:
