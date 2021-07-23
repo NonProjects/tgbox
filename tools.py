@@ -33,7 +33,7 @@ class SearchFilter:
             max_size: Optional[Union[int, List[int]]] = None,
             file_salt: Optional[Union[bytes, List[bytes]]] = None,
             verbyte: Optional[Union[bytes, List[bytes]]] = None,
-            exported: Optional[bool] = None
+            exported: Optional[bool] = None, re: Optional[bool] = None
         ):
         '''
         Container that filters search in `RemoteBox` or 
@@ -49,6 +49,9 @@ class SearchFilter:
         
         Any kwarg with `str` | `bytes` type 
         can also be regular expression.
+        
+        kwarg `re` will tell the `tgbox.api._search_func` that
+        *all* filters that you use is Regular Expressions. 
         '''
         self.id = id if isinstance(id, list) else ([] if not id else [id])
         self.time = time if isinstance(time, list) else ([] if not time else [time])
@@ -61,11 +64,12 @@ class SearchFilter:
         self.verbyte = verbyte if isinstance(verbyte, list) else ([] if not verbyte else [verbyte])
         
         self.exported = exported
+        self.re = re
         
     def __hash__(self) -> int:
         return hash((
             self.id, self.time, self.comment, self.folder, self.exported,
-            self.file_name, self.size, self._file_salt, self.verbyte
+            self.file_name, self.size, self._file_salt, self.verbyte, self.re
         ))
     def __eq__(self, other) -> bool:
         return all((
@@ -99,7 +103,7 @@ class SearchFilter:
             max_size = self.max_size + other.max_size,
             file_salt = self.file_salt + other.file_salt,
             verbyte = self.verbyte + other.verbyte,
-            exported = other.exported
+            exported = other.exported, re = self.re
         )
 class OpenPretender:
     def __init__(self, aes_generator: Generator):
