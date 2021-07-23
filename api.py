@@ -1044,7 +1044,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         )
         preview_bypassed = False
         async for chunk in iter_down:
-            if not any((self._size >= 5008, ignore_preview, skip_preview, preview_bypassed)):
+            if not any((self._size <= 5008, ignore_preview, skip_preview, preview_bypassed)):
                 try:
                     maybe_preview = decrypt_preview(chunk[:5008], self._filekey)
                     assert maybe_preview[:2 ] == b'\xff\xd8' # JPEG start prefix.
