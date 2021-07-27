@@ -194,7 +194,7 @@ def aes_encrypt(
         yield_size: int=AES_RETURN_SIZE, add_padding: bool=True
         )-> Generator[bytes, None, None]:
     '''
-    Returns encrypted `plain_data` by `yield_size` amount of bytes.
+    Yields encrypted `plain_data` by `yield_size` amount of bytes.
     
     plain_data (`BinaryIO`, `bytes`):
         Bytes to encrypt. Can be file-like object or bytes.
@@ -263,7 +263,7 @@ def aes_decrypt(
         yield_size: int=AES_RETURN_SIZE, strip_padding: bool=True
         ) -> Generator[bytes, None, None]:
     '''
-    Returns decrypted `cipher_data` by `yield_size` amount of bytes.
+    Yields decrypted `cipher_data` by `yield_size` amount of bytes.
     
     cipher_data (`BinaryIO`, `bytes`):
         Bytes to decrypt. Can be file-like object or bytes.

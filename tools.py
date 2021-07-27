@@ -68,13 +68,19 @@ class SearchFilter:
         
     def __hash__(self) -> int:
         return hash((
-            self.id, self.time, self.comment, self.folder, self.exported,
-            self.file_name, self.size, self._file_salt, self.verbyte, self.re
+            self.id, self.time, self.comment, self.folder, self.exported, self.max_size,
+            self.file_name, self.min_size, self.file_salt, self.verbyte, self.re
         ))
     def __eq__(self, other) -> bool:
         return all((
             isinstance(other, self.__class__), 
             self.__hash__() == hash(other)
+        ))
+    def __bool__(self) -> bool:
+        '''Will return `True` if any(kwargs)'''
+        return any((
+            self.id, self.time, self.comment, self.folder, self.exported, self.max_size,
+            self.file_name, self.min_size, self.file_salt, self.verbyte, self.re
         ))
     def __add__(self, other: 'SearchFilter') -> None:
         '''Extends filters with `other` filters.'''

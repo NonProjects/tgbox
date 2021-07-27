@@ -1098,7 +1098,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         else:
             return make_sharekey(filekey=self._filekey)
         
-class EncryptedLocalBox:
+class EncryptedLocalBox: # todo: Skip invalid file folders.
     def __init__(self, box_path: str=DB_PATH):
         self._box_path = box_path
         self._box_salt = open(path_join(box_path,'BOX_DATA','BOX_SALT'),'rb').read()
@@ -1260,14 +1260,14 @@ class DecryptedLocalBox(EncryptedLocalBox):
             
             The method needs to know size of the `file`, so
             it will try to ask system what size of file on path
-            `file.name`. If it's impossible, then program tries to
+            `file.name`. If it's impossible, then method tries to
             get size by `len()` (from `__len__` dunder). If both fails,
             it tries to get `len(file.read())` (with load to RAM).
             
-            File name length must be <= 45 symbols.
+            File name length must be <= 44 symbols.
             If file has no `name` then it will be `urandom(6).hex()`
             
-            File can't be empty, program will raise `ValueError`
+            File can't be empty, method will raise `ValueError`
             if you will try to upload it. If `ignore_limit_errors == True`,
             then file data will be extended to 1 byte, b'\x00'.
             
@@ -1284,7 +1284,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         ignore_limit_erors (`bool`, optional):
             Will ignore all `ValueError`s if file
             data won't fit the limit. I.e, if filename
-            length is more than 45, we will cut it to 
+            length is more than 44, we will cut it to 
             fit the limit. `False` by default.
         '''
         # todo: set foldername length limit.
@@ -1300,11 +1300,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
         
         if hasattr(file, 'name'):
             file_name = file.name.split(path_sep)[-1].encode()
-            if len(file_name) > 45:
+            if len(file_name) > 44:
                 if not ignore_limit_errors:
-                    raise ValueError('File name length must be <= 45 symbols.')
+                    raise ValueError('File name length must be <= 44 symbols.')
                 else:
-                    file_name = file_name[:-45]
+                    file_name = file_name[:-44]
             file_name = file_name.decode()
             
         else:
@@ -1501,7 +1501,6 @@ class EncryptedLocalBoxFolder:
             ) from None
             
         for file in listdir(self._folder_path):
-            
             if file != 'FOLDER_CR_TIME':
                 if decrypt:
                     yield EncryptedLocalBoxFile(
@@ -1548,16 +1547,16 @@ class EncryptedLocalBoxFolder:
         '''Returns decrypted by `mainkey` `DecryptedLocalBoxFolder`.'''
         return DecryptedLocalBoxFolder(self, mainkey)
     
-    def delete(self, db_path: str=DB_PATH) -> None:
+    def delete(self, box_path: str=DB_PATH) -> None:
         '''
         Will delete this folder with all files from your LocalBox.
         All files will stay in `RemoteBox`, so you can restore
         all your folders via importing files.
         '''
         if hasattr(self, '_elbf'): # We're into DecryptedLocalBoxFolder
-            rm_db_folder(self._elbf._foldername, db_path=db_path)
+            rm_db_folder(self._elbf._foldername, db_path=box_path)
         else:
-            rm_db_folder(self._foldername, db_path=db_path)
+            rm_db_folder(self._foldername, db_path=box_path)
 
 class DecryptedLocalBoxFolder(EncryptedLocalBoxFolder):
     def __init__(self, elbf: EncryptedLocalBoxFolder, mainkey: [MainKey, ImportKey]):
@@ -1754,23 +1753,20 @@ class EncryptedLocalBoxFile:
     def decrypt(self, key: Union[FileKey, ImportKey, MainKey]) -> 'DecryptedLocalBoxFile':
         return DecryptedLocalBoxFile(self, key)
     
-    def delete(self, db_path: str=DB_PATH) -> None:
+    def delete(self, box_path: str=DB_PATH) -> None:
         '''
         Will delete this file from your LocalBox.
         You can re-import it from `RemoteBox` with
         `import_file`. To remove your file totally
         please use same function on RemoteBoxFile.
-        '''
-        self._file_name = self._file_path.split(path_sep)[-1]
-        self._folder = self._file_path.split(path_sep)[-2]
-        
+        '''        
         if hasattr(self, '_elbfi'): # We're into DecryptedLocalBoxFile
             rm_db_file_folder(self._elbfi._file_name, 
-                self._elbfi._folder, db_path=db_path
+                self._elbfi._folder, db_path=box_path
             )
         else:
             rm_db_file_folder(self._file_name, 
-                self._folder, db_path=db_path
+                self._folder, db_path=box_path
             )
 class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
     def __init__(
