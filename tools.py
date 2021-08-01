@@ -21,7 +21,7 @@ from os import remove as remove_file
 from os.path import join as path_join
 
 from .keys import Key
-# todo: fix previews, so it always square.
+
 class SearchFilter:
     def __init__(
             self, *, id: Optional[Union[int, List[int]]] = None, 
@@ -130,10 +130,10 @@ class OpenPretender:
         Please note that `enc_preview` must be encrypted
         with `crypto.encrypt_preview` & == 5008 bytelength.
         '''
-        assert len(enc_preview) == 5008 # Length must equals to 5008.
+        assert len(enc_preview) <= 1_048_576+32
         
         if self._stop_iteration or self._buffered_bytes:
-            raise Exception('Preview must before any usage of object.')
+            raise Exception('Preview concat must be before any usage of object.')
         else:
             self._buffered_bytes += enc_preview
     
@@ -180,9 +180,10 @@ def make_folder_iv(key: Key) -> bytes:
     '''
     return sha256(key.key).digest()[:16]
         
-def int_to_bytes(int_: int) -> bytes:
+def int_to_bytes(int_: int, length: Optional[int] = None) -> bytes:
     '''Converts int to bytes with Big byteorder.'''
-    return int.to_bytes(int_, (int_.bit_length() + 8) // 8, 'big', signed=True)
+    length = length if length else (int_.bit_length() + 8) // 8
+    return int.to_bytes(int_, length, 'big', signed=True)
 
 def bytes_to_int(bytes_: bytes) -> int:
     '''Converts bytes to int with Big byteorder.'''
@@ -227,13 +228,13 @@ async def get_media_duration(file_path: str) -> float:
         await sleep(0.1)
     return float(p.stdout.read())
 
-async def make_media_preview(file_path: str, output_path: str='', x: int=128, y: int=-1) -> bytes: # todo
+async def make_media_preview(file_path: str, output_path: str='', x: int=128, y: int=-1) -> bytes:
     '''Makes x:y sized thumbnail of the video/audio with ffmpeg.'''
     thumbnail_path = path_join(output_path, hex(randrange(2**128))[2:]) + '.jpg' 
     
     p = Popen(
         ['ffmpeg', '-i', file_path, '-filter:v', f'scale={x}:{y}', '-an',
-        '-loglevel', 'quiet', '-q:v', '31', thumbnail_path]
+        '-loglevel', 'quiet', '-q:v', '2', thumbnail_path]
     )
     while p.poll() == None:
         await sleep(0.1)
@@ -243,13 +244,13 @@ async def make_media_preview(file_path: str, output_path: str='', x: int=128, y:
     except FileNotFoundError as e: # if something goes wrong then file not created
         raise TypeError('Not a video.') from e
             
-async def make_image_preview(file_path: str, output_path: str='', x: int=128, y: int=-1) -> bytes: # todo
+async def make_image_preview(file_path: str, output_path: str='', x: int=128, y: int=-1) -> bytes:
     '''Makes resized to x:y copy of the image with ffmpeg.'''
     thumbnail_path = path_join(output_path, hex(randrange(2**128))[2:]) + '.jpg'
     
     p = Popen(
         ['ffmpeg', '-i', file_path, '-vf', f'scale={x}:{y}', 
-         '-loglevel', 'quiet', '-q:v', '31', thumbnail_path]
+         '-loglevel', 'quiet', '-q:v', '2', thumbnail_path]
     )
     while p.poll() == None:
         await sleep(0.1)

@@ -20,8 +20,7 @@ from telethon.tl.types import (
     Message, PeerChannel
 )
 from .crypto import (
-    aes_decrypt, aes_encrypt, AESwState,
-    encrypt_preview, decrypt_preview
+    aes_decrypt, aes_encrypt, AESwState
 )
 from .keys import (
     make_filekey, make_requestkey, make_importkey,
@@ -422,9 +421,22 @@ class RemoteBox:
         )
         oe = OpenPretender(e)
         if dlbfi.preview:
-            oe.concat_preview(
-                encrypt_preview(dlbfi.preview, dlbfi._filekey)
+            enc_preview = next(aes_encrypt(
+                dlbfi.preview, dlbfi._filekey, yield_all=True
+            ))
+            preview_size = next(aes_encrypt(
+                int_to_bytes(len(enc_preview), 3),
+                dlbfi._filekey, yield_all=True
+            ))
+            oe.concat_preview(preview_size + enc_preview)
+        else:
+            oe.concat_preview(next(aes_encrypt(
+                b'\x00'*3, dlbfi._filekey, yield_all=True))
             )
+            # ^ First 16 bytes is always encrypted preview length, 
+            # ^ so if there is no preview then length == 0, 
+            # ^ or three zero bytes after decryption.
+            
         ifile = await self._ta.TelegramClient.upload_file(
             oe, file_name=dlbfi._elbfi._file_name, part_size_kb=512,
             file_size = dlbfi._size
@@ -698,7 +710,7 @@ class EncryptedRemoteBoxFile:
         self._version_byte = r_datastring[6]
         
         self._file_size = self._file.size
-        self._preview = None
+        self._preview = b''
         
         if self._message.fwd_from:
             self._exported = True            
@@ -819,40 +831,47 @@ class EncryptedRemoteBoxFile:
         `object.get_preview()` call.
         '''
         self._cache_preview = True
-        
-    async def get_preview(self) -> bytes:
+    
+    async def get_preview(self) -> bytes: # todo
         '''
-        Returns file preview.
-        
-        If you call this on `EncryptedRemoteBoxFile` then
-        there is no guarantee that this function will return
-        preview, because we don't know if it was added or
-        not, it can be just first 5008 of encrypted file.
-        
-        If you call this on `DecryptedRemoteBoxFile` then
-        there is guarantee that you will recieve decrypted
-        preview or zero bytes (`b''`) as return.
+        Returns decrypted preview or empty bytes (`b''`) if
+        you call this func on `DecryptedRemoteBoxFile`, otherwise
+        this method will return 1MiB+32B of encrypted remote file.
         
         If your class has `cache_preview` setted to `True` then
         after first call to Telegram servers it will be
-        cached in object (max ~5KB), otherwise not.
+        cached in object (max is 1 MiB), otherwise not.
+        
+        You can disable caching via 
+        `object.disable_cache_preview()` method.
         '''
         if self._preview:
             return self._preview
         else:
+            if hasattr(self, '_filekey'):
+                async for preview_size in self._ta.TelegramClient.iter_download(
+                    self._message.document, offset=0, request_size=32):
+                        preview_size = bytes_to_int(next(aes_decrypt(
+                            preview_size.tobytes(), self._filekey, yield_all=True))
+                        )
+                        break
+            else:
+                preview_size = 1_048_576
+            
             async for preview in self._ta.TelegramClient.iter_download(
-                self._message.document, offset=0, request_size=5008):
+                self._message.document, offset=32, request_size=preview_size):
                     if hasattr(self, '_filekey'):
                         try:
-                            maybe_preview = decrypt_preview(preview.tobytes(), self._filekey)
-                            assert maybe_preview[:2 ] == b'\xff\xd8' # JPEG start prefix.
-                            assert maybe_preview[-2:] == b'\xff\xd9' # JPEG end prefix.
-                            preview = maybe_preview
-                        except (ValueError, AssertionError):
+                            preview = next(aes_decrypt(
+                                preview.tobytes(), self._filekey, yield_all=True 
+                            )) 
+                        except ValueError:
                             preview = b'' # Not preview
+                            
                     if self._cache_preview:
                         self._preview = preview
-                    return preview if isinstance(preview, bytes) else preview.tobytes()
+                        
+                    return preview
     
     async def delete(self) -> None:
         '''
@@ -958,8 +977,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
     async def download(
             self, *, outfile: Union[str, BinaryIO] = DOWNLOAD_PATH, 
             hide_folder: bool=False, hide_name: bool=False,
-            decrypt: bool=True, ignore_preview: bool=False,
-            skip_preview: bool=False, offset: int=0,  
+            decrypt: bool=True, skip_preview: bool=False, offset: int=0,  
             request_size: int=524288, box_path: str=DB_PATH) -> BinaryIO:
         '''
         Downloads and saves remote box file to the `outfile`.
@@ -985,18 +1003,10 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         decrypt (`bool`, optional):
             Decrypts file if True (default).
         
-        ignore_preview (`bool`, optional):
-            If set to `False`, tries to decrypt first 5008 bytes
-            of the file to identify preview. If you sure that
-            your `DecryptedRemoteBoxFile` hasn't preview, then
-            you can set this to `True`. Will be ignored if 
-            file size is <= 5008. `False` by default.
-        
         skip_preview (`bool`, optional):
-            If set to `True`, skips first 5008 bytes
-            of the file. You can set it to `True` if you
-            sure that this file has preview. Will be ignored
-            if file size is <= 5008. `False` by default.
+            If set to `True`, skips all operation with file
+            preview. You can set it to `True` if you
+            sure that this file has preview. `False` by default.
             
             `offset` will be ignored if you set this to `True`.
         
@@ -1017,9 +1027,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         
         box_path (`str`, optional):
             Path to Box DB Folder. `.constants.DB_PATH` by default.
-        '''
-        assert not all((ignore_preview, skip_preview)) # Please choose one kwarg.
-        
+        '''        
         if decrypt:
             aws = AESwState(self._filekey, self._file_iv)
         
@@ -1043,23 +1051,26 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             self._message.document, offset=offset, 
             request_size=request_size
         )
-        preview_bypassed = False
+        preview_bypassed = False # todo
         async for chunk in iter_down:
-            if not any((self._size <= 5008, ignore_preview, skip_preview, preview_bypassed)):
+            if not any((skip_preview, preview_bypassed)):
                 try:
-                    maybe_preview = decrypt_preview(chunk[:5008], self._filekey)
-                    assert maybe_preview[:2 ] == b'\xff\xd8' # JPEG start prefix.
-                    assert maybe_preview[-2:] == b'\xff\xd9' # JPEG end prefix.
-                    chunk = chunk[5008:]
-                except (ValueError, AssertionError):
+                    preview_size = bytes_to_int(next(
+                        aes_decrypt(chunk[:32], self._filekey, yield_all=True)
+                    ))
+                    if not preview_size:
+                        chunk = chunk[32:]
+                    else:
+                        chunk = chunk[preview_size+32:]
+                        
+                except ValueError:
                     pass # Not preview
                 
                 preview_bypassed = True
             
-            if skip_preview and not preview_bypassed:
-                chunk = chunk[5008:]
-            
+            chunk = chunk[32:] if skip_preview else chunk
             chunk = aws.decrypt(chunk) if decrypt else chunk
+            
             outfile.write(chunk)
 
         if decrypt:
@@ -1356,8 +1367,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
                     duration = b'\x00'*4
         
-        if len(preview) > 5008:
-            preview = b'' # todo: Maybe we need to somehow limit image size.
+        preview = b'' if len(preview) > 1_048_576+32 else preview
+        # ^ Although we store preview size in 3 bytes, the max
+        # ^ preview size is 1 MiB+32B, not 16MiB.
             
         data = {
             'ID': b'', # Empty because file isn't uploaded.
