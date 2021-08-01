@@ -232,7 +232,7 @@ def aes_encrypt(
     else:
         aes_cbc = _PyaesState(key, iv)
     
-    if concat_iv: 
+    if concat_iv and not yield_all: 
         yield iv
     
     while True:
@@ -249,11 +249,13 @@ def aes_encrypt(
             raise ValueError(
                 f'plain_data ({type(plain_data)}) not Union[BinaryIO, bytes].'
             )
-        if len(chunk) % 16 or not chunk:
+        if len(chunk) % 16 or not chunk or yield_all:
             if not chunk and not add_padding:
                 return
             else:
-                yield aes_cbc.encrypt(Padding.pad(chunk)); return
+                iv_ = iv if (concat_iv and yield_all) else b''
+                yield iv_ + aes_cbc.encrypt(Padding.pad(chunk))
+                return
         else:
             yield aes_cbc.encrypt(chunk)
 
@@ -332,51 +334,3 @@ def make_box_salt(saltlen: int=32) -> bytes:
         Salt length. 32 by default.
     '''
     return urandom(saltlen)
-
-def encrypt_preview(preview: bytes, filekey: 'FileKey') -> bytes:
-    '''
-    Encrypts and pads preview to the 5008 bytes.
-    
-    This function must be used only for adding
-    preview to the `.tools.OpenPretender.concat_preview`.
-    For saving previews in LocalBox you must use the 
-    default encryption via `aes_encrypt`.
-    
-    preview (`bytes`):
-        File preview. Can be received with
-        `.tools.make_media_preview`. Must be <= 4976.
-    '''
-    assert len(preview) <= 4976
-    
-    if len(preview) % 16:
-        preview = Padding.pad(preview)
-    
-    while len(preview) != 4976:
-        preview += b'\x10'*16
-    
-    enc_preview = b''.join(aes_encrypt(preview, filekey)) 
-    return enc_preview
-
-def decrypt_preview(enc_preview: bytes, filekey: 'FileKey') -> bytes:
-    '''
-    Decrypts and removes padding from encrypted via
-    `encrypt_preview` preview.
-    
-    This function must be used only for extracting
-    preview from the `RemoteBox` file.
-    
-    For decrypting previews from LocalBox you must use the 
-    default decryption via `aes_decrypt`.
-    
-    enc_preview (`bytes`):
-        Encrypted preview. Length must equals to 5008.
-        The first 5008 bytes of the uploaded to the
-        `RemoteBox` file can be preview.
-    '''
-    assert len(enc_preview) == 5008
-    preview = b''.join(aes_decrypt(enc_preview, filekey))
-    try:
-        while True:
-            preview = Padding.unpad(preview)
-    except ValueError:
-        return preview
