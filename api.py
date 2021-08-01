@@ -433,7 +433,7 @@ class RemoteBox:
             oe.concat_preview(next(aes_encrypt(
                 b'\x00'*3, dlbfi._filekey, yield_all=True))
             )
-            # ^ First 16 bytes is always encrypted preview length, 
+            # ^ First 32 bytes is always encrypted preview length, 
             # ^ so if there is no preview then length == 0, 
             # ^ or three zero bytes after decryption.
             
