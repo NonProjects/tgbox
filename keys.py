@@ -52,7 +52,8 @@ class Key:
             3: 'RequestKey',
             4: 'ShareKey',
             5: 'ImportKey',
-            6: 'FileKey'
+            6: 'FileKey',
+            7: 'EncryptedMainkey'
         }
     def __hash__(self) -> int:
         return hash((self._key, self._key_type))
@@ -94,13 +95,15 @@ class Key:
     @classmethod
     def decode(cls, encoded_key: str) -> Union[
             'BaseKey','MainKey','RequestKey',
-            'ShareKey','ImportKey','FileKey']:
+            'ShareKey','ImportKey','FileKey',
+            'EncryptedMainkey']:
         '''
         '''
         ekey_types = {
             'B': BaseKey,    'M': MainKey,
             'R': RequestKey, 'S': ShareKey,
-            'I': ImportKey,  'F': FileKey
+            'I': ImportKey,  'F': FileKey,
+            'E': EncryptedMainkey
         }
         ekey_type = ekey_types[encoded_key[0]]
         return ekey_type(b64decode(encoded_key[1:]))
@@ -136,21 +139,28 @@ class FileKey(Key):
     def __init__(self, key: bytes):
         super().__init__(key, 6)
 
+class EncryptedMainkey(Key):
+    def __init__(self, key: bytes):
+        super().__init__(key, 7)
+
 def make_basekey(
-        phrase: [bytes, 'Phrase'], *, salt: bytes=SCRYPT_SALT,
+        phrase: [bytes,'Phrase'], *, salt: bytes=SCRYPT_SALT,
         n: int=SCRYPT_N, r: int=SCRYPT_R, p: int=SCRYPT_P, 
         dklen: int=SCRYPT_DKLEN) -> BaseKey:
     '''
-    Function for retrieving BaseKeys. Uses scrypt.
+    Function for retrieving BaseKeys. Uses `sha256(scrypt)`.
     RAM consumption is calculated by `128 * r * (n + p + 2)`.
     '''
     phrase = phrase.phrase if isinstance(phrase, Phrase) else phrase
     
     m = 128 * r * (n + p + 2)
-    return BaseKey(
-        scrypt(phrase, n=n, r=r, dklen=dklen, 
-        p=p, salt=salt, maxmem=m)
+    scrypt_key = scrypt(
+        phrase, n=n, r=r, 
+        dklen=dklen, p=p, 
+        salt=salt, maxmem=m
     )
+    return BaseKey(sha256(scrypt_key).digest())
+
 def make_mainkey(basekey: BaseKey, box_salt: bytes) -> MainKey:
     '''
     Function for retrieving mainkey.
@@ -189,37 +199,39 @@ def make_requestkey(
     
     Alice has file in her Box which she wants to send to Bob.
     Then: A sends file to B. B forwards file to his Box, takes
-    `FILE_SALT` and `mainkey` of his Box and (i.e) calls
+    FileSalt from A File and `mainkey` of his Box and (i.e) calls
     `make_requestkey(mainkey=mainkey, file_salt=file_salt)`.
     
     RequestKeys is compressed pubkeys of ECDH on secp256k1, 
     B makes privkey with `sha256(mainkey + salt)` & exports pubkey
     to make a shared secret bytes (key, with which A will be
-    encrypt her filekey or mainkey, encrypted (file/main)key 
+    encrypt her filekey/mainkey, encrypted (file/main)key 
     is called `ShareKey`. Use help on `make_sharekey`.).
     
-    B sends received `RequestKey` to A. A creates `ShareKey`
-    and sends to B. B calls `get_importkey` and recieves filekey.
+    B sends received `RequestKey` to A. A makes `ShareKey`
+    and sends it to B. B calls `get_importkey` and recieves filekey.
     
     No one except Alice and Bob will have filekey. If Alice want
     to share entire Box (mainkey) with Bob, then Bob creates
     slightly different `RequestKey` with same function:
     `make_requestkey(mainkey=mainkey, box_salt=box_salt)`.
     
-    To get `BOX_SALT` Alice should only add Bob to her Box(`Channel`).
+    To get BoxSalt Alice should only add Bob to her Box(`Channel`).
     
     Functions in this module is low-level, you can make `RequestKey` for
     a forwarded from A file by calling `get_requestkey(...)` 
-    method of `EncryptedRemoteBoxFile`.
+    method on `EncryptedRemoteBoxFile`.
     
     mainkey (`MainKey`):
-        Your Box key.
+        Bob's `MainKey`. 
     
     file_salt (`bytes`, optional):
-        File Salt. Should be specified if `box_salt` is `None`.
+        Alice's FileSalt. 
+        Should be specified if `box_salt` is `None`.
     
     box_salt (`bytes`, optional):
-        Box Salt. Should be specified if `file_salt` is `None`.
+        Alice's BoxSalt. 
+        Should be specified if `file_salt` is `None`.
     '''
     if not any((file_salt, box_salt)):
         raise ValueError(
@@ -247,12 +259,12 @@ def make_sharekey(
     You may want to know what is `RequestKey` before reading
     this. Please, run help on `make_requestkey` to get info.
     
-    Alice recieves `RequestKey` of Bob. But what should we do
-    next? As reqkey is just EC-pubkey, we want to make a shared
+    Alice recieves `RequestKey` from Bob. But what she should do
+    next? As reqkey is just EC-pubkey, she want to make a shared
     secret key. A makes her own privkey as B, with
     `sha256(mainkey + salt)` & initializes ECDH with B pubkey
     and her privkey. After this, A makes a shared secret, which
-    is 32-byte length AES-CBC key & encrypts her file or main key. 
+    is 32-byte length AES-CBC key & encrypts her file/main key. 
     IV here is first 16 byte of `sha256(requestkey)`. Then she
     prepends her pubkey to the result and sends it to Bob.
     

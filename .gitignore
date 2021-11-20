@@ -127,3 +127,11 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Vim
+*.swp
+
+# User defined
+*.hidden
+*.sql
+*.sqlite

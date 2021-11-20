@@ -1,10 +1,8 @@
-import random
-
 from os import urandom
 from typing import BinaryIO, Generator, Union, Optional
-from hashlib import sha256, scrypt
 
 from .constants import AES_RETURN_SIZE
+from .errors import ModeInvalid, AESError
 
 try:
     from Crypto.Cipher import AES
@@ -12,9 +10,12 @@ try:
         pad as pad_, unpad as unpad_
     )
     FAST_ENCRYPTION = True
-except ModuleNotFoundError:  # We can use PyAES if there is no pycryptodome.
-    from pyaes.util import ( # PyAES is about 30x slower (CPython) than pycryptodome.
-        append_PKCS7_padding as pad_, # This is just too slow and not so usable, but anyway.
+except ModuleNotFoundError: 
+    # We can use PyAES if there is no pycryptodome.
+    # PyAES is about 30x slower (CPython) than pycryptodome.
+    # This is too slow and not so usable, but anyway.
+    from pyaes.util import ( 
+        append_PKCS7_padding as pad_, 
         strip_PKCS7_padding as unpad_
     )
     from pyaes import AESModeOfOperationCBC
@@ -26,8 +27,8 @@ except ModuleNotFoundError:
     FAST_TELETHON = False
 
 class Padding:
-    pad_ = pad_ # Avoid globals. Period.
-    unpad_ = unpad_
+    pad_ = pad_ if not FAST_ENCRYPTION else lambda ptxt: pad_(ptxt,16)
+    unpad_ = unpad_ if not FAST_ENCRYPTION else lambda ptxt: unpad_(ptxt,16)
     
     @classmethod
     def pad(cls, plaintext: bytes, pad_func=None) -> bytes:
@@ -37,10 +38,7 @@ class Padding:
         else:
             pad_, custom = cls.pad_, False
         
-        if FAST_ENCRYPTION and not custom:
-            return pad_(plaintext, 16)
-        else:
-            return pad_(plaintext)
+        return pad_(plaintext)
     
     @classmethod
     def unpad(cls, plaintext: bytes, unpad_func=None) -> bytes:
@@ -49,11 +47,33 @@ class Padding:
             unpad_, custom = unpad_func, True
         else:
             unpad_, custom = cls.unpad_, False
-            
-        if FAST_ENCRYPTION and not custom:
-            return unpad_(plaintext,16)
+        
+        while True:
+            try:
+                plaintext = unpad_(plaintext)
+            except ValueError: # No more padding
+                return plaintext
+
+    @classmethod
+    def cycle_pad(cls, plaintext: bytes, to_len: int, pad_func=None) -> bytes:
+        '''
+        Pads block with PKCS#7 padding to specified len. 
+        `to_len` must be divisible by 16.
+        '''
+        if not bool(to_len) or to_len % 16:
+            raise ValueError('to_len must be divisible by 16.')
+        elif to_len < len(plaintext):
+            raise ValueError('to_len must be > than plaintext length')
+
+        if pad_func:
+            pad_, custom = pad_func, True
         else:
-            return unpad_(plaintext)    
+            pad_, custom = cls.pad_, False
+        
+        plaintext = pad_(plaintext)
+        while len(plaintext) != to_len:
+            plaintext += b'\x10'*16
+        return plaintext
 
 class _PyaesState:
     def __init__(self, key: Union[bytes, 'Key'], iv: bytes):
@@ -74,7 +94,7 @@ class _PyaesState:
             self.__mode = 1
         else:
             if self.__mode != 1:
-                raise Exception('You should use only decrypt function.')
+                raise ModeInvalid('You should use only decrypt function.')
         
         assert not len(data) % 16; total = b''
         
@@ -90,7 +110,7 @@ class _PyaesState:
             self.__mode = 2
         else:
             if self.__mode != 2:
-                raise Exception('You should use only encrypt function.')
+                raise ModeInvalid('You should use only encrypt function.')
                 
         assert not len(data) % 16; total = b''
         
@@ -105,93 +125,54 @@ class AESwState:
         '''
         Wrap around AES CBC which saves state.
         
-        This class works like `pyaes.Encrypter` or
-        `pyaes.Decrypter`. Returns last encrypted or
-        decrypted bytes and uses `finalize()` to
-        strip or add padding to the last chunk.
-        
         You should use only `encrypt()` or 
         `decrypt()` method per one object.
         '''
-        key = key.key if hasattr(key, 'key') else key
-        
+        self.key = key.key if hasattr(key, 'key') else key
+        self.iv, self.__mode = iv, None
+
         if FAST_ENCRYPTION:
-            self._aes_cbc = AES.new(key, AES.MODE_CBC, iv=iv)
+            self._aes_cbc = AES.new(self.key, AES.MODE_CBC, iv=self.iv)
         else:
-            self._aes_cbc = _PyaesState(key, iv)
-        
-        self.__mode = None
-        self.__last_data = b''
-    
-    @property
-    def finalized(self) -> bool:
-        return self.__mode == 3
+            self._aes_cbc = _PyaesState(self.key, self.iv)
     
     @property
     def mode(self) -> int:
         '''
         Returns `1` if mode is encryption 
-        and `2` if decryption. `3` if finalized.
+        and `2` if decryption. 
         '''
         return self.__mode
     
-    def encrypt(self, data: bytes) -> bytes:
+    def encrypt(self, data: bytes, pad: bool=False) -> bytes:
         '''Encrypts bytes. `data` length must equals to 16.'''
         if not self.__mode:
             self.__mode = 1
         else:
             if self.__mode != 1:
-                raise Exception('You should use only decrypt function.')
-            
-        last_data = self.__last_data
-        self.__last_data = data
-
-        if last_data:
-            return self._aes_cbc.encrypt(last_data)
-        else:
-            return last_data
+                raise ModeInvalid('You should use only decrypt function.')
+        
+        if pad: data = Padding.pad(data)
+        data = self._aes_cbc.encrypt(data)
+        return data
     
-    def decrypt(self, data: bytes) -> bytes:
+    def decrypt(self, data: bytes, unpad: bool=False) -> bytes:
         '''Decrypts bytes. `data` length must equals to 16.'''
         if not self.__mode:
             self.__mode = 2
         else:
             if self.__mode != 2:
-                raise Exception('You should use only encrypt function.')
-            
-        last_data = self.__last_data
-        self.__last_data = data
-
-        if last_data:
-            return self._aes_cbc.decrypt(last_data)
-        else:
-            return last_data
-    
-    def finalize(self) -> bytes:
-        '''
-        Returns last encrypted/decrypted bytes and
-        adds or strips padding. After you called this
-        function you will need to create new object.
-        '''
-        if self.__mode == 1:
-            self.__last_data = Padding.pad(self.__last_data)
-            endbytes = self.encrypt(None)  
+                raise ModeInvalid('You should use only encrypt function.')
         
-        elif self.__mode == 2:
-            endbytes = Padding.unpad(self.decrypt(None))
-        
-        elif self.__mode == 3:
-            raise Exception('Already finalized.')
-        else:
-            raise Exception('You need to decrypt/encrypt something.')
-            
-        self.__mode, self._aes_cbc = 3, None; return endbytes
+        data = self._aes_cbc.decrypt(data)
+        if unpad: data = Padding.unpad(data)
+        return data
     
 def aes_encrypt(
         plain_data: Union[BinaryIO, bytes], 
         key: Union[bytes, 'Key'], iv: Optional[bytes] = None, 
         concat_iv: bool=True, yield_all: bool=False, 
-        yield_size: int=AES_RETURN_SIZE, add_padding: bool=True
+        yield_size: int=2*10**8, add_padding: bool=True
         )-> Generator[bytes, None, None]:
     '''
     Yields encrypted `plain_data` by `yield_size` amount of bytes.
@@ -223,14 +204,19 @@ def aes_encrypt(
         Adds padding (even if length is divisible by 16) if
         True (by default). False is otherwise.
     '''
-    assert not yield_size % 16 
+    if yield_size % 16:
+        raise AESError('yield_size must be divisible by 16.')
+
     iv = iv if iv else urandom(16)
     key = key.key if hasattr(key, 'key') else key
     
-    if FAST_ENCRYPTION:
-        aes_cbc = AES.new(key, AES.MODE_CBC, iv=iv)
-    else:
-        aes_cbc = _PyaesState(key, iv)
+    try:
+        if FAST_ENCRYPTION:
+            aes_cbc = AES.new(key, AES.MODE_CBC, iv=iv)
+        else:
+            aes_cbc = _PyaesState(key, iv)
+    except Exception as e:
+        raise AESError(f'Invalid configuration. {e}')
     
     if concat_iv and not yield_all: 
         yield iv
@@ -246,9 +232,8 @@ def aes_encrypt(
             else:
                 chunk, plain_data = plain_data, b''
         else:
-            raise ValueError(
-                f'plain_data ({type(plain_data)}) not Union[BinaryIO, bytes].'
-            )
+            raise TypeError('plain_data not Union[BinaryIO, bytes].')
+
         if len(chunk) % 16 or not chunk or yield_all:
             if not chunk and not add_padding:
                 return
@@ -291,7 +276,9 @@ def aes_decrypt(
         Removes padding if `True`.
     '''    
     aes_cbc = None
-    assert not yield_size % 16
+    if yield_size % 16:
+        raise AESError('yield_size must be divisible by 16.')
+
     key = key.key if hasattr(key, 'key') else key
     
     while True:
@@ -300,7 +287,7 @@ def aes_decrypt(
             chunk = cipher_data.read() if yield_all else cipher_data.read(yield_size)
             l_strip_padding = False if (not strip_padding or cipher_data.peek(1)) else True
             
-        elif isinstance(cipher_data, bytes):
+        elif isinstance(cipher_data, (bytes, memoryview)):
             if not iv:
                 iv = cipher_data[:16]
                 cipher_data = cipher_data[16:]
@@ -309,28 +296,26 @@ def aes_decrypt(
             cipher_data = b'' if yield_all else cipher_data[yield_size:]
             l_strip_padding = False if (not strip_padding or cipher_data) else True         
         else:
-            raise ValueError(
-                f'cipher_data ({type(cipher_data)}) not Union[BinaryIO, bytes].'
-            )
-        if not aes_cbc:
-            if FAST_ENCRYPTION:
-                aes_cbc = AES.new(key, AES.MODE_CBC, iv=iv)
-            else:
-                aes_cbc = _PyaesState(key, iv)
+            raise TypeError('cipher_data not Union[BinaryIO, bytes].')
         
-        if l_strip_padding:
-            yield Padding.unpad(aes_cbc.decrypt(chunk)); return
-        else:
-            if not chunk and not strip_padding:
-                return
+        try:
+            if not aes_cbc:
+                if FAST_ENCRYPTION:
+                    aes_cbc = AES.new(key, AES.MODE_CBC, iv=iv)
+                else:
+                    aes_cbc = _PyaesState(key, iv)
+            
+            if l_strip_padding:
+                yield Padding.unpad(aes_cbc.decrypt(chunk)); return
             else:
-                yield aes_cbc.decrypt(chunk)
+                if not chunk and not strip_padding:
+                    return
+                else:
+                    yield aes_cbc.decrypt(chunk)
 
-def make_box_salt(saltlen: int=32) -> bytes:
-    '''
-    Generates and returns box salt.
-    
-    saltlen (`int`): 
-        Salt length. 32 by default.
-    '''
-    return urandom(saltlen)
+        except Exception as e:
+            raise AESError(f'Invalid configuration. {e}')
+
+def make_box_salt() -> bytes:
+    '''Generates box salt.'''
+    return urandom(32)

@@ -1,179 +1,138 @@
-from os.path import exists, getsize, join as path_join
-from base64 import (
-    urlsafe_b64encode as b64encode,  # We use urlsafe base64.
-    urlsafe_b64decode as b64decode
-) 
-from hashlib import sha256
-from os import mkdir
-from time import time
-from shutil import rmtree
-from typing import Optional, Union
+import aiosqlite
 
-from .tools import int_to_bytes, bytes_to_int, make_folder_iv
-from .constants import DB_PATH, DOWNLOAD_PATH
-from .crypto import aes_encrypt, aes_decrypt
-from .keys import Key, MainKey, FileKey, ImportKey, BaseKey
+from pathlib import Path
+from typing import Optional, Union, Generator
+from .errors import PathIsDirectory
 
-def is_cloned(db_path: str=DB_PATH) -> bool:
-    '''
-    Returns `True` if BOX_DATA of LocalBox on `db_path`
-    has MAINKEY file. `False` otherwise.
-    '''
-    return exists(path_join(db_path, 'BOX_DATA', 'MAINKEY'))
 
-def get_box_salt(db_path: str=DB_PATH) -> bytes:
-    '''Returns box salt. Note that for first you need to make LocalBox.'''
-    return open(path_join(db_path,'BOX_DATA','BOX_SALT'),'rb').read() # Make box firstly.
+class SqlTableWrapper:
+    '''A low-level wrapper to SQLite Tables.'''
+    def __init__(self, aiosql_conn, table_name: str):
+        self._table_name = table_name
+        self._aiosql_conn = aiosql_conn
+    
+    async def __aiter__(self) -> tuple:
+        '''Will yield rows as self.select without `sql_statement`'''
+        async for row in self.select():
+            yield row
+   
+    @property
+    def table_name(self) -> str:
+        return self._table_name
 
-def get_box_channel_id(mainkey: Optional[MainKey] = None, db_path: str=DB_PATH) -> Union[bytes, int]:
-    '''Returns box channel id. If `mainkey` specified then tries to decrypt.'''
-    
-    box_channel_id = open(path_join(db_path,'BOX_DATA','BOX_CHANNEL_ID'),'rb').read()
-    if mainkey:
-        return bytes_to_int(b''.join(aes_decrypt(box_channel_id, mainkey)))
-    else:
-        return box_channel_id
-    
-def get_box_cr_time(mainkey: Optional[MainKey] = None, db_path: str=DB_PATH) -> bytes:
-    '''Returns box creation time. If `mainkey` specified then tries to decrypt.'''
+    async def count_rows(self) -> int:
+        '''Execute SELECT count(*) from TABLE_NAME'''
+        async with self._aiosql_conn.execute(f'SELECT count(*) FROM {self._table_name}') as cursor:
+            return (await cursor.fetchone())[0]
 
-    box_cr_time = open(path_join(db_path,'BOX_DATA','BOX_CR_TIME'),'rb').read()
-    if mainkey:
-        return b''.join(aes_decrypt(box_cr_time, mainkey))
-    else:
-        return box_cr_time
-    
-def get_last_file_id(mainkey: Optional[MainKey] = None, db_path: str=DB_PATH) -> bytes:
-    '''
-    Returns id of the last file in the box. May be useful for detecting new files. 
-    If `mainkey` specified then tries to decrypt.
-    '''
-    last_file_id = open(path_join(db_path,'BOX_DATA','LAST_FILE_ID'),'rb').read()
-    if mainkey:
-        return b''.join(aes_decrypt(last_file_id, mainkey))
-    else:
-        return last_file_id
+    async def select(self, *, sql_tuple: Optional[tuple] = None) -> Generator:
+        '''
+        If `sql_tuple` isn't specified, then will be used
+        (SELECT * FROM TABLE_NAME, ()) statement.
+        '''
+        if not sql_tuple:
+            sql_tuple = (f'SELECT * FROM {self._table_name}',()) 
 
-def get_session(mainkey: Optional[MainKey] = None, db_path: str=DB_PATH) -> bytes:
-    '''Returns encrypted session. If `mainkey` specified then tries to decrypt.'''
+        async with self._aiosql_conn.execute(*sql_tuple) as cursor:
+            async for row in cursor: yield row
     
-    session = open(path_join(db_path,'BOX_DATA','SESSION'),'rb').read()
-    if mainkey:
-        return b''.join(aes_decrypt(session, mainkey)).decode()
-    else:
-        return session
-       
-def make_db(db_path: str=DB_PATH) -> str:
-    '''Creates `db_path` DIR and returns `db_path`'''
-    mkdir(db_path); return db_path
+    async def select_once(self, *, sql_tuple: Optional[tuple] = None) -> tuple:
+        '''
+        Will return first row which match the `sql_tuple`,
+        see `select()` method for `sql_tuple` details.
+        '''
+        return await (self.select(sql_tuple=sql_tuple)).__anext__()
 
-def init_db(
-        session: str, box_channel_id: int, mainkey: Union[MainKey, ImportKey],
-        box_salt: bytes, db_path: str=DB_PATH, download_path: str=DOWNLOAD_PATH, 
-        basekey: Optional[BaseKey] = None, box_cr_time: Optional[int] = None,
-        last_file_id: Optional[int] = None) -> str:
-    '''
-    Will init DB with SESSION, BOX_SALT, BOX_CR_TIME & etc.
-    If you want to clone other RemoteBox then you need to
-    specify `basekey`, as your SESSION and MAINKEY file
-    will be encrypted with this key, and other BOX_DATA with `mainkey`.
+    async def insert(
+            self, *args, sql_statement: Optional[str] = None, 
+            commit: bool=True) -> None:
+        '''
+        If `sql_statement` isn't specified, then will be used
+        INSERT INTO TABLE_NAME values (...).
+
+        This method doesn't check if you insert correct data
+        or correct amount of it, you should know DB structure.
+        '''
+        if not sql_statement:
+            sql_statement = (
+                f'INSERT INTO {self._table_name} values ('
+                + ('?,' * len(args))[:-1] + ')'
+            )
+        await self._aiosql_conn.execute(sql_statement, args)
+        if commit: await self._aiosql_conn.commit()
     
-    Returns `db_path`.
-    '''
-    mkdir(path_join(db_path,'BOX_DATA'))
-    mkdir(download_path)
-    
-    if basekey:
-        with open(path_join(db_path,'BOX_DATA','MAINKEY'),'wb') as f:
-            f.write(b''.join(aes_encrypt(mainkey.key, basekey)))
-    
-    with open(path_join(db_path,'BOX_DATA','SESSION'),'wb') as f:
-        if basekey:
-            f.write(b''.join(aes_encrypt(session.encode(), basekey)))
+    async def execute(self, sql_tuple: tuple, commit: bool=True):
+        result = await self._aiosql_conn.execute(*sql_tuple)
+        if commit: await self._aiosql_conn.commit()
+        return result # Returns Cursor object
+
+    async def commit(self) -> None:
+        await self._aiosql_conn.commit()
+
+class TgboxDB:
+    def __init__(self, db_path: Union[Path, str]):
+        if isinstance(db_path, Path):
+            self._db_path = db_path
         else:
-            f.write(b''.join(aes_encrypt(session.encode(), mainkey)))
-    
-    with open(path_join(db_path,'BOX_DATA','BOX_SALT'),'wb') as f:
-        f.write(box_salt)
-    
-    with open(path_join(db_path,'BOX_DATA','BOX_CHANNEL_ID'),'wb') as f:
-        f.write(b''.join(aes_encrypt(int_to_bytes(box_channel_id), mainkey)))
+            self._db_path = Path(db_path)
 
-    with open(path_join(db_path,'BOX_DATA','NO_FOLDER'),'wb') as f:
-        f.write(b''.join(aes_encrypt(b'NO_FOLDER', mainkey, 
-            make_folder_iv(mainkey), concat_iv=False)
-        ))
-    with open(path_join(db_path,'BOX_DATA','BOX_CR_TIME'),'wb') as f:
-        box_cr_time = box_cr_time if box_cr_time else int(time())
-        f.write(b''.join(aes_encrypt(int_to_bytes(box_cr_time), mainkey)))
+        self._aiosql_db = None
+        self._aiosql_db_is_closed = None
+        self._name = self._db_path.name
 
-    with open(path_join(db_path,'BOX_DATA','LAST_FILE_ID'),'wb') as f:
-        if last_file_id:
-            f.write(b''.join(aes_encrypt(int_to_bytes(last_file_id), mainkey)))
+        if self._db_path.is_dir():
+            raise PathIsDirectory('Path is directory.')
     
-    return db_path
-        
-def make_db_folder(foldername: str, key: Key, db_path: str=DB_PATH) -> str:
-    foldername = foldername.encode() if not isinstance(foldername, bytes) else foldername
-    folder_iv = make_folder_iv(key)
-    
-    enc_b64_fon = b64encode(b''.join(
-        aes_encrypt(foldername, key, folder_iv, concat_iv=False))).decode()
-    # ^ We don't concat IV to the foldernames to reduce name length.
-    #   We can simply get IV that we need by making sha256 of the mainkey.
-    
-    folder_path = path_join(db_path, enc_b64_fon)
-    mkdir(folder_path)
+    @property
+    def name(self) -> str:
+        return self._name
 
-    with open(path_join(db_path, enc_b64_fon, 'FOLDER_CR_TIME'),'wb') as f:
-        f.write(b''.join(aes_encrypt(int_to_bytes(int(time())), key)))
+    @property
+    def db_path(self) -> bool:
+        return self._db_path
     
-    return folder_path
+    @property
+    def closed(self) -> bool:
+        '''
+        This method will return `None` if DB wasn't opened,
+        False if it's still opened, True if it's was closed.
+        '''
+        return self._aiosql_db_is_closed
     
-def make_db_file_folder(
-        filename: str, foldername: str, mainkey: MainKey, 
-        filekey: FileKey, db_path: str=DB_PATH) -> str:
+    @staticmethod
+    async def create(db_path: Union[str, Path]) -> 'TgboxDB':
+        return await TgboxDB(db_path).init()
 
-    folder_iv = make_folder_iv(mainkey)
-    file_folder_iv = make_folder_iv(filekey)
-    # ^ Only for foldernames. In other cases `urandom(16).`
+    async def close(self) -> None:
+        await self._aiosql_db.close()
+        self._aiosql_db_is_closed = True
+        self.BoxData = None
+        self.Files = None
+        self.Folders = None
     
-    try:
-        make_db_folder(foldername, mainkey, db_path)
-    except FileExistsError:
-        pass
-    
-    filename = filename.encode()
-    foldername = foldername.encode()
-    
-    enc_b64_fin = b64encode(b''.join(aes_encrypt(filename, filekey, file_folder_iv, concat_iv=False))).decode()
-    enc_b64_fon = b64encode(b''.join(aes_encrypt(foldername, mainkey, folder_iv, concat_iv=False))).decode() 
-    
-    file_folder_path = path_join(db_path, enc_b64_fon, enc_b64_fin)
-    mkdir(file_folder_path)
+    async def init(self) -> 'TgboxDB':
+        self._aiosql_db = await aiosqlite.connect(self._db_path)
+        await self._aiosql_db.execute(
+            '''CREATE TABLE IF NOT EXISTS BOX_DATA (LAST_FILE_ID int NOT NULL, '''
+            '''BOX_CHANNEL_ID blob NOT NULL, BOX_CR_TIME blob NOT NULL, '''
+            '''BOX_SALT blob NOT NULL, MAINKEY blob, SESSION blob NOT NULL);''' 
+        )
+        await self._aiosql_db.execute(
+            '''CREATE TABLE IF NOT EXISTS FILES (ID integer PRIMARY KEY, '''
+            '''FOLDER_ID blob NOT NULL, COMMENT blob, DURATION blob NOT NULL, '''
+            '''FILE_IV blob NOT NULL, FILE_KEY blob, FILE_NAME blob NOT NULL, '''
+            '''FILE_SALT blob NOT NULL, PREVIEW blob, SIZE blob NOT NULL, '''
+            '''UPLOAD_TIME blob NOT NULL, VERBYTE blob NOT NULL, FILE_PATH blob)'''
+        )
+        await self._aiosql_db.execute(
+            '''CREATE TABLE IF NOT EXISTS FOLDERS (FOLDER blob NOT NULL, '''
+            '''FOLDER_IV blob NOT NULL, FOLDER_ID blob NOT NULL)'''
+        )
+        await self._aiosql_db.commit()
+        self._aiosql_db_is_closed = False
 
-    return file_folder_path
+        self.BoxData = SqlTableWrapper(self._aiosql_db,'BOX_DATA')
+        self.Files = SqlTableWrapper(self._aiosql_db,'FILES')
+        self.Folders = SqlTableWrapper(self._aiosql_db,'FOLDERS')
 
-def rm_db_folder(enc_foldername: str, db_path: str=DB_PATH) -> None:
-    '''
-    Removes folder in LocalBox encrypted filename (folder).
-    Caution: **THIS WILL REMOVE ALL LocalBox FILE INFO IN THIS FOLDER**.
-    You can re-download it from RemoteBox.
-
-    Be careful with `db_path` and `enc_foldername`.
-    This function removes directory `f'{db_path}/{enc_foldername}'`.
-    '''
-    rmtree(path_join(db_path, enc_foldername))
-
-def rm_db_file_folder(
-        enc_filename: str, enc_foldername: str,
-        db_path: str=DB_PATH) -> None:
-    '''
-    Removes file in LocalBox by encrypted filename (folder).
-    Caution: **THIS WILL REMOVE ALL FILE INFO IN LocalBox**.
-    You can re-download it from RemoteBox.
-
-    Be careful with `db_path`, `enc_foldername` and `enc_filename`.
-    This function removes directory `f'{db_path}/{enc_foldername}/{enc_filename}'`.
-    '''
-    rmtree(path_join(db_path, enc_foldername, enc_filename))
+        return self

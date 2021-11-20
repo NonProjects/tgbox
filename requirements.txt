@@ -1,6 +1,7 @@
 regex
 
-telethon==1.21.1
+aiosqlite==0.17.0
+telethon==1.23.0
 ecdsa==0.16.1
 
 cryptg==0.2.post2
