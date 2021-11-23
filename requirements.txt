@@ -7,4 +7,3 @@ ecdsa==0.16.1
 cryptg==0.2.post2
 pycryptodome==3.10.1
 
-gmpy2
