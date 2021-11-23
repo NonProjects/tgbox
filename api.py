@@ -1989,11 +1989,14 @@ class FutureFile:
         upload_time = int_to_bytes(upload_time)
         
         # Verify that there is no file with same ID
-        maybe_file = await self.dlb._tgbox_db.Files.select_once(
-            sql_tuple=('SELECT ID FROM FILES WHERE ID=?', (id,))
-        )
-        if maybe_file:
-            raise AlreadyImported('There is already file with same ID')
+        try:
+            maybe_file = await self.dlb._tgbox_db.Files.select_once(
+                sql_tuple=('SELECT ID FROM FILES WHERE ID=?', (id,))
+            )
+        except StopAsyncIteration:
+            pass
+        else:
+            raise AlreadyImported('There is already file with same ID') from None
 
         if self.imported:
             filekey = next(aes_encrypt(
