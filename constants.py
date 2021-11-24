@@ -6,7 +6,10 @@ from pathlib import Path
 API_ID: int=2210681; API_HASH: str='33755adb5ba3c296ccf0dd5220143841'
 
 VERSION: str='0.1'
-VERBYTE: bytes=b'\x00'   
+VERBYTE: bytes=b'\x00'
+
+DEF_NO_FOLDER:  bytes = b'NO_FOLDER'
+DEF_UNK_FOLDER: bytes = b'UNKNOWN_FOLDER'
 
 PREFIX:       bytes=b'\x00TGBOX'
 VERBYTE_MAX:    int=1

@@ -31,7 +31,7 @@ from .constants import (
     VERSION, VERBYTE, BOX_IMAGE_PATH, 
     DOWNLOAD_PATH, API_ID, API_HASH, FILESIZE_MAX,
     FILE_NAME_MAX, FOLDERNAME_MAX, COMMENT_MAX,
-    PREVIEW_MAX, DURATION_MAX
+    PREVIEW_MAX, DURATION_MAX, DEF_NO_FOLDER
 )
 from .db import TgboxDB
 
@@ -39,7 +39,7 @@ from .errors import (
     IncorrectKey, NotInitializedError,
     InUseException, BrokenDatabase,
     AlreadyImported, RemoteFileNotFound,
-    AESError, NotImported
+    NotImported
 )
 from sqlite3 import IntegrityError
 
@@ -582,7 +582,6 @@ class RemoteBox:
             elif not m and not ignore_errors:
                 raise RemoteFileNotFound('One of requsted by you file doesn\'t exist')
             
-            # May raise error if you specified file that doesn't exist. ?? TODO
             if m.document: 
                 if not decrypt:
                     rbf = await EncryptedRemoteBoxFile(
@@ -961,7 +960,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                         self._foldername, self.__mainkey, yield_all=True)
                     )
                 else:
-                    self._foldername = b'NO_FOLDER'
+                    self._foldername = DEF_NO_FOLDER
 
                 pos = 10 + folder_len
                 comment_len = bytes_to_int(dec_filedata[pos:pos+1],signed=False)
@@ -1023,7 +1022,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         
         hide_folder (`bool`, optional):
             Saves to folder which this file belongs to if False,
-            (default) otherwise to `outfile/UNKNOWN_FOLDER`.
+            (default) otherwise to `outfile/{constants.DEF_UNK_FOLDER}`.
             
             Doesn't create any folders if `isinstance(outfile, BinaryIO)`.
         
@@ -1060,8 +1059,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             Path('BoxDownloads').mkdir(exist_ok=True)
             outfile = Path(outfile) if not isinstance(outfile, Path) else outfile
 
-            folder = 'UNKNOWN_FOLDER' if hide_folder else self._foldername
-            folder = b'NO_FOLDER' if not folder else folder
+            folder = DEF_UNK_FOLDER if hide_folder else self._foldername
+            folder = DEF_NO_FOLDER if not folder else folder
             name = prbg(16).hex() if hide_name else self._file_name
             
             outfile = Path(outfile, folder.decode())
@@ -1309,7 +1308,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
     async def make_file( 
             self, file: Union[BinaryIO, BytesIO, bytes],
             file_size: Optional[int] = None,
-            foldername: bytes=b'NO_FOLDER', 
+            foldername: bytes=DEF_NO_FOLDER, 
             comment: bytes=b'',
             make_preview: bool=True) -> 'FutureFile':
         '''
@@ -1856,7 +1855,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 iv=self._foldername_iv, yield_all=True)
             )
         else:
-            self._foldername = b'NO_FOLDER'
+            self._foldername = DEF_NO_FOLDER
 
         self._comment = next(aes_decrypt(
             elbfi._comment, self._filekey, yield_all=True)
