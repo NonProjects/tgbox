@@ -16,10 +16,12 @@ from telethon.tl.functions.channels import (
     GetFullChannelRequest
 )
 from telethon.tl.types import (
-    Channel, Message, PeerChannel
+    Channel, Message, 
+    PeerChannel, SentCode
 )
 from .crypto import (
-    aes_decrypt, aes_encrypt, AESwState
+    aes_decrypt, aes_encrypt, 
+    AESwState, make_box_salt
 )
 from .keys import (
     make_filekey, make_requestkey,
@@ -28,7 +30,7 @@ from .keys import (
     EncryptedMainkey, make_mainkey
 )
 from .constants import (
-    VERSION, VERBYTE, BOX_IMAGE_PATH, 
+    VERSION, VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME,
     DOWNLOAD_PATH, API_ID, API_HASH, FILESIZE_MAX,
     FILE_NAME_MAX, FOLDERNAME_MAX, COMMENT_MAX,
     PREVIEW_MAX, DURATION_MAX, DEF_NO_FOLDER
@@ -182,38 +184,74 @@ async def _search_func(
         yield file
 
 async def make_remote_box(
-        ta: 'TelegramAccount', box_salt: bytes, tgbox_db: Optional[TgboxDB] = None, 
-        BOX_IMAGE_PATH: str=BOX_IMAGE_PATH) -> 'RemoteBox':
+        ta: 'TelegramAccount', 
+        tgbox_db_name: str=DEF_TGBOX_NAME, 
+        box_image_path: Path=BOX_IMAGE_PATH,
+        box_salt: Optional[bytes] = None) -> 'RemoteBox':
+    '''
+    Function used for making `RemoteBox`. 
+
+    ta (`TelegramAccount`):
+        Account to make private Telegram channel.
+        You must be signed in via `sign_in()`.
     
-    if not tgbox_db:
-        tgbox_db = await (await TgboxDB('tgbox_db')).init()
+    tgbox_db_name (`TgboxDB`, optional):
+        Name of your Local and Remote boxes.
+        `constants.DEF_TGBOX_NAME` by default.
+
+    box_image_path (`Path`, optional):
+        `Path` to image that will be used as
+        `Channel` photo of your `RemoteBox`.
+
+    box_salt (`bytes`, optional):
+        Random 32 bytes. Will be used in `MainKey`
+        creation. Default is `crypto.make_box_salt()`.
+    '''
+    tgbox_db = await TgboxDB.create(tgbox_db_name)
+    if (await tgbox_db.BoxData.count_rows()): 
+        raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
 
     channel_name = 'tgbox: ' + tgbox_db.name
+    box_salt = b64encode(box_salt if box_salt else make_box_salt())
+
     channel = (await ta.TelegramClient(
         CreateChannelRequest(channel_name,'',megagroup=False))).chats[0]
     
-    BOX_IMAGE_PATH = await ta.TelegramClient.upload_file(BOX_IMAGE_PATH)
-    await ta.TelegramClient(EditPhotoRequest(channel, BOX_IMAGE_PATH)) 
-    await ta.TelegramClient(EditChatAboutRequest(channel, b64encode(box_salt).decode()))
+    box_image = await ta.TelegramClient.upload_file(open(box_image_path,'rb'))
+    await ta.TelegramClient(EditPhotoRequest(channel, box_image)) 
+    await ta.TelegramClient(EditChatAboutRequest(channel, box_salt.decode()))
     
     return RemoteBox(channel, ta)
 
 async def get_remote_box(
         dlb: Optional['DecryptedLocalBox'] = None, 
         ta: Optional['TelegramAccount'] = None,
-        entity: Optional[Union[int, str]] = None) -> 'RemoteBox':
+        entity: Optional[Union[int, str, PeerChannel]] = None) -> 'RemoteBox':
     '''
     Returns `RemoteBox` (`Channel`).
     
-    Note that `ta` must be already connected 
-    with Telegram via `await ta.connect()`.
-    
-    Must be specified at least `dlb` or
-    `ta` with `entity`. `entity` will be used 
-    if specified. Can be Channel ID or Username.
+    Must be specified at least 
+    `dlb` or `ta` with `entity`. 
+
+    dlb (`DecryptedLocalBox`, optional):
+        Should be specified if `ta` is `None`.
+
+    ta (`TelegramAccount`, optional):
+        Should be specified if `dlb` is `None`.
+        `entity` should be specified with `ta`.
+
+        Note that `ta` must be already connected 
+        with Telegram via `await ta.connect()`.
+
+    entity (`PeerChannel`, `int`, `str`, optional):
+        Can be `Channel` ID, Username or `PeerChannel`.
+        Will be used if specified. Must be specified with `ta`.
     '''
     if ta:
         account = ta
+
+    elif ta and not entity:
+        raise ValueError('entity must be specified with ta')
     else:
         account = TelegramAccount(session=dlb._session)
         await account.connect()
@@ -224,12 +262,26 @@ async def get_remote_box(
 
 async def make_local_box(
         rb: 'RemoteBox', ta: 'TelegramAccount', 
-        mainkey: MainKey, tgbox_db: TgboxDB) -> 'DecryptedLocalBox':
-    
+        basekey: BaseKey) -> 'DecryptedLocalBox':
+    '''
+    rb (`RemoteBox`):
+        Created `RemoteBox`. Pretty obvious, huh?!
+
+    ta (`TelegramAccount`):
+        `TelegramAccount` connected with servers.
+
+    basekey (`BaseKey`):
+        `BaseKey` that will be used for `MainKey`
+        creation. Furtherly you will need to always 
+        specify it for downloading files from 
+        your `RemoteBox`, so don't forget your `Phrase`.
+    '''
+    tgbox_db = await TgboxDB.create(await rb.get_box_name())
     if (await tgbox_db.BoxData.count_rows()): 
         raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
 
     box_salt = await rb.get_box_salt()
+    mainkey = make_mainkey(basekey, box_salt)
 
     await tgbox_db.BoxData.insert(
         next(aes_encrypt(int_to_bytes(0), mainkey, yield_all=True)),
@@ -242,7 +294,8 @@ async def make_local_box(
     return await EncryptedLocalBox(tgbox_db).decrypt(mainkey)
 
 async def get_local_box(
-        tgbox_db: TgboxDB, key: Optional[Union[MainKey, BaseKey]] = None, 
+        key: Optional[Union[MainKey, BaseKey]] = None,
+        tgbox_db_path: Optional[Union[Path, str]] = DEF_TGBOX_NAME,
         ) -> Union['EncryptedLocalBox', 'DecryptedLocalBox']:
     '''
     Returns LocalBox.
@@ -251,52 +304,161 @@ async def get_local_box(
         Returns `DecryptedLocalBox` if specified,
         `EncryptedLocalBox` otherwise (default).
         
-        You can specify `key` as `BaseKey` if it's
-        was cloned from `RemoteBox` and has BOX_DATA/MAINKEY.
-        If it's your LocalBox, then use `MainKey`.
-    
-    tgbox_db (`TgboxDB`, optional):
-        Initialized `TgboxDB`. 
+    tgbox_db_path (`Path`, `str`, optional):
+        `Path` to your TgboxDB (LocalBox). Default
+        is `constants.DEF_TGBOX_NAME`.
     '''
+    if not isinstance(tgbox_db_path, Path):
+        tgbox_db_path = Path(tgbox_db_path)
+
+    if not tgbox_db_path.exists():
+        raise FileNotFoundError('Can\'t open {tgbox_db_path.absolute()}') 
+    else:
+        tgbox_db = await TgboxDB(tgbox_db_path).init()
+
     if key:
         return await EncryptedLocalBox(tgbox_db).decrypt(key)
     else:
         return await EncryptedLocalBox(tgbox_db).init()
 
 class TelegramAccount:
+    '''
+    Wrapper around `telethon.TelegramClient`
+    
+    Typical use:
+        ```
+        ...
+        from getpass import getpass # For hidden input
+
+        ta = TelegramAccount(phone_number=input('Phone: '))
+
+        await ta.connect()
+        await ta.send_code_request()
+
+        await ta.sign_in(
+            code=int(input('Code: ')),
+            password=getpass('Pass: ')
+        )
+        rb = await make_remote_box(ta)
+        ...
+        ```
+    '''
     def __init__(
-        self, api_id: int=API_ID, api_hash: str=API_HASH, 
-        phone_number: Optional[str] = None, session: Optional[str] = None):
+            self, api_id: int=API_ID, 
+            api_hash: str=API_HASH, 
+            phone_number: Optional[str] = None, 
+            session: Optional[str, StringSession] = None):
+        '''
+        api_id (`int`, optional):
+            API_ID from https://my.telegram.org.
+            `constants.API_ID` by default.
+
+        api_hash (`int`, optional):
+            API_HASH from https://my.telegram.org.
+            `constants.API_HASH` by default.
         
+        phone_number (`str`, optional):
+            Phone number linked to your Telegram
+            account. You may want to specify it
+            to recieve log-in code. You should
+            specify it if `session` is `None`.
+
+        session (`str`, `StringSession`, optional):
+            `StringSession` that give access to
+            your Telegram account. You can get it
+            after connecting and signing in via
+            `TelegramAccount.get_session()` method.
+        '''
         self._api_id, self._api_hash = api_id, api_hash
         self._phone_number = phone_number
         
         self.TelegramClient = TelegramClient(
             StringSession(session), self._api_id, self._api_hash
         )
+    async def signed_in(self) -> bool:
+        '''Returns `True` if you logged in account'''
+        return await self.TelegramClient.is_user_authorized()
+
     async def connect(self) -> None:
+        '''
+        Connects to Telegram. Typically
+        you will use this method if you have
+        `StringSession` (`session` specified).
+        '''
         await self.TelegramClient.connect()
 
-    async def send_code_request(self) -> None:
-        await self.TelegramClient.send_code_request(self._phone_number)
+    async def send_code_request(self, force_sms: bool=False) -> SentCode:
+        '''
+        Sends the Telegram code needed to login to the given phone number.
 
-    async def sign_in(self, password: str=None, code: int=None) -> None: # todo: return True/False
+        force_sms (`bool`, optional):
+            Whether to force sending as SMS.
+        '''
+        return await self.TelegramClient.send_code_request(self._phone_number)
+
+    async def sign_in(
+            self, password: Optional[str] = None, 
+            code: Optional[int] = None) -> None: 
+        '''
+        Logs in to Telegram to an existing user account.
+        You should only use this if you are not signed in yet.
+        
+        password (`str`, optional):
+            Your 2FA password. You can ignore 
+            this if you don't enabled it yet.
+
+        code (`int`, optional):
+            The code that Telegram sent you after calling
+            `TelegramAccount.send_code_request()` method.
+        '''
         if not await self.TelegramClient.is_user_authorized():
             try:
                 await self.TelegramClient.sign_in(self._phone_number, code)
             except SessionPasswordNeededError:
                 await self.TelegramClient.sign_in(password=password)
 
-    async def log_out(self):
+    async def log_out(self) -> bool:
+        '''
+        Logs out from Telegram. Returns `True` 
+        if the operation was successful.
+        '''
         return await self.TelegramClient.log_out()
 
-    async def resend_code(self, phone_number: str, phone_code_hash: str) -> None: #????/ todo
-        await self.TelegramClient(ResendCodeRequest(phone_number, phone_code_hash))
+    async def resend_code(self, phone_code_hash: str) -> SentCode:
+        '''
+        Send log-in code again. This can be used to
+        force Telegram send you SMS or Call to dictate code.
+
+        phone_code_hash (`str`):
+            You can get this hash after calling
+            `TelegramAccount.send_code_request()`.
+
+            E.g:
+                ```
+                ...
+                sent_code = await tg_account.send_code_request()
+                sent_code = await tg_account.resend_code(sent_code.phone_code_hash)
+                ...
+                ```
+        '''
+        return await self.TelegramClient(
+            ResendCodeRequest(self._phone_number, phone_code_hash)
+        )
 
     def get_session(self) -> str:
+        '''Returns `StringSession` as `str`'''
         return self.TelegramClient.session.save()
     
     async def tgboxes(self, yield_with: str='tgbox: ') -> Generator:
+        '''
+        Iterator over all Tgbox Channels in your account.
+        It will return any channel with Tgbox prefix,
+        `"tgbox: "` by default, you can override this.
+
+        yield_with (`str`):
+            Any channel that have `in` title this
+            string will be returned as `RemoteBox`. 
+        '''
         async for d in self.TelegramClient.iter_dialogs():
             if yield_with in d.title and d.is_channel: 
                 yield RemoteBox(d, self)
