@@ -6,14 +6,8 @@ class IncorrectKey(Exception):
 class NotInitializedError(Exception):
     '''The class you try to use isn't initialized'''
 
-class InUseException(Exception):
-    '''The DB already exists and in use'''
-
-class BrokenDatabase(Exception):
-    '''Can\'t parse SQLite DB'''
-
-class AlreadyImported(Exception):
-    '''LocalBox have file with same ID'''
+class PathIsDirectory(Exception):
+    '''Specified path is Directory'''
 
 # Crypto Exceptions
 
@@ -36,5 +30,21 @@ class DurationImpossible(Exception):
 
 # Database Exceptions
 
-class PathIsDirectory(Exception):
-    '''Specified path is Directory'''
+class InUseException(Exception):
+    '''The DB already exists and in use'''
+
+class BrokenDatabase(Exception):
+    '''Can\'t parse SQLite DB'''
+
+# RemoteBox Exceptions
+
+class RemoteFileNotFound(Exception):
+    '''Seems that there is no requested by you file'''
+
+# LocalBox Exceptions
+
+class AlreadyImported(Exception):
+    '''LocalBox have file with same ID'''
+
+class NotImported(Exception):
+    '''The file you try to retrieve wasn\'t imported yet'''
