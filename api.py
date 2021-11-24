@@ -38,7 +38,8 @@ from .db import TgboxDB
 from .errors import (
     IncorrectKey, NotInitializedError,
     InUseException, BrokenDatabase,
-    AlreadyImported
+    AlreadyImported, RemoteFileNotFound,
+    AESError, NotImported
 )
 from sqlite3 import IntegrityError
 
@@ -577,43 +578,54 @@ class RemoteBox:
         async for m in it_messages:
             if not m and ignore_errors:
                 continue 
+
+            elif not m and not ignore_errors:
+                raise RemoteFileNotFound('One of requsted by you file doesn\'t exist')
             
             # May raise error if you specified file that doesn't exist. ?? TODO
             if m.document: 
-                try:
-                    if decrypt:
-                        try:
-                            rbf = await EncryptedRemoteBoxFile(
-                                m, self._ta, cache_preview=cache_preview).decrypt(key)
-                        except ValueError as e: # In case of imported file
-                            if return_imported_as_erbf and not dlb:
-                                rbf = await EncryptedRemoteBoxFile(
-                                    m, self._ta, cache_preview=cache_preview).init()
-                            elif ignore_errors and not dlb:
-                                continue
-                            else:
-                                if dlb:
-                                    dlb_file = await dlb.get_file(m.id)
-                                    if not dlb_file:
-                                        if return_imported_as_erbf: 
-                                            rbf = await EncryptedRemoteBoxFile(
-                                                m, self._ta, cache_preview=cache_preview).init()
-                                        elif ignore_errors:
-                                            continue
-                                        else:
-                                            raise e # ??
-                                    else:
-                                        rbf = await EncryptedRemoteBoxFile(
-                                            m, self._ta, cache_preview=cache_preview
-                                        ).decrypt(dlb_file._filekey)
-                                else: 
-                                    raise e # ??
-                    else:
+                if not decrypt:
+                    rbf = await EncryptedRemoteBoxFile(
+                        m, self._ta, cache_preview=cache_preview).init()
+                else:
+                    try:
                         rbf = await EncryptedRemoteBoxFile(
-                            m, self._ta, cache_preview=cache_preview).init()
-                    yield rbf
-                except IndexError: # Not Tgbox file (can't parse datastring).
-                    pass
+                            m, self._ta, cache_preview=cache_preview).decrypt(key)
+                    except Exception as e: # In case of imported file
+                        if return_imported_as_erbf and not dlb:
+                            rbf = await EncryptedRemoteBoxFile(
+                                m, self._ta, cache_preview=cache_preview).init()
+
+                        elif ignore_errors and not dlb:
+                            continue
+
+                        elif not ignore_errors and not dlb:
+                            raise IncorrectKey(
+                                'File is imported. Specify dlb?') from None
+                        elif dlb:
+                            # We try to fetch FileKey of imported file from DLB.
+                            dlb_file = await dlb.get_file(m.id, cache_preview=False)
+                            
+                            # If we haven't imported this file to DLB
+                            if not dlb_file:
+                                if return_imported_as_erbf: 
+                                    rbf = await EncryptedRemoteBoxFile(
+                                        m, self._ta, cache_preview=cache_preview).init()
+                                elif ignore_errors:
+                                    continue
+                                else:
+                                    raise NotImported(
+                                        '''You don\'t have FileKey for this file. '''
+                                        '''Set to True `return_imported_as_erbf`?'''
+                                    ) from None
+                            else:
+                                # We already imported file, so have FileKey
+                                rbf = await EncryptedRemoteBoxFile(
+                                    m, self._ta, cache_preview=cache_preview
+                                ).decrypt(dlb_file._filekey)
+                        else: 
+                            raise e # Unknown Exception
+                yield rbf
     
     async def get_requestkey(self, mainkey: MainKey) -> RequestKey:
         '''
