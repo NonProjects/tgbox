@@ -16,9 +16,10 @@ from telethon.tl.functions.channels import (
     GetFullChannelRequest
 )
 from telethon.tl.types import (
-    Channel, Message, 
-    PeerChannel, SentCode
+    Channel, Message, PeerChannel
 )
+from telethon.tl.types.auth import SentCode
+
 from .crypto import (
     aes_decrypt, aes_encrypt, 
     AESwState, make_box_salt
@@ -347,7 +348,7 @@ class TelegramAccount:
             self, api_id: int=API_ID, 
             api_hash: str=API_HASH, 
             phone_number: Optional[str] = None, 
-            session: Optional[str, StringSession] = None):
+            session: Optional[Union[str, StringSession]] = None):
         '''
         api_id (`int`, optional):
             API_ID from https://my.telegram.org.
@@ -842,6 +843,7 @@ class EncryptedRemoteBoxFile:
         self._message = sended_file
         self._id = sended_file.id
         self._file = sended_file.file
+        self._sender = sended_file.post_author
         
         self._ta = ta
         self._cache_preview = cache_preview
@@ -876,6 +878,15 @@ class EncryptedRemoteBoxFile:
     @property
     def initialized(self) -> bool:
         return self._initialized
+    
+    @property
+    def sender(self) -> Union[str, None]:
+        '''
+        Returns post author if sign
+        messages is enabled in 
+        `Channel`, `None` otherwise
+        '''
+        return self._sender
 
     @property 
     def exported(self) -> bool:
@@ -1063,6 +1074,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._message = erbf._message
         self._id = erbf._id
         self._file = erbf._file
+        self._sender = erbf._sender
         
         self._ta = erbf._ta
         self._cache_preview = erbf._cache_preview
