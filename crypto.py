@@ -26,6 +26,18 @@ try:
 except ModuleNotFoundError:
     FAST_TELETHON = False
 
+
+__all__ = [
+    'AES', 
+    'urandom',
+    'FAST_ENCRYPTION', 
+    'FAST_TELETHON', 
+    'Padding', 
+    'AESwState', 
+    'aes_encrypt', 
+    'aes_decrypt', 
+    'make_box_salt'
+]
 class Padding:
     pad_ = pad_ if not FAST_ENCRYPTION else lambda ptxt: pad_(ptxt,16)
     unpad_ = unpad_ if not FAST_ENCRYPTION else lambda ptxt: unpad_(ptxt,16)

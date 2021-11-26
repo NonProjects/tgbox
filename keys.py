@@ -18,6 +18,25 @@ from .constants import (
 )
 from .crypto import aes_encrypt, aes_decrypt
 
+
+__all__ = [
+    'Phrase', 
+    'Key', 
+    'BaseKey', 
+    'MainKey', 
+    'RequestKey', 
+    'ShareKey', 
+    'ImportKey', 
+    'FileKey', 
+    'EncryptedMainkey', 
+    'make_basekey', 
+    'make_mainkey', 
+    'make_filekey', 
+    'make_requestkey', 
+    'make_sharekey', 
+    'make_importkey'
+]
+
 class Phrase:
     def __init__(self, phrase: bytes):
         self._phrase = phrase

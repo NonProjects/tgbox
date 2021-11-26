@@ -68,8 +68,23 @@ from base64 import (
     urlsafe_b64encode as b64encode, # We use urlsafe base64.
     urlsafe_b64decode as b64decode
 )
-#__all__ = [] TODO: square previews. Test with PyAes.
 
+__all__ = [
+    'make_remote_box', 
+    'get_remote_box', 
+    'make_local_box', 
+    'get_local_box', 
+    'TelegramAccount', 
+    'RemoteBox', 
+    'EncryptedRemoteBoxFile', 
+    'DecryptedRemoteBoxFile', 
+    'EncryptedLocalBox', 
+    'DecryptedLocalBox', 
+    'LocalBoxFolder', 
+    'EncryptedLocalBoxFile', 
+    'DecryptedLocalBoxFile', 
+    'FutureFile'
+]
 TelegramClient.__version__ = VERSION
 
 async def _search_func(
@@ -186,7 +201,7 @@ async def _search_func(
 async def make_remote_box(
         ta: 'TelegramAccount', 
         tgbox_db_name: str=DEF_TGBOX_NAME, 
-        box_image_path: Path=BOX_IMAGE_PATH,
+        box_image_path: Union[Path, str] = BOX_IMAGE_PATH,
         box_salt: Optional[bytes] = None) -> 'RemoteBox':
     '''
     Function used for making `RemoteBox`. 
@@ -510,8 +525,10 @@ class RemoteBox:
         return self._box_name
 
     async def clone(
-            self, mainkey: Union[MainKey, ImportKey],
-            basekey: BaseKey, box_path: Optional[Union[Path, str]] = None) -> 'DecryptedLocalBox':
+            self, 
+            mainkey: Union[MainKey, ImportKey],
+            basekey: BaseKey, 
+            box_path: Optional[Union[Path, str]] = None) -> 'DecryptedLocalBox':
         '''
         '''
         box_path = self._box_name if not box_path else box_path
@@ -1248,7 +1265,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         elif isinstance(outfile, BinaryIO) or hasattr(outfile, 'write'):
             pass # We already can write 
         else:
-            raise TypeError('outfile not Union[BinaryIO, str].')
+            raise TypeError('outfile not Union[BinaryIO, str, Path].')
         
         if offset and decrypt:
             raise ValueError('Can\'t decrypt with `offset`')
@@ -1339,15 +1356,15 @@ class EncryptedLocalBox:
         return self._session
     
     @property
-    def box_channel_id(self) -> Union[bytes, str, None]:
+    def box_channel_id(self) -> Union[bytes, int, None]:
         return self._box_channel_id
     
     @property
-    def box_cr_time(self) -> Union[bytes, str, None]:
+    def box_cr_time(self) -> Union[bytes, int, None]:
         return self._box_cr_time
     
     @property
-    def last_file_id(self) -> Union[bytes, str, None]:
+    def last_file_id(self) -> Union[bytes, int, None]:
         return self._last_file_id
     
     async def init(self) -> 'EncryptedLocalBox':
@@ -1805,11 +1822,11 @@ class EncryptedLocalBoxFile:
         return self._file_path
 
     @property
-    def file_name(self) -> Union[str, None]:
+    def file_name(self) -> Union[bytes, None]:
         return self._file_name
 
     @property
-    def foldername(self) -> Union[str, None]:
+    def foldername(self) -> Union[bytes, None]:
         return self._foldername
 
     @property

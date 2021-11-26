@@ -1,6 +1,36 @@
 from os.path import abspath
 from pathlib import Path
 
+__all__ = [
+    'API_ID', 
+    'API_HASH', 
+    'VERSION', 
+    'VERBYTE', 
+    'DEF_TGBOX_NAME', 
+    'DEF_NO_FOLDER', 
+    'DEF_UNK_FOLDER', 
+    'PREFIX', 
+    'VERBYTE_MAX', 
+    'FILE_SALT_SIZE', 
+    'FILE_NAME_MAX', 
+    'COMMENT_MAX', 
+    'FOLDERNAME_MAX', 
+    'PREVIEW_MAX', 
+    'DURATION_MAX', 
+    'FILESIZE_MAX', 
+    'METADATA_MAX', 
+    'FILEDATA_MAX', 
+    'NAVBYTES_SIZE', 
+    'BOX_IMAGE_PATH', 
+    'WORDS_PATH', 
+    'SCRYPT_SALT', 
+    'SCRYPT_DKLEN', 
+    'SCRYPT_N', 
+    'SCRYPT_R', 
+    'SCRYPT_P', 
+    'DOWNLOAD_PATH', 
+    'AES_RETURN_SIZE'
+]
 # Please DO NOT use this parameters in your projects. Thanks.
 # You can get your own at my.telegram.org. Use it, instead of default.
 API_ID: int=2210681; API_HASH: str='33755adb5ba3c296ccf0dd5220143841'

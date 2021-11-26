@@ -7,6 +7,8 @@ from .errors import PathIsDirectory
 from .tools import anext
 
 
+__all__ = ['SqlTableWrapper', 'TgboxDB']
+
 class SqlTableWrapper:
     '''A low-level wrapper to SQLite Tables.'''
     def __init__(self, aiosql_conn, table_name: str):
