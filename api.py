@@ -1592,7 +1592,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
             if make_preview and preview_func:
                 try:
-                    preview = await preview_func(file.name)
+                    preview = (await preview_func(file.name)).read()
                 except PreviewImpossible:
                     preview = b''
             else:

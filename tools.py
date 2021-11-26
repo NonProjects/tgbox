@@ -13,6 +13,7 @@ from struct import (
     pack as struct_pack, 
     unpack as struct_unpack
 )
+from io import BytesIO
 from pathlib import Path
 from functools import partial
 from dataclasses import dataclass
@@ -360,8 +361,15 @@ async def get_media_duration(file_path: str) -> float:
     except ValueError:
         raise DurationImpossible('Can\'t get media duration') from None 
 
-async def make_media_preview(file_path: str, output_path: str='', x: int=128, y: int=-1) -> bytes:
-    '''Makes x:y sized thumbnail of the video/audio with ffmpeg.'''
+async def make_media_preview(
+        file_path: str, 
+        output_path: str='', 
+        x: int=128, 
+        y: int=-1) -> BinaryIO:
+    '''
+    Makes x:y sized thumbnail of the 
+    video/audio with ffmpeg.
+    '''
     thumbnail_path = Path(output_path, prbg(8).hex()+'.jpg')
     
     func = partial(subprocess_run,
@@ -374,13 +382,21 @@ async def make_media_preview(file_path: str, output_path: str='', x: int=128, y:
     )
     try:
         future = await loop.run_in_executor(None, func)
-        th = open(thumbnail_path,'rb').read()
-        remove_file(thumbnail_path); return th
-    except FileNotFoundError as e: # if something goes wrong then file not created
+        thumb = BytesIO(open(thumbnail_path,'rb').read())
+        remove_file(thumbnail_path); return thumb
+    except FileNotFoundError as e:
+        # if something goes wrong then file not created
         raise PreviewImpossible(f'Not a media. {e}') from None
             
-async def make_image_preview(file_path: str, output_path: str='', x: int=128, y: int=-1) -> bytes:
-    '''Makes resized to x:y copy of the image with ffmpeg.'''
+async def make_image_preview(
+        file_path: str, 
+        output_path: str='', 
+        x: int=128, 
+        y: int=-1) -> BinaryIO:
+    '''
+    Makes resized to x:y copy 
+    of the image with ffmpeg.
+    '''
     thumbnail_path = Path(output_path, prbg(8).hex()+'.jpg')
     
     p = Popen(
@@ -390,7 +406,8 @@ async def make_image_preview(file_path: str, output_path: str='', x: int=128, y:
     while p.poll() == None:
         await sleep(0.1)
     try:
-        th = open(thumbnail_path,'rb').read()
-        remove_file(thumbnail_path); return th
-    except FileNotFoundError as e: # if something goes wrong then file not created
+        thumb = BytesIO(open(thumbnail_path,'rb').read())
+        remove_file(thumbnail_path); return thumb
+    except FileNotFoundError as e:
+        # if something goes wrong then file not created
         raise PreviewImpossible(f'Not a photo. {e}') from None
