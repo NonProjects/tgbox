@@ -364,7 +364,7 @@ async def get_media_duration(file_path: str) -> float:
 async def make_media_preview(
         file_path: str, 
         output_path: str='', 
-        x: int=256, 
+        x: int=128, 
         y: int=-1) -> BinaryIO:
     '''
     Makes x:y sized thumbnail of the 
@@ -386,4 +386,4 @@ async def make_media_preview(
         remove_file(thumbnail_path); return thumb
     except FileNotFoundError as e:
         # if something goes wrong then file not created
-        raise PreviewImpossible(f'Not a media. {e}') from None
+        raise PreviewImpossible(f'Not a media file. {e}') from None
