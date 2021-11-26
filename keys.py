@@ -5,8 +5,8 @@ from hashlib import sha256, scrypt
 from typing import Generator, Union, Optional
 
 from base64 import (
-    urlsafe_b64encode as b64encode,  # We use urlsafe base64.
-    urlsafe_b64decode as b64decode
+    urlsafe_b64encode,
+    urlsafe_b64decode 
 )
 from ecdsa.ecdh import ECDH
 from ecdsa.curves import SECP256k1
@@ -125,11 +125,11 @@ class Key:
             'E': EncryptedMainkey
         }
         ekey_type = ekey_types[encoded_key[0]]
-        return ekey_type(b64decode(encoded_key[1:]))
+        return ekey_type(urlsafe_b64decode(encoded_key[1:]))
     
     def encode(self) -> str:
         prefix = self._key_types[self._key_type][0]
-        return prefix + b64encode(self._key).decode()
+        return prefix + urlsafe_b64encode(self._key).decode()
     
     def hex(self) -> str:
         return self._key.hex()

@@ -65,8 +65,8 @@ from io import BytesIO
 from time import time
 
 from base64 import (
-    urlsafe_b64encode as b64encode, # We use urlsafe base64.
-    urlsafe_b64decode as b64decode
+    urlsafe_b64encode, 
+    urlsafe_b64decode 
 )
 
 __all__ = [
@@ -227,7 +227,7 @@ async def make_remote_box(
         raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
 
     channel_name = 'tgbox: ' + tgbox_db.name
-    box_salt = b64encode(box_salt if box_salt else make_box_salt())
+    box_salt = urlsafe_b64encode(box_salt if box_salt else make_box_salt())
 
     channel = (await ta.TelegramClient(
         CreateChannelRequest(channel_name,'',megagroup=False))).chats[0]
@@ -514,7 +514,7 @@ class RemoteBox:
             full_rq = await self._ta.TelegramClient(
                 GetFullChannelRequest(channel=self._box_channel)
             )
-            self._box_salt = b64decode(full_rq.full_chat.about)
+            self._box_salt = urlsafe_b64decode(full_rq.full_chat.about)
             
         return self._box_salt
     
@@ -585,7 +585,7 @@ class RemoteBox:
         oe.concat_metadata(ff.metadata)
             
         ifile = await self._ta.TelegramClient.upload_file(
-            oe, file_name=b64encode(ff.file_salt).decode(), 
+            oe, file_name=urlsafe_b64encode(ff.file_salt).decode(), 
             part_size_kb=512, file_size=ff.size
         )
         file_message = await self._ta.TelegramClient.send_file(

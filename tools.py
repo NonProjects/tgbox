@@ -24,11 +24,14 @@ from .constants import (
     DURATION_MAX, FILESIZE_MAX, PREFIX, 
     METADATA_MAX, FILEDATA_MAX, NAVBYTES_SIZE
 )
+from .errors import (
+    ConcatError, 
+    PreviewImpossible, 
+    DurationImpossible
+)
 from .keys import FileKey, MainKey
 from .crypto import AESwState, aes_encrypt
-from .errors import (
-    ConcatError, PreviewImpossible, DurationImpossible
-)
+
 
 __all__ = [
     'prbg', 'anext', 
