@@ -34,7 +34,7 @@ from .constants import (
     VERSION, VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME,
     DOWNLOAD_PATH, API_ID, API_HASH, FILESIZE_MAX,
     FILE_NAME_MAX, FOLDERNAME_MAX, COMMENT_MAX,
-    PREVIEW_MAX, DURATION_MAX, DEF_NO_FOLDER
+    PREVIEW_MAX, DURATION_MAX, DEF_NO_FOLDER, NAVBYTES_SIZE
 )
 from .db import TgboxDB
 
@@ -42,7 +42,7 @@ from .errors import (
     IncorrectKey, NotInitializedError,
     InUseException, BrokenDatabase,
     AlreadyImported, RemoteFileNotFound,
-    NotImported
+    NotImported, AESError
 )
 from .tools import (
     int_to_bytes, bytes_to_int, make_image_preview, 
@@ -1110,6 +1110,10 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         dec_navbytes = next(aes_decrypt(
             self._erbf._navbytes, self._filekey, yield_all=True)
         )
+        # This should be True when LocalBox hasn't Key for imported file.
+        if len(dec_navbytes) == NAVBYTES_SIZE-16:
+            raise AESError('Navbytes wasn\'t decrypted correctly. Incorrect key?')
+        
         filedata_len = bytes_to_int(dec_navbytes[:3],signed=False)
         preview_len = bytes_to_int(dec_navbytes[3:],signed=False)
         #TODO: BIG FILEDATA LEN IS BROKEN
