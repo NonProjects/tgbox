@@ -364,7 +364,7 @@ async def get_media_duration(file_path: str) -> float:
 async def make_media_preview(
         file_path: str, 
         output_path: str='', 
-        x: int=128, 
+        x: int=256, 
         y: int=-1) -> BinaryIO:
     '''
     Makes x:y sized thumbnail of the 
@@ -381,33 +381,9 @@ async def make_media_preview(
         stderr=STDOUT
     )
     try:
-        future = await loop.run_in_executor(None, func)
+        await loop.run_in_executor(None, func)
         thumb = BytesIO(open(thumbnail_path,'rb').read())
         remove_file(thumbnail_path); return thumb
     except FileNotFoundError as e:
         # if something goes wrong then file not created
         raise PreviewImpossible(f'Not a media. {e}') from None
-            
-async def make_image_preview(
-        file_path: str, 
-        output_path: str='', 
-        x: int=128, 
-        y: int=-1) -> BinaryIO:
-    '''
-    Makes resized to x:y copy 
-    of the image with ffmpeg.
-    '''
-    thumbnail_path = Path(output_path, prbg(8).hex()+'.jpg')
-    
-    p = Popen(
-        ['ffmpeg', '-i', file_path, '-vf', f'scale={x}:{y}', 
-         '-loglevel', 'quiet', '-q:v', '2', thumbnail_path]
-    )
-    while p.poll() == None:
-        await sleep(0.1)
-    try:
-        thumb = BytesIO(open(thumbnail_path,'rb').read())
-        remove_file(thumbnail_path); return thumb
-    except FileNotFoundError as e:
-        # if something goes wrong then file not created
-        raise PreviewImpossible(f'Not a photo. {e}') from None
