@@ -44,18 +44,17 @@ from .errors import (
     AlreadyImported, RemoteFileNotFound,
     NotImported
 )
-from sqlite3 import IntegrityError
-
 from .tools import (
     int_to_bytes, bytes_to_int, make_image_preview, 
     make_media_preview, SearchFilter, OpenPretender, 
     make_folder_id, get_media_duration, float_to_bytes, 
-    bytes_to_float, prbg, RemoteBoxFileMetadata
+    bytes_to_float, prbg, RemoteBoxFileMetadata, anext
 )
 from typing import (
     BinaryIO, Union, NoReturn, 
     Generator, List, Optional
 )
+from sqlite3 import IntegrityError
 from dataclasses import dataclass
 from mimetypes import guess_type
 from os.path import getsize
@@ -612,7 +611,7 @@ class RemoteBox:
             ignore_errors=ignore_errors
         )
         try:
-            return await file_iter.__anext__()
+            return await anext(file_iter)
         except StopAsyncIteration: # If there is no file by `id`.
             return None
 

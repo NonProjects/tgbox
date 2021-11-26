@@ -32,6 +32,11 @@ from .errors import (
 # Will generate `size` pseudo-random bytes.
 prbg = lambda size: bytes([randrange(256) for _ in range(size)])
 
+try:
+    anext() # Python 3.10+
+except NameError:
+    anext = lambda agen: agen.__anext__()
+
 @dataclass
 class RemoteBoxFileMetadata: # TODO __repr__?
     file_name: str

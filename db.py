@@ -2,7 +2,9 @@ import aiosqlite
 
 from pathlib import Path
 from typing import Optional, Union, Generator
+
 from .errors import PathIsDirectory
+from .tools import anext
 
 
 class SqlTableWrapper:
@@ -41,7 +43,7 @@ class SqlTableWrapper:
         Will return first row which match the `sql_tuple`,
         see `select()` method for `sql_tuple` details.
         '''
-        return await (self.select(sql_tuple=sql_tuple)).__anext__()
+        return await anext(self.select(sql_tuple=sql_tuple))
 
     async def insert(
             self, *args, sql_statement: Optional[str] = None, 
