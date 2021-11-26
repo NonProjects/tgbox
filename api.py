@@ -3,6 +3,8 @@ try:
 except ImportError:
     from re import search as re_search
 
+from filetype import guess as filetype_guess
+
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError
@@ -43,13 +45,14 @@ from .errors import (
     IncorrectKey, NotInitializedError,
     InUseException, BrokenDatabase,
     AlreadyImported, RemoteFileNotFound,
-    NotImported, AESError
+    NotImported, AESError, PreviewImpossible,
+    DurationImpossible
 )
 from .tools import (
-    int_to_bytes, bytes_to_int, make_image_preview, 
+    int_to_bytes, bytes_to_int, RemoteBoxFileMetadata, 
     make_media_preview, SearchFilter, OpenPretender, 
     make_folder_id, get_media_duration, float_to_bytes, 
-    bytes_to_float, prbg, RemoteBoxFileMetadata, anext
+    bytes_to_float, prbg, anext
 )
 from typing import (
     BinaryIO, Union, NoReturn, 
@@ -57,7 +60,6 @@ from typing import (
 )
 from sqlite3 import IntegrityError
 from dataclasses import dataclass
-from mimetypes import guess_type
 from os.path import getsize
 from pathlib import Path
 
@@ -69,7 +71,6 @@ from base64 import (
     urlsafe_b64encode, 
     urlsafe_b64decode 
 )
-
 __all__ = [
     'make_remote_box', 
     'get_remote_box', 
@@ -1578,42 +1579,35 @@ class DecryptedLocalBox(EncryptedLocalBox):
             elif file_size > FILESIZE_MAX:
                 raise Exception(f'File size limit is {FILESIZE_MAX} bytes.')
         
-        gtype = guess_type(file_name)
+        if make_preview:
+            file_type = filetype_guess(file_name)
+            file_type = file_type if not file_type\
+                else file_type.mime.split('/')[0]
+        else:
+            file_type = None
 
-        if gtype[0]:
-            type_ = gtype[0].split('/')[0]
+        preview, duration = b'', 0
 
-            if type_ in ('audio','video'):
-                preview_func = make_media_preview
-            elif type_ == 'image':
-                preview_func = make_image_preview
-            else:
-                preview_func = None
+        if file_type in ('audio','video','image'):
+            try:
+                preview = (await make_media_preview(file.name)).read()
+                open('toremove.jpg','wb').write(preview)
+            except PreviewImpossible:
+                pass
 
-            if make_preview and preview_func:
-                try:
-                    preview = (await preview_func(file.name)).read()
-                except PreviewImpossible:
-                    preview = b''
-            else:
-                preview = b''
-
-            if preview_func == make_media_preview:
+            if file_type in ('audio','video'):
                 try:
                     duration = await get_media_duration(file.name) 
-                except:
-                    duration = 0
-            else:
-                duration = 0
-        else:
-            preview, duration = b'', 0
+                except DurationImpossible:
+                    pass 
         
+        # Although we store preview size in 3 bytes, the max
+        # preview size is 1MB-16b (PREVIEW_MAX), not 16MiB.
         preview = b'' if len(preview) > PREVIEW_MAX else preview
-        # ^ Although we store preview size in 3 bytes, the max
-        # ^ preview size is 1MB-16b (PREVIEW_MAX), not 16MiB.
+        # Duration can't be bigger than DURATION_MAX. As per
+        # v1.0 it's ~68.1 years. More than enough.
         duration = 0 if duration > DURATION_MAX else duration
-        # ^ Duration can't be bigger than DURATION_MAX. As per
-        # ^ v1.0 it's ~68.1 years. More than enough.
+
         return FutureFile(
             dlb=self, 
             file_name=file_name,
