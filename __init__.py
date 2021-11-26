@@ -1,3 +1,5 @@
+from asyncio import new_event_loop
+
 __all__ = [
     'api',
     'constants',
@@ -5,5 +7,8 @@ __all__ = [
     'db',
     'errors',
     'keys',
-    'tools'
+    'tools',
+    'loop'
 ]
+# Define global event loop
+loop = new_event_loop()
