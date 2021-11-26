@@ -1591,7 +1591,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
         if file_type in ('audio','video','image'):
             try:
                 preview = (await make_media_preview(file.name)).read()
-                open('toremove.jpg','wb').write(preview)
             except PreviewImpossible:
                 pass
 
