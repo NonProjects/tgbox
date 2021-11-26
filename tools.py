@@ -1,22 +1,22 @@
 from hashlib import sha256
 from random import randrange
 
-# TODO: Investigate expediency
-from asyncio import sleep
-
 from subprocess import (
-    Popen, PIPE, STDOUT
+    PIPE, STDOUT, 
+    run as subprocess_run
 )
 from typing import (
-    BinaryIO, List, Union, Optional
+    BinaryIO, List,
+    Union, Optional
 )
 from struct import (
     pack as struct_pack, 
     unpack as struct_unpack
 )
-from os import remove as remove_file
 from pathlib import Path
+from functools import partial
 from dataclasses import dataclass
+from os import remove as remove_file
 
 from .constants import (
     VERBYTE_MAX, FILE_SALT_SIZE, FILE_NAME_MAX,
@@ -29,6 +29,7 @@ from .errors import (
     PreviewImpossible, 
     DurationImpossible
 )
+from . import loop
 from .keys import FileKey, MainKey
 from .crypto import AESwState, aes_encrypt
 
@@ -345,15 +346,17 @@ def bytes_to_float(bytes_: bytes) -> float:
 
 async def get_media_duration(file_path: str) -> float:
     '''Returns video/audio duration with ffprobe.'''
-    p = Popen(
-        ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', 
-         '-of', 'default=noprint_wrappers=1:nokey=1', file_path],
-        stdout=PIPE, stderr=STDOUT
+    func = partial(subprocess_run,
+        args=[
+            'ffprobe', '-v', 'error', '-show_entries', 'format=duration', 
+            '-of', 'default=noprint_wrappers=1:nokey=1', file_path
+        ],
+        stdout=PIPE, 
+        stderr=STDOUT
     )
-    while p.poll() == None:
-        await sleep(0.1)
     try:
-        return float(p.stdout.read())
+        future = await loop.run_in_executor(None, func)
+        return float(future.stdout)
     except ValueError:
         raise DurationImpossible('Can\'t get media duration') from None 
 
@@ -361,17 +364,20 @@ async def make_media_preview(file_path: str, output_path: str='', x: int=128, y:
     '''Makes x:y sized thumbnail of the video/audio with ffmpeg.'''
     thumbnail_path = Path(output_path, prbg(8).hex()+'.jpg')
     
-    p = Popen(
-        ['ffmpeg', '-i', file_path, '-filter:v', f'scale={x}:{y}', '-an',
-        '-loglevel', 'quiet', '-q:v', '2', thumbnail_path]
+    func = partial(subprocess_run,
+        args=[
+            'ffmpeg', '-i', file_path, '-filter:v', f'scale={x}:{y}', '-an',
+            '-loglevel', 'quiet', '-q:v', '2', thumbnail_path
+        ],
+        stdout=PIPE, 
+        stderr=STDOUT
     )
-    while p.poll() == None:
-        await sleep(0.1)
     try:
+        future = await loop.run_in_executor(None, func)
         th = open(thumbnail_path,'rb').read()
         remove_file(thumbnail_path); return th
     except FileNotFoundError as e: # if something goes wrong then file not created
-        raise PreviewImpossible(f'Not a video. {e}') from None
+        raise PreviewImpossible(f'Not a media. {e}') from None
             
 async def make_image_preview(file_path: str, output_path: str='', x: int=128, y: int=-1) -> bytes:
     '''Makes resized to x:y copy of the image with ffmpeg.'''
