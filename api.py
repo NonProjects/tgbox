@@ -37,6 +37,7 @@ from .constants import (
     PREVIEW_MAX, DURATION_MAX, DEF_NO_FOLDER, NAVBYTES_SIZE
 )
 from .db import TgboxDB
+from . import loop
 
 from .errors import (
     IncorrectKey, NotInitializedError,
@@ -388,7 +389,8 @@ class TelegramAccount:
         self._phone_number = phone_number
         
         self.TelegramClient = TelegramClient(
-            StringSession(session), self._api_id, self._api_hash
+            StringSession(session), 
+            self._api_id, self._api_hash, loop=loop
         )
     async def signed_in(self) -> bool:
         '''Returns `True` if you logged in account'''
