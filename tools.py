@@ -325,6 +325,40 @@ class OpenPretender:
     def close(self) -> None:
         self._stop_iteration = True
 
+def pad_request_size(request_size: int, blocksize: int=4096) -> int:
+    '''
+    This function pads `request_size` to divisible
+    by 4096 bytes. If `request_size` < 4096, then
+    it's not padded. This function designed for 
+    Telethon's `GetFileRequest`. See issue #3.
+
+    You need to strip extra bytes.
+
+    request_size (`int`):
+        Amount of requested bytes.
+
+    blocksize (`int`, optional):
+        Size of block. Typically we
+        don't need to change this.
+    '''
+    # Check amount of blocks
+    block_count = request_size/blocksize
+    
+    if block_count <= 1:
+        return request_size
+
+    # If it's already divisible by 4096
+    elif int(block_count) == block_count:
+        request_size = int(block_count*blocksize)
+    else:
+        # Add 1 block.
+        request_size = int(block_count+1)*blocksize
+    
+    # request_size must be divisible by 1MiB
+    while 1048576 % request_size:
+        request_size += 1
+    return request_size
+
 def make_folder_id(mainkey: MainKey, foldername: bytes) -> bytes:
     return sha256(sha256(mainkey.key).digest() + foldername).digest()[:16]
         

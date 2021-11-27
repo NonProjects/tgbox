@@ -52,7 +52,7 @@ from .tools import (
     int_to_bytes, bytes_to_int, RemoteBoxFileMetadata, 
     make_media_preview, SearchFilter, OpenPretender, 
     make_folder_id, get_media_duration, float_to_bytes, 
-    bytes_to_float, prbg, anext
+    bytes_to_float, prbg, anext, pad_request_size
 )
 from typing import (
     BinaryIO, Union, NoReturn, 
@@ -1136,12 +1136,12 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         
         filedata_len = bytes_to_int(dec_navbytes[:3],signed=False)
         preview_len = bytes_to_int(dec_navbytes[3:],signed=False)
-        #TODO: BIG FILEDATA LEN IS BROKEN
+        request_size = pad_request_size(filedata_len)
 
         async for filedata in self._ta.TelegramClient.iter_download(
-            self._message.document, offset=103, request_size=filedata_len):
-                # filedata = filedata[103:] # TODO: assigned to Broken fdata len.
-                # ^ Offset need to be removed if fixed req_size
+            self._message.document, offset=103, request_size=request_size):
+                
+                filedata = filedata[:filedata_len]
 
                 dec_filedata = next(aes_decrypt(
                     filedata, self._filekey, yield_all=True)
@@ -1189,16 +1189,21 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
     async def get_preview(self) -> bytes:
         self.__raise_initialized()
+        if self._preview is not None:
+            return self._preview
+
         if isinstance(self._preview_pos, tuple) and not self._preview_pos:
             preview = b''
         else:
+            request_size = pad_request_size(self._preview_pos[1])
+            offset = self._preview_pos[0]
+
             async for preview in self._ta.TelegramClient.iter_download(
-                self._message.document, offset=self._preview_pos[0], 
-                    request_size=self._preview_pos[1]):
-                        preview = next(aes_decrypt(
-                            preview, self._filekey, yield_all=True)
-                        )
-                        break
+                self._message.document, offset=offset, request_size=request_size):
+                    preview = preview[:self._preview_pos[1]]
+                    preview = next(aes_decrypt(preview, self._filekey, yield_all=True))
+                    break
+
         if self._cache_preview:
             self._preview = preview
         return preview
