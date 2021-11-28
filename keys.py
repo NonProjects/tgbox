@@ -38,8 +38,11 @@ __all__ = [
 ]
 
 class Phrase:
-    def __init__(self, phrase: bytes):
-        self._phrase = phrase
+    def __init__(self, phrase: Union[bytes, str]):
+        if isinstance(phrase, str):
+            self._phrase = phrase.encode()
+        else:
+            self._phrase = phrase
     
     def __hash__(self) -> int:
         return hash((self._key, self._key_type))
