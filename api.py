@@ -1,3 +1,4 @@
+"""Module with all Application functions and classes."""
 try:
     from regex import search as re_search
 except ImportError:
@@ -1284,12 +1285,12 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         if isinstance(key, (FileKey, ImportKey)):
             self._filekey = FileKey(key.key)
-            self.__mainkey = None
+            self._mainkey = None
         elif isinstance(key, BaseKey):
-            self.__mainkey = make_mainkey(key, self._box_salt)
-            self._filekey = make_filekey(self.__mainkey, self._file_salt)
+            self._mainkey = make_mainkey(key, self._box_salt)
+            self._filekey = make_filekey(self._mainkey, self._file_salt)
         else:
-            self.__mainkey = self._key
+            self._mainkey = self._key
             self._filekey = make_filekey(self._key, self._file_salt)
             
     @property
@@ -1353,9 +1354,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 
                 self._foldername = dec_filedata[10:10+folder_len] 
 
-                if self.__mainkey:
+                if self._mainkey:
                     self._foldername = next(aes_decrypt(
-                        self._foldername, self.__mainkey, yield_all=True)
+                        self._foldername, self._mainkey, yield_all=True)
                     )
                 else:
                     self._foldername = DEF_NO_FOLDER
@@ -1721,7 +1722,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
     more low-level it's wrapper around `TgboxDB` that
     decrypts and parses every row. You don't need to
     work with `EncryptedLocalBox` to write any data
-    to the `TgboxDB`. Every write will be encrypted here.
+    to the `TgboxDB`. Every commit will be encrypted here.
 
     Typical usage:
         ```
@@ -2046,7 +2047,7 @@ class LocalBoxFolder:
             self._enc_foldername, mainkey, 
             iv=self._folder_iv, yield_all=True
         ))
-        self.__mainkey = mainkey
+        self._mainkey = mainkey
 
     def __hash__(self) -> int:
         # Without 22 hash of bytes wil be equal to object's
@@ -2096,7 +2097,7 @@ class LocalBoxFolder:
         """
         return await EncryptedLocalBoxFile(
             id, self._tgbox_db, cache_preview=cache_preview
-        ).decrypt(self.__mainkey)
+        ).decrypt(self._mainkey)
 
     async def delete(self) -> None: 
         """
@@ -2209,78 +2210,108 @@ class EncryptedLocalBoxFile:
         return self._version_byte
     
     @property
-    def file_path(self) -> Union[str, None]:
+    def file_path(self) -> Union[bytes, None]:
+        """
+        Returns encrypted `file_path` from
+        `EncryptedLocalBoxFile` and decrypted
+        from `DecryptedLocalBoxFile`. `None`
+        if class wasn't initialized.
+        """
         return self._file_path
 
     @property
     def file_name(self) -> Union[bytes, None]:
+        """
+        Returns encrypted `file_name` from
+        `EncryptedLocalBoxFile` and decrypted
+        from `DecryptedLocalBoxFile`. `None`
+        if class wasn't initialized.
+        """
         return self._file_name
 
     @property
     def foldername(self) -> Union[bytes, None]:
+        """
+        Returns encrypted `foldername` from
+        `EncryptedLocalBoxFile` and decrypted
+        from `DecryptedLocalBoxFile`. `None`
+        if class wasn't initialized.
+        """
         return self._foldername
 
     @property
     def size(self) -> Union[bytes, int, None]:
         """
-        Returns bytes from `EncryptedLocalBoxFile`
-            and int from `DecryptedLocalBoxFile`.
+        Returns encrypted `size` from
+        `EncryptedLocalBoxFile` and decrypted
+        from `DecryptedLocalBoxFile`. `None`
+        if class wasn't initialized.
         """
         return self._size
     
     @property
     def duration(self) -> Union[bytes, float, None]:
         """
-        Returns bytes from `EncryptedLocalBoxFile`
-            and float from `DecryptedLocalBoxFile`.
+        Returns encrypted `duration` from
+        `EncryptedLocalBoxFile` and decrypted
+        from `DecryptedLocalBoxFile`. `None`
+        if class wasn't initialized.
         """
         return self._duration
     
     @property
     def comment(self) -> Union[bytes, None]:
-        """Returns file comment."""
+        """
+        Returns encrypted `comment` from
+        `EncryptedLocalBoxFile` and decrypted
+        from `DecryptedLocalBoxFile`. `None`
+        if class wasn't initialized.
+        """
         return self._comment
 
     @property
-    def id(self) -> Union[bytes, int, None]:
+    def id(self) -> Union[int, None]:
         """
-        Returns bytes from `EncryptedLocalBoxFile`
-            and int from `DecryptedLocalBoxFile`.
+        Returns file ID or `None` 
+        if file wasn't initialized
         """
         return self._id
     
     @property
     def file_iv(self) -> Union[bytes, None]:
         """
-        Returns encrypted FILE_IV from `EncryptedLocalBoxFile`
-        and decrypted FILE_IV from `DecryptedLocalBoxFile`.
+        Returns file IV or `None` 
+        if file wasn't initialized
         """
         return self._file_iv
 
     @property
     def upload_time(self) -> Union[bytes, int, None]:
         """
-        Returns bytes from `EncryptedLocalBoxFile`
-            and int from `DecryptedLocalBoxFile`.
+        Returns encrypted `upload_time` from
+        `EncryptedLocalBoxFile` and decrypted
+        from `DecryptedLocalBoxFile`. `None`
+        if class wasn't initialized.
         """
         return self._upload_time
 
     @property
     def file_salt(self) -> Union[bytes, None]:
         """
-        Returns `FILE_SALT`.
-        
-        You can get decryption key for this file
-        with `.crypto.make_filekey(mainkey, file_salt)`.
+        Returns FileSalt or `None` 
+        if file wasn't initialized
         """
         return self._file_salt
 
     @property
     def preview(self) -> Union[bytes, None]:
         """
-        Returns file preview. If there is no
-        preview then returns `b''`.
-        """ 
+        Returns encrypted `preview` from
+        `EncryptedLocalBoxFile` and decrypted
+        from `DecryptedLocalBoxFile`. `None`
+        if class wasn't initialized and `b''`
+        if this file hasn't preview.
+        """
         return self._preview
     
     def __raise_initialized(self) -> NoReturn:
@@ -2288,6 +2319,8 @@ class EncryptedLocalBoxFile:
             raise NotInitializedError('Not initialized. Call .init().') 
     
     async def init(self) -> 'EncryptedLocalBoxFile':
+        """Will fetch and parse data from Database."""
+
         preview = '' if not self._cache_preview else ' PREVIEW,'
 
         sql_query = (
@@ -2356,6 +2389,12 @@ class EncryptedLocalBoxFile:
         return make_requestkey(mainkey, file_salt=self._file_salt)
 
     async def decrypt(self, key: Union[FileKey, MainKey]) -> 'DecryptedLocalBoxFile':
+        """
+        Returns decrypted by `key` `EncryptedLocalBoxFile`
+
+        key (`FileKey`, `MainKey`):
+            Decryption key.
+        """
         if not self.initialized:
             await self.init()
         return DecryptedLocalBoxFile(self, key)
@@ -2385,12 +2424,34 @@ class EncryptedLocalBoxFile:
                 ('DELETE FROM FOLDERS WHERE FOLDER_ID=? LIMIT 1',(file_row[1],))
             )
 
-class DecryptedLocalBoxFile(EncryptedLocalBoxFile): 
+class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
+    """
+    This class represents an decrypted local file. 
+    On more low-level that's a wrapper of `FILES`
+    table in Tgbox Database that decrypts row. 
+
+    Typical usage:
+        ```
+        ...
+        dlbfi = await dlb.get_file(dlb.last_file_id)
+        print(dlbfi.foldername) # Decrypted
+        ```
+    """
     def __init__(
             self, elbfi: EncryptedLocalBoxFile, 
             key: Union[FileKey, ImportKey, MainKey],
             cache_preview: Optional[bool] = None):
-        
+        """
+        elbfi (`EncryptedLocalBoxFile`):
+            Encrypted local box file that
+            you want to decrypt.
+
+        key (`FileKey`, `ImportKey`, `MainKey`):
+            Decryption key.
+
+        cache_preview (`bool`, optional):
+            Cache preview in class or not.
+        """
         if not elbfi.initialized:
             raise NotInitializedError('You should init elbfi firstly')
 
@@ -2418,9 +2479,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             self._filekey = make_filekey(self._key, self._file_salt)
         
         if isinstance(key, MainKey):
-            self.__mainkey = key
+            self._mainkey = key
         else:
-            self.__mainkey = None
+            self._mainkey = None
 
         self._folder = None
 
@@ -2441,9 +2502,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         self._file_name = next(aes_decrypt(
             elbfi._file_name, self._filekey, yield_all=True)
         )
-        if self.__mainkey:
+        if self._mainkey:
             self._foldername = next(aes_decrypt(
-                elbfi._foldername, self.__mainkey, 
+                elbfi._foldername, self._mainkey, 
                 iv=self._folder_iv, yield_all=True)
             )
         else:
@@ -2491,6 +2552,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         )
     @property
     def download_path(self) -> str:
+        """Returns current download path"""
         return self._download_path
 
     async def get_preview(self) -> bytes: 
@@ -2514,14 +2576,15 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 self._preview = preview
             return preview
 
-    async def get_folder(self, mainkey: Optional[MainKey] = None) -> LocalBoxFolder:
-        if not self.__mainkey and not mainkey:
-            raise IncorrectKey('You need to specify MainKey')
-
+    async def get_folder(self) -> LocalBoxFolder:
+        """
+        Returns `LocalBoxFolder` associated with
+        this `DecryptedLocalBoxFile`.
+        """
         if not self._folder:
             self._folder = LocalBoxFolder(
                 self._tgbox_db, 
-                self.__mainkey, 
+                self._mainkey, 
                 self._elbfi.foldername,
                 self._folder_iv,
                 self._folder_id
@@ -2550,6 +2613,13 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
 @dataclass
 class FutureFile:
+    """
+    This dataclass stores data needed for upload 
+    in future, by `RemoteBox.push_file`. After
+    pushing used for LocalBoxFile creation.
+
+    Usually it's only for internal use.
+    """
     dlb: DecryptedLocalBox
     file_name: str
     foldername: bytes
@@ -2566,6 +2636,7 @@ class FutureFile:
 
     @property
     def metadata(self) -> RemoteBoxFileMetadata:
+        """Returns Metadata compiled from class data."""
         if not hasattr(self, '_metadata'):
             enc_foldername = next(aes_encrypt(
                 self.foldername, self.dlb._mainkey,
@@ -2587,6 +2658,17 @@ class FutureFile:
         return self._metadata
 
     async def make_local(self, id: int, upload_time: int) -> DecryptedLocalBoxFile:
+        """
+        Creates LocalBoxFile.
+
+        id (`int`):
+            File ID, recieved after
+            `RemoteBox.push_file`.
+
+        upload_time (`int`):
+            UNIX time stamp after file
+            was uploaded to `RemoteBox`.
+        """
         duration = float_to_bytes(self.duration)
         size = int_to_bytes(self.size)
         upload_time = int_to_bytes(upload_time)
