@@ -22,6 +22,7 @@ class SqlTableWrapper:
    
     @property
     def table_name(self) -> str:
+        """Returns table name"""
         return self._table_name
 
     async def count_rows(self) -> int:
