@@ -1,9 +1,11 @@
 from os import urandom
-from typing import BinaryIO, Generator, Union, Optional
 
+from typing import (
+    BinaryIO, Generator, 
+    Union, Optional, Callable
+)
 from .constants import AES_RETURN_SIZE
 from .errors import ModeInvalid, AESError
-
 try:
     from Crypto.Cipher import AES
     from Crypto.Util.Padding import (
@@ -12,7 +14,7 @@ try:
     FAST_ENCRYPTION = True
 except ModuleNotFoundError: 
     # We can use PyAES if there is no pycryptodome.
-    # PyAES is about 30x slower (CPython) than pycryptodome.
+    # PyAES is about 30x slower in CPython than pycryptodome.
     # This is too slow and not so usable, but anyway.
     from pyaes.util import ( 
         append_PKCS7_padding as pad_, 
@@ -39,22 +41,49 @@ __all__ = [
     'make_box_salt'
 ]
 class Padding:
-    pad_ = pad_ if not FAST_ENCRYPTION else lambda ptxt: pad_(ptxt,16)
-    unpad_ = unpad_ if not FAST_ENCRYPTION else lambda ptxt: unpad_(ptxt,16)
+    """
+    Class that implements PKCS#7 padding. If
+    PyCryptodome module isn't available, will
+    be used padding function from PyAES.
+    """
+    pad_ = pad_ if not FAST_ENCRYPTION else lambda b: pad_(b,16)
+    unpad_ = unpad_ if not FAST_ENCRYPTION else lambda b: unpad_(b,16)
     
     @classmethod
-    def pad(cls, plaintext: bytes, pad_func=None) -> bytes:
-        """Pads block with PKCS#7 padding."""
+    def pad(
+            cls, bytedata: bytes, 
+            pad_func: Optional[Callable[
+                [bytes], bytes]] = None) -> bytes:
+        """
+        Pads block with PKCS#7 padding.
+
+        bytedata (`bytes`):
+            Bytes to be padded.
+
+        pad_func (`Callable`):
+            Padding function. 
+        """
         if pad_func:
             pad_, custom = pad_func, True
         else:
             pad_, custom = cls.pad_, False
         
-        return pad_(plaintext)
+        return pad_(bytedata)
     
     @classmethod
-    def unpad(cls, plaintext: bytes, unpad_func=None) -> bytes:
-        """Unpads block with PKCS#7 padding."""
+    def unpad(
+            cls, bytedata: bytes, 
+            unpad_func: Optional[Callable[
+                [bytes], bytes]] = None) -> bytes:
+        """
+        Unpads block with PKCS#7 padding.
+
+        bytedata (`bytes`):
+            Bytes to be unpadded.
+
+        unpad_func (`Callable`):
+            Unpadding function. 
+        """
         if unpad_func:
             unpad_, custom = unpad_func, True
         else:
@@ -62,30 +91,30 @@ class Padding:
         
         while True:
             try:
-                plaintext = unpad_(plaintext)
+                bytedata = unpad_(bytedata)
             except ValueError: # No more padding
-                return plaintext
+                return bytedata
 
     @classmethod
-    def cycle_pad(cls, plaintext: bytes, to_len: int, pad_func=None) -> bytes:
+    def cycle_pad(cls, bytedata: bytes, to_len: int, pad_func=None) -> bytes:
         """
         Pads block with PKCS#7 padding to specified len. 
         `to_len` must be divisible by 16.
         """
         if not bool(to_len) or to_len % 16:
             raise ValueError('to_len must be divisible by 16.')
-        elif to_len < len(plaintext):
-            raise ValueError('to_len must be > than plaintext length')
+        elif to_len < len(bytedata):
+            raise ValueError('to_len must be > than bytedata length')
 
         if pad_func:
             pad_, custom = pad_func, True
         else:
             pad_, custom = cls.pad_, False
         
-        plaintext = pad_(plaintext)
-        while len(plaintext) != to_len:
-            plaintext += b'\x10'*16
-        return plaintext
+        bytedata = pad_(bytedata)
+        while len(bytedata) != to_len:
+            bytedata += b'\x10'*16
+        return bytedata
 
 class _PyaesState:
     def __init__(self, key: Union[bytes, 'Key'], iv: bytes):
@@ -95,6 +124,12 @@ class _PyaesState:
         
         You should use only `encrypt()` or 
         `decrypt()` method per one object.
+
+        key (`bytes`, `Key`):
+            AES encryption/decryption Key.
+        
+        iv (`bytes`):
+            AES Initialization Vector.
         """
         key = key.key if hasattr(key, 'key') else key
         self._aes_state = AESModeOfOperationCBC(key=key, iv=iv)
@@ -139,6 +174,12 @@ class AESwState:
         
         You should use only `encrypt()` or 
         `decrypt()` method per one object.
+
+        key (`bytes`, `Key`):
+            AES encryption/decryption Key.
+        
+        iv (`bytes`):
+            AES Initialization Vector.
         """
         self.key = key.key if hasattr(key, 'key') else key
         self.iv, self.__mode = iv, None
@@ -221,7 +262,6 @@ def aes_encrypt(
 
     iv = iv if iv else urandom(16)
     key = key.key if hasattr(key, 'key') else key
-    
     try:
         if FAST_ENCRYPTION:
             aes_cbc = AES.new(key, AES.MODE_CBC, iv=iv)
