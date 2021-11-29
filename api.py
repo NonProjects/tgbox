@@ -541,8 +541,8 @@ class RemoteBox:
         # Similar to box_salt, call get_box_name.
 
     def __hash__(self) -> int:
-        return hash((self._box_channel_id,22))
-        # ^ Without 22 hash of int wil be equal to object's
+        # Without 22 hash of int wil be equal to object's
+        return hash((self._box_channel_id, 22))
         
     def __eq__(self, other) -> bool:
         return all((
