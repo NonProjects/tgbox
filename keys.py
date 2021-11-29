@@ -1,4 +1,4 @@
-"""Stores all keys and keys making functions."""
+"""This module stores all keys and keys making functions."""
 
 from os import urandom
 from random import SystemRandom
