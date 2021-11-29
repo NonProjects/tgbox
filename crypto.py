@@ -1,3 +1,5 @@
+"""This module stores all cryptography used in API."""
+
 from os import urandom
 
 from typing import (

@@ -1,3 +1,5 @@
+"""This module stores wrappers around Tgbox SQL DB."""
+
 import aiosqlite
 
 from pathlib import Path

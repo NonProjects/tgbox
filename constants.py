@@ -1,3 +1,5 @@
+"""This module stores API constants."""
+
 from os.path import abspath
 from pathlib import Path
 

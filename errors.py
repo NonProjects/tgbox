@@ -1,3 +1,5 @@
+"""This module stores all Tgbox-unique errors."""
+
 # Base Exceptions
 
 class IncorrectKey(Exception):
