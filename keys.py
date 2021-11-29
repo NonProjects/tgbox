@@ -1,6 +1,7 @@
-import random
+"""Stores all keys and keys making functions."""
 
 from os import urandom
+from random import SystemRandom
 from hashlib import sha256, scrypt
 from typing import Generator, Union, Optional
 
@@ -38,34 +39,62 @@ __all__ = [
 ]
 
 class Phrase:
+    """This class represents passphrase"""
     def __init__(self, phrase: Union[bytes, str]):
         if isinstance(phrase, str):
             self._phrase = phrase.encode()
         else:
             self._phrase = phrase
     
+    def __repr__(self) -> str:
+        return f'Phrase({repr(self._phrase)}) # at {hex(id(self))}'
+
     def __hash__(self) -> int:
-        return hash((self._key, self._key_type))
+        # Without 22 hash of bytes will be equal to object's
+        return hash((self._phrase,22))
     
     def __eq__(self, other) -> bool:
-        return all((
-            isinstance(other, self.__class__), 
-            self._key == other.key,
-            self._key_type == other.key_type
-        ))   
+        return hash(self) == hash(other)
+
     @property
     def phrase(self) -> bytes:
+        """Returns currrent raw phrase"""
         return self._phrase
     
     @classmethod
-    def generate(cls, length: int=12) -> 'Phrase':
-        random.seed(urandom(32))
-        words_list = open(WORDS_PATH, 'rb').readlines()
-        phrase = [random.choice(words_list)[:-1] for _ in range(length)]     
+    def generate(cls, words_count: int=12) -> 'Phrase':
+        """
+        Generates passphrase
+
+        words_count (`int`, optional):
+            Words count in `Phrase`.
+        """
+        sysrnd = SystemRandom(urandom(32))
+        words_list = open(WORDS_PATH,'rb').readlines()
+
+        phrase = [
+            sysrnd.choice(words_list)[:-1] 
+            for _ in range(words_count)
+        ]     
         return cls(b' '.join(phrase))
 
 class Key:
+    """Metaclass that represents all keys."""
     def __init__(self, key: bytes, key_type: int):
+        """
+        key (`bytes`):
+            Raw bytes key.
+
+        key_type (`int`):
+            Type of key, where:
+                1: `BaseKey`
+                2: `MainKey`
+                3: `RequestKey`
+                4: `ShareKey`
+                5: `ImportKey`
+                6: `FileKey`
+                7: `EncryptedMainkey`
+        """
         self._key = key
         self._key_type = key_type
         self._key_types = {
@@ -104,14 +133,17 @@ class Key:
     
     @property
     def key_types(self) -> dict:
-        return self._key_types
+        """Returns all key types"""
+        return self._key_types.copy()
     
     @property
     def key_type(self) -> int:
+        """Returns current key type"""
         return self._key_type
     
     @property
     def key(self) -> bytes:
+        """Returns key in raw"""
         return self._key
     
     @classmethod
@@ -120,6 +152,20 @@ class Key:
             'ShareKey','ImportKey','FileKey',
             'EncryptedMainkey']:
         """
+        Decodes Key by prefix and returns
+        `Key` in one of `Key` classes.
+
+        B: BaseKey    
+        M: MainKey
+        R: RequestKey 
+        S: ShareKey
+        I: ImportKey  
+        F: FileKey
+        E: EncryptedMainkey
+
+        Key example:
+            `MSGVsbG8hIEkgYW0gTm9uISBJdCdzIDI5LzExLzIwMjE=`.
+            You can decode it with `Key.decode`.
         """
         ekey_types = {
             'B': BaseKey,    'M': MainKey,
@@ -131,47 +177,107 @@ class Key:
         return ekey_type(urlsafe_b64decode(encoded_key[1:]))
     
     def encode(self) -> str:
+        """Encode raw key with `urlsafe_b64encode` and add prefix."""
         prefix = self._key_types[self._key_type][0]
         return prefix + urlsafe_b64encode(self._key).decode()
     
     def hex(self) -> str:
+        """Returns key in hex represenation"""
         return self._key.hex()
 
 class BaseKey(Key):
+    """
+    This `Key` used for `MainKey` creation and
+    cloned `RemoteBox` decryption. In API
+    it's usually result of `keys.make_basekey`.
+    """
     def __init__(self, key: bytes):
         super().__init__(key, 1)    
 
 class MainKey(Key):
+    """
+    `MainKey` may be reffered as "BoxKey". This
+    key encrypts all BoxData and used in `FileKey`
+    creation. It's one of your most important `Key`,
+    as leakage of it will result in compromising all
+    your encrypted files in `RemoteBox` & LocalBox.
+
+    When you clone other's `RemoteBox`, Session data
+    encrypts with `BaseKey`, not `MainKey`.
+
+    Usually you will see this `Key` as a result of
+    `keys.make_mainkey` function.
+    """
     def __init__(self, key: bytes):
         super().__init__(key, 2)
 
 class RequestKey(Key):
+    """Run `help(tgbox.keys.make_requestkey)` for info."""
     def __init__(self, key: bytes):
         super().__init__(key, 3)
 
 class ShareKey(Key):
+    """Run `help(tgbox.keys.make_sharekey)` for info."""
     def __init__(self, key: bytes):
         super().__init__(key, 4)
 
 class ImportKey(Key):
+    """Run `help(tgbox.keys.make_importkey)` for info."""
     def __init__(self, key: bytes):
         super().__init__(key, 5)
 
 class FileKey(Key):
+    """
+    `FileKey` is used for encrypting `RemoteBox` files
+    and information about them in your LocalBox. If
+    you share one `FileKey`, other people will be able
+    to decrypt only file, that key corresponds to, and
+    no more. They will not be able to get folder of this
+    file. Only those, who have `MainKey` can access 
+    folder information from file's Metadata.
+
+    Usually you will not work with this code, API
+    converts `MainKey` to `FileKey` under the hood,
+    but you can make it with `keys.make_filekey`.
+    """
     def __init__(self, key: bytes):
         super().__init__(key, 6)
 
 class EncryptedMainkey(Key):
+    """
+    This class represents encrypted mainkey. When
+    you clone other's `RemoteBox`, it's `MainKey`
+    encrypts with your `BaseKey`.
+    """
     def __init__(self, key: bytes):
         super().__init__(key, 7)
 
 def make_basekey(
-        phrase: [bytes,'Phrase'], *, salt: bytes=SCRYPT_SALT,
+        phrase: [bytes, Phrase], *, salt: bytes=SCRYPT_SALT,
         n: int=SCRYPT_N, r: int=SCRYPT_R, p: int=SCRYPT_P, 
         dklen: int=SCRYPT_DKLEN) -> BaseKey:
     """
     Function for retrieving BaseKeys. Uses `sha256(scrypt)`.
     RAM consumption is calculated by `128 * r * (n + p + 2)`.
+
+    phrase (`bytes`, `Phrase`):
+        Passphrase from which 
+        `BaseKey` will be created.
+
+    salt (`bytes`, optional):
+        Scrypt Salt.
+
+    n (`int`, optional):
+        Scrypt N.
+
+    r (`int`, optional):
+        Scrypt R.
+
+    p (`int`, optional):
+        Scrypt P.
+
+    dklen (`int`, optional):
+        Scrypt dklen.
     """
     phrase = phrase.phrase if isinstance(phrase, Phrase) else phrase
     
@@ -193,7 +299,6 @@ def make_mainkey(basekey: BaseKey, box_salt: bytes) -> MainKey:
 
     box_salt (`bytes`): 
         Salt generated on LocalBox creation.
-        Must be on DB_PATH/BOX_DATA/BOX_SALT.
     """
     return MainKey(sha256(basekey + box_salt).digest())
 
@@ -201,8 +306,8 @@ def make_filekey(mainkey: MainKey, file_salt: bytes) -> FileKey:
     """
     Function for retrieving filekeys.
 
-    Every LocalBoxFile have random generated on encryption FILE_SALT.
-    Key for file encryption we create as `sha256(mainkey + FILE_SALT)`.
+    Every LocalBoxFile have random generated on encryption FileSalt.
+    Key for file encryption we create as `sha256(mainkey + FileSalt)`.
 
     Thanks to this, you can share the key with which
     the file was encrypted (filekey) without revealing your mainkey.
@@ -282,7 +387,7 @@ def make_sharekey(
     this. Please, run help on `make_requestkey` to get info.
     
     Alice recieves `RequestKey` from Bob. But what she should do
-    next? As reqkey is just EC-pubkey, she want to make a shared
+    next? As reqkey is just EC-pubkey, she wants to make a shared
     secret key. A makes her own privkey as B, with
     `sha256(mainkey + salt)` & initializes ECDH with B pubkey
     and her privkey. After this, A makes a shared secret, which
@@ -369,6 +474,34 @@ def make_importkey(
         box_salt: Optional[bytes] = None, 
         file_salt: Optional[bytes] = None) -> ImportKey:
     """
+    You may want to know what is `RequestKey` and 
+    `ShareKey` before using this. Use `help()` on
+    another `make_*key` functions.
+    
+    `ShareKey` is a combination of encrypted by Alice
+    (File/Main)Key and her pubkey. As Bob can create
+    again `RequestKey`, which is PubKey of ECDH from
+    `sha256(mainkey + salt)` PrivKey, and already have
+    PubKey of A, -- B can create a shared secret, and
+    decrypt A `ShareKey` to make an `ImportKey`.
+
+    mainkey (`MainKey`):
+        `MainKey` that was used 
+        in `RequestKey` creation.
+
+    sharekey (`ShareKey`):
+        Alice's `ShareKey`.
+
+    box_salt (`bytes`, optional):
+        BoxSalt that was used in
+        `RequestKey` creation. 
+
+    file_salt (`bytes`, optional):
+        FileSalt that was used in
+        `RequestKey` creation. 
+
+    At least `box_salt` or `file_salt` must
+    be specified in function.
     """
     if len(sharekey) == 32: # Key isn't encrypted.
         return ImportKey(sharekey.key) 
