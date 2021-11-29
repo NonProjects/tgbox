@@ -1684,7 +1684,14 @@ class EncryptedLocalBox:
     
     async def files(self, cache_preview: bool=True)\
             -> Union['DecryptedLocalBoxFile', 'EncryptedLocalBoxFile', None]:
+        '''
+        Yields every local file as `EncryptedLocalBoxFile` if you
+        call it on `EncryptedLocalBox` and `DecryptedLocalBoxFile`
+        if on `DecryptedLocalBox`. Works via `self.get_file`
 
+        cache_preview (`bool`, optional):
+            Cache preview in class or not.
+        '''
         cursor = await self._tgbox_db.Files.execute(('SELECT ID FROM FILES',()))
         async for file_id in cursor:
             yield await self.get_file(file_id[0], cache_preview=cache_preview)
@@ -1709,10 +1716,36 @@ class EncryptedLocalBox:
         return DecryptedLocalBox(self, key)
 
 class DecryptedLocalBox(EncryptedLocalBox):
+    '''
+    Class that represents decrypted local box. On
+    more low-level it's wrapper around `TgboxDB` that
+    decrypts and parses every row. You don't need to
+    work with `EncryptedLocalBox` to write any data
+    to the `TgboxDB`. Every write will be encrypted here.
+
+    Typical usage:
+        ```
+        from tgbox.api import get_local_box
+        from tgbox.keys import make_basekey, Phrase
+        
+        basekey = make_basekey(Phrase('very_bad_phrase'))
+        dlb = await get_local_box(basekey)
+        
+        # Iterating over all files
+        async for dlbfi in dlb.files():
+            print(file.id, file.file_name, file.size)
+        ```
+    '''
     def __init__(
             self, elb: EncryptedLocalBox, 
             key: Union[MainKey, ImportKey, BaseKey]):
-        
+        '''
+        elb (`EncryptedLocalBox`):
+            Local box you want to decrypt.
+
+        key (`MainKey`, `ImportKey`, `BaseKey`):
+            Decryption key.
+        '''
         if not elb.initialized:
             raise NotInitializedError('Parent class isn\'t initialized.')
 
@@ -1731,18 +1764,16 @@ class DecryptedLocalBox(EncryptedLocalBox):
             else:
                 self._mainkey = make_mainkey(key, self._elb._box_salt)
                 key = self._mainkey
-        
         else:
             raise IncorrectKey('key is not Union[MainKey, ImportKey, BaseKey]')
-        
         try:
-            # When we clone other's RemoteBox, we encrypt Session with Basekey,
+            # When we clone other's RemoteBox, we encrypt Session with Basekey
             # to prevent stealing Session information by people who also have
             # mainkey of the same box. So there is decryption with `key`.
             self._session = next(aes_decrypt(
                 elb._session, key, yield_all=True)).decode()
         except UnicodeDecodeError:
-            raise IncorrectKey('Can\'t decrypt Session. Invalid Phrase/Basekey?') from None
+            raise IncorrectKey('Can\'t decrypt Session. Invalid Basekey?') from None
 
         self._box_channel_id = bytes_to_int(next(
             aes_decrypt(elb._box_channel_id, self._mainkey, yield_all=True))
@@ -1768,21 +1799,28 @@ class DecryptedLocalBox(EncryptedLocalBox):
             '''This function was inherited from `EncryptedLocalBox` '''
             '''and cannot be used on `DecryptedLocalBox`.'''
         )
-    async def folders(self) -> 'LocalBoxFolder': 
-            folders_list = await self._tgbox_db.Folders.execute(
-                (f'SELECT * FROM FOLDERS',)
-            )
-            async for folder in folders_list:
-                yield LocalBoxFolder(
-                    self._tgbox_db, self._mainkey,
-                    enc_foldername=folder[0],
-                    foldername_iv=folder[1],
-                    folder_id=folder[2]
-                )
+    async def folders(self) -> 'LocalBoxFolder':
+        '''Iterate over all folders in LocalBox.'''
 
-    async def search_file(self, sf: SearchFilter, mainkey: Optional[MainKey] = None):
-        mainkey = mainkey if (not hasattr(self, '_mainkey') and not mainkey) else self._mainkey
-        async for file in _search_func(sf, lb=self, mainkey=mainkey):
+        folders_list = await self._tgbox_db.Folders.execute(
+            (f'SELECT * FROM FOLDERS',)
+        )
+        async for folder in folders_list:
+            yield LocalBoxFolder(
+                self._tgbox_db, self._mainkey,
+                enc_foldername=folder[0],
+                folder_iv=folder[1],
+                folder_id=folder[2]
+            )
+
+    async def search_file(self, sf: SearchFilter) -> 'DecryptedLocalBoxFile':
+        '''
+        This method used to search for files in your `RemoteBox`.
+        
+        sf (`SearchFilter`):
+            `SearchFilter` with kwargs you like.
+        '''
+        async for file in _search_func(sf, lb=self, mainkey=self._mainkey):
             yield file
         
     async def make_file( 
@@ -1909,7 +1947,14 @@ class DecryptedLocalBox(EncryptedLocalBox):
             self, drbf: DecryptedRemoteBoxFile,
             foldername: Optional[bytes] = None)\
             -> 'DecryptedLocalBoxFile':
+        '''
+        drbf (`DecryptedRemoteBoxFile`):
+            Remote file you want to import.
 
+        foldername (`bytes`, optional):
+            File's folder. Will be used
+            `drbf._foldername` if `None`.
+        '''
         ff = FutureFile(
             self, file_name=drbf._file_name,
             foldername=(foldername if foldername else drbf._foldername), 
@@ -1925,21 +1970,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
             imported=True
         )
         return await ff.make_local(drbf._id, drbf._upload_time)
-    
-    async def download_file(
-            self, rb: RemoteBox, 
-            dlbfi: 'DecryptedLocalBoxFile', 
-            **kwargs) -> BinaryIO:
-        '''
-        Downloads file from `RemoteBox` similiar to the
-        `DecryptedRemoteBoxFile.download(**kwargs)`. It's
-        like syntactic sugar to make your life easier.
-        '''
-        key = dlbfi._filekey if dlbfi.exported else dlbfi._key
-        
-        return await (await rb.get_file(
-            dlbfi.id, key, decrypt=True)
-        ).download(**kwargs)
     
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         '''
@@ -1963,28 +1993,64 @@ class DecryptedLocalBox(EncryptedLocalBox):
             return make_sharekey(mainkey=self._mainkey)
     
 class LocalBoxFolder:
+    '''
+    Class that represents abstract Tgbox folder. You
+    can iterate over all files in this folder.
+
+    Typical usage:
+        ...
+        # Iterate over all folders, recieve `LocalBoxFolder`
+        async for folder in dlb.folders():
+            print('@ FOLDER:', folder.dec_foldername)
+
+            # Iterate over all files
+            async for dlbfi in folder.files():
+                print(dlbfi.id, dlbfi.file_name, dlbfi.comment)
+    '''
     def __init__(
             self, tgbox_db: TgboxDB, 
             mainkey: MainKey, 
             enc_foldername: bytes,
-            foldername_iv: bytes,
+            folder_iv: bytes,
             folder_id: bytes):
+        '''
+        To make a `LocalBoxFolder` you need to
+        fetch one row from `FOLDERS` table.
 
+        tgbox_db (`TgboxDB`):
+            Tgbox Database.
+
+        mainkey (`MainKey`):
+            Decryption key associated
+            with `tgbox_db`.
+
+        enc_foldername (`bytes`):
+            Encrypted `FOLDER` from
+            TgboxDB `FOLDERS` table.
+
+        folder_iv (`bytes`):
+            `FOLDER_IV` from
+            TgboxDB `FOLDERS` table.
+
+        folder_id (`bytes`):
+            `FOLDER_ID` from
+            TgboxDB `FOLDERS` table.
+        '''
         self._tgbox_db = tgbox_db
         
         self._enc_foldername = enc_foldername
-        self._foldername_iv = foldername_iv
+        self._folder_iv = folder_iv
         self._folder_id = folder_id
 
         self._dec_foldername = next(aes_decrypt(
             self._enc_foldername, mainkey, 
-            iv=self._foldername_iv, yield_all=True
+            iv=self._folder_iv, yield_all=True
         ))
         self.__mainkey = mainkey
 
     def __hash__(self) -> int:
+        # Without 22 hash of bytes wil be equal to object's
         return hash((self._enc_foldername, 22))
-        # ^ Without 22 hash of str wil be equal to object's
     
     def __eq__(self, other) -> bool:
         return all((
@@ -1993,13 +2059,22 @@ class LocalBoxFolder:
         ))
     @property
     def enc_foldername(self) -> bytes:
+        '''Returns encrypted foldername'''
         return self._enc_foldername
     
     @property
     def dec_foldername(self) -> bytes:
+        '''Returns decrypted foldername'''
         return self._dec_foldername
 
     async def files(self, cache_preview: bool=True) -> 'DecryptedLocalBoxFile':
+        '''
+        Iterate over all files in this abstract folder.
+
+        cache_preview (`bool`, optional):
+            Cache preview in class or not. 
+            `True` by default.
+        '''
         files_list = await self._tgbox_db.Files.execute( 
             ('SELECT * FROM FILES WHERE FOLDER_ID = ?', (self._folder_id,))
         )
@@ -2013,10 +2088,10 @@ class LocalBoxFolder:
         Returns file by given ID.
         
         id (`int`):
-            ID of the uploaded to `RemoteBox` file.
+            File ID.
 
-        cache_preview (optional, `bool`):
-            Will save preview image (max 1MB) in 
+        cache_preview (`bool`, optional):
+            Will save preview image (max ~1MB) in 
             `EncryptedLocalBoxFile` object if `True` (default).
         '''
         return await EncryptedLocalBoxFile(
@@ -2048,7 +2123,7 @@ class EncryptedLocalBoxFile:
         self._initialized = False
         
         self._foldername, self._preview = None, None
-        self._foldername_iv, self._folder = None, None
+        self._folder_iv, self._folder = None, None
         self._file_name, self._folder_id = None, None        
         self._comment, self._size = None, None
         self._duration, self._id = None, id
@@ -2201,7 +2276,7 @@ class EncryptedLocalBoxFile:
             cursor = await self._tgbox_db.Folders.execute(
                 ('SELECT * FROM FOLDERS WHERE FOLDER_ID = ?',(self._folder_id,))
             )
-            self._foldername, self._foldername_iv, self._folder_id = (
+            self._foldername, self._folder_iv, self._folder_id = (
                 await cursor.fetchone()
             )
         except Exception as e:
@@ -2311,7 +2386,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         self._folder = None
 
-        self._foldername_iv = elbfi._foldername_iv
+        self._folder_iv = elbfi._folder_iv
         self._file_iv, self._folder_id = elbfi._file_iv, elbfi._folder_id
         self._id, self._file_salt = elbfi._id, elbfi._file_salt
         self._version_byte = elbfi._version_byte
@@ -2331,7 +2406,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         if self.__mainkey:
             self._foldername = next(aes_decrypt(
                 elbfi._foldername, self.__mainkey, 
-                iv=self._foldername_iv, yield_all=True)
+                iv=self._folder_iv, yield_all=True)
             )
         else:
             self._foldername = DEF_NO_FOLDER
@@ -2410,7 +2485,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 self._tgbox_db, 
                 self.__mainkey, 
                 self._elbfi.foldername,
-                self._foldername_iv,
+                self._folder_iv,
                 self._folder_id
             )
         return self._folder
