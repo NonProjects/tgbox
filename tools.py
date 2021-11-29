@@ -154,7 +154,7 @@ class SearchFilter:
             verbyte: Optional[Union[bytes, List[bytes]]] = None,
             exported: Optional[bool] = None, re: Optional[bool] = None
         ):
-        '''
+        """
         Container that filters search in `RemoteBox` or 
         `DecryptedLocalBox`. All kwargs will be converted to `List`.
         
@@ -171,7 +171,7 @@ class SearchFilter:
         
         kwarg `re` will tell the `tgbox.api._search_func` that
         *all* filters that you use is Regular Expressions. 
-        '''
+        """
         self.id = id if isinstance(id, list) else ([] if not id else [id])
         self.time = time if isinstance(time, list) else ([] if not time else [time])
         self.comment = comment if isinstance(comment, list) else ([] if not comment else [comment])
@@ -196,13 +196,13 @@ class SearchFilter:
             self.__hash__() == hash(other)
         ))
     def __bool__(self) -> bool:
-        '''Will return `True` if any(kwargs)'''
+        """Will return `True` if any(kwargs)"""
         return any((
             self.id, self.time, self.comment, self.folder, self.exported, self.max_size,
             self.file_name, self.min_size, self.file_salt, self.verbyte, self.re
         ))
     def __add__(self, other: 'SearchFilter') -> None:
-        '''Extends filters with `other` filters.'''
+        """Extends filters with `other` filters."""
         self.id.extend(other.id)
         self.time.extend(other.time)
         self.comment.extend(other.comment)
@@ -214,10 +214,10 @@ class SearchFilter:
         self.verbyte.extend(other.verbyte)
     
     def __floordiv__(self, other: 'SearchFilter') -> 'SearchFilter':
-        '''
+        """
         Makes a new `SearchFilter` from `self` and `other` filters.
         Kwarg `exported` will be used from `other` class.
-        '''
+        """
         return SearchFilter(
             id = self.id + other.id,
             time = self.time + other.time,
@@ -232,7 +232,7 @@ class SearchFilter:
         )
 class OpenPretender: 
     def __init__(self, flo: BinaryIO, aes_state: AESwState, mode: int):
-        '''
+        """
         Class to wrap Tgbox AES Generators and make it look
         like opened to "rb"-read file. Designed to work with Telethon.
         
@@ -244,14 +244,14 @@ class OpenPretender:
 
         mode (`int`):
             Mode of `AESwState` (1=Enc, 2=Dec).
-        '''
+        """
         self._aes_state = aes_state
         self._mode, self._flo = mode, flo
         self._buffered_bytes = b''
         self._total_size = None
 
     def concat_metadata(self, metadata: bytes) -> None:
-        '''Concates metadata to the file as (metadata + file).'''
+        """Concates metadata to the file as (metadata + file)."""
         assert len(metadata) <= METADATA_MAX
 
         if self._total_size is not None or self._buffered_bytes:
@@ -260,13 +260,13 @@ class OpenPretender:
             self._buffered_bytes += metadata.constructed 
     
     def read(self, size: int=-1) -> bytes: 
-        '''
+        """
         Returns `size` bytes from Generator.
         
         size (`int`):
             Amount of bytes to return. By default 
             is negative (return all). 
-        '''
+        """
         if size % 16 and not size == -1:
             raise ValueError('size must be divisible by 16 or -1 (return all)')
 
@@ -326,7 +326,7 @@ class OpenPretender:
         self._stop_iteration = True
 
 def pad_request_size(request_size: int, blocksize: int=4096) -> int:
-    '''
+    """
     This function pads `request_size` to divisible
     by 4096 bytes. If `request_size` < 4096, then
     it's not padded. This function designed for 
@@ -340,7 +340,7 @@ def pad_request_size(request_size: int, blocksize: int=4096) -> int:
     blocksize (`int`, optional):
         Size of block. Typically we
         don't need to change this.
-    '''
+    """
     # Check amount of blocks
     block_count = request_size/blocksize
     
@@ -363,24 +363,24 @@ def make_folder_id(mainkey: MainKey, foldername: bytes) -> bytes:
     return sha256(sha256(mainkey.key).digest() + foldername).digest()[:16]
         
 def int_to_bytes(int_: int, length: Optional[int] = None, signed: Optional[bool] = True) -> bytes:
-    '''Converts int to bytes with Big byteorder.'''
+    """Converts int to bytes with Big byteorder."""
     length = length if length else (int_.bit_length() + 8) // 8
     return int.to_bytes(int_, length, 'big', signed=signed)
 
 def bytes_to_int(bytes_: bytes, signed: Optional[bool] = True) -> int:
-    '''Converts bytes to int with Big byteorder.'''
+    """Converts bytes to int with Big byteorder."""
     return int.from_bytes(bytes_, 'big', signed=signed)
 
 def float_to_bytes(float_: float) -> bytes:
-    '''Converts float to bytes.'''
+    """Converts float to bytes."""
     return struct_pack('!f', float_)
 
 def bytes_to_float(bytes_: bytes) -> float:
-    '''Converts bytes to float.'''
+    """Converts bytes to float."""
     return struct_unpack('!f', bytes_)[0]
 
 async def get_media_duration(file_path: str) -> float:
-    '''Returns video/audio duration with ffprobe.'''
+    """Returns video/audio duration with ffprobe."""
     func = partial(subprocess_run,
         args=[
             'ffprobe', '-v', 'error', '-show_entries', 'format=duration', 
@@ -400,10 +400,10 @@ async def make_media_preview(
         output_path: str='', 
         x: int=128, 
         y: int=-1) -> BinaryIO:
-    '''
+    """
     Makes x:y sized thumbnail of the 
     video/audio with ffmpeg.
-    '''
+    """
     thumbnail_path = Path(output_path, prbg(8).hex()+'.jpg')
     
     func = partial(subprocess_run,

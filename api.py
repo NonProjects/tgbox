@@ -95,7 +95,7 @@ async def _search_func(
         mainkey: Optional[MainKey] = None,
         it_messages: Optional[Generator] = None,
         lb: Optional[Union['DecryptedLocalBox', 'EncryptedLocalBox']] = None) -> Generator:
-    '''
+    """
     Function used to search for files in dlb and rb. It's
     only for internal use, and you shouldn't use it in your
     own projects. `ta` must be specified with `it_messages`.
@@ -104,7 +104,7 @@ async def _search_func(
     to your LocalBox, then we can specify box as `lb`. Generator
     will try to get FILEKEY and decrypt `EncryptedRemoteBoxFile`.
     Otherwise imported file will be ignored.
-    '''
+    """
     in_func = re_search if sf.re else lambda p,s: p in s
     iter_from = it_messages if it_messages else lb.files()
     
@@ -205,7 +205,7 @@ async def make_remote_box(
         tgbox_db_name: str=DEF_TGBOX_NAME, 
         box_image_path: Union[Path, str] = BOX_IMAGE_PATH,
         box_salt: Optional[bytes] = None) -> 'RemoteBox':
-    '''
+    """
     Function used for making `RemoteBox`. 
 
     ta (`TelegramAccount`):
@@ -223,7 +223,7 @@ async def make_remote_box(
     box_salt (`bytes`, optional):
         Random 32 bytes. Will be used in `MainKey`
         creation. Default is `crypto.make_box_salt()`.
-    '''
+    """
     tgbox_db = await TgboxDB.create(tgbox_db_name)
     if (await tgbox_db.BoxData.count_rows()): 
         raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
@@ -244,7 +244,7 @@ async def get_remote_box(
         dlb: Optional['DecryptedLocalBox'] = None, 
         ta: Optional['TelegramAccount'] = None,
         entity: Optional[Union[int, str, PeerChannel]] = None) -> 'RemoteBox':
-    '''
+    """
     Returns `RemoteBox` (`Channel`).
     
     Must be specified at least 
@@ -263,7 +263,7 @@ async def get_remote_box(
     entity (`PeerChannel`, `int`, `str`, optional):
         Can be `Channel` ID, Username or `PeerChannel`.
         Will be used if specified. Must be specified with `ta`.
-    '''
+    """
     if ta:
         account = ta
 
@@ -280,7 +280,7 @@ async def get_remote_box(
 async def make_local_box(
         rb: 'RemoteBox', ta: 'TelegramAccount', 
         basekey: BaseKey) -> 'DecryptedLocalBox':
-    '''
+    """
     rb (`RemoteBox`):
         Created `RemoteBox`. Pretty obvious, huh?!
 
@@ -292,7 +292,7 @@ async def make_local_box(
         creation. Furtherly you will need to always 
         specify it for downloading files from 
         your `RemoteBox`, so don't forget your `Phrase`.
-    '''
+    """
     tgbox_db = await TgboxDB.create(await rb.get_box_name())
     if (await tgbox_db.BoxData.count_rows()): 
         raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
@@ -314,7 +314,7 @@ async def get_local_box(
         key: Optional[Union[MainKey, BaseKey]] = None,
         tgbox_db_path: Optional[Union[Path, str]] = DEF_TGBOX_NAME,
         ) -> Union['EncryptedLocalBox', 'DecryptedLocalBox']:
-    '''
+    """
     Returns LocalBox.
     
     key (`MainKey`, `BaseKey`, optional):
@@ -324,7 +324,7 @@ async def get_local_box(
     tgbox_db_path (`Path`, `str`, optional):
         `Path` to your TgboxDB (LocalBox). Default
         is `constants.DEF_TGBOX_NAME`.
-    '''
+    """
     if not isinstance(tgbox_db_path, Path):
         tgbox_db_path = Path(tgbox_db_path)
 
@@ -339,7 +339,7 @@ async def get_local_box(
         return await EncryptedLocalBox(tgbox_db).init()
 
 class TelegramAccount:
-    '''
+    """
     Wrapper around `telethon.TelegramClient`
     
     Typical usage:
@@ -359,13 +359,13 @@ class TelegramAccount:
         rb = await make_remote_box(ta)
         ...
         ```
-    '''
+    """
     def __init__(
             self, api_id: int=API_ID, 
             api_hash: str=API_HASH, 
             phone_number: Optional[str] = None, 
             session: Optional[Union[str, StringSession]] = None):
-        '''
+        """
         api_id (`int`, optional):
             API_ID from https://my.telegram.org.
             `constants.API_ID` by default.
@@ -385,7 +385,7 @@ class TelegramAccount:
             your Telegram account. You can get it
             after connecting and signing in via
             `TelegramAccount.get_session()` method.
-        '''
+        """
         self._api_id, self._api_hash = api_id, api_hash
         self._phone_number = phone_number
         
@@ -394,30 +394,30 @@ class TelegramAccount:
             self._api_id, self._api_hash, loop=loop
         )
     async def signed_in(self) -> bool:
-        '''Returns `True` if you logged in account'''
+        """Returns `True` if you logged in account"""
         return await self.TelegramClient.is_user_authorized()
 
     async def connect(self) -> None:
-        '''
+        """
         Connects to Telegram. Typically
         you will use this method if you have
         `StringSession` (`session` specified).
-        '''
+        """
         await self.TelegramClient.connect()
 
     async def send_code_request(self, force_sms: bool=False) -> SentCode:
-        '''
+        """
         Sends the Telegram code needed to login to the given phone number.
 
         force_sms (`bool`, optional):
             Whether to force sending as SMS.
-        '''
+        """
         return await self.TelegramClient.send_code_request(self._phone_number)
 
     async def sign_in(
             self, password: Optional[str] = None, 
             code: Optional[int] = None) -> None: 
-        '''
+        """
         Logs in to Telegram to an existing user account.
         You should only use this if you are not signed in yet.
         
@@ -428,7 +428,7 @@ class TelegramAccount:
         code (`int`, optional):
             The code that Telegram sent you after calling
             `TelegramAccount.send_code_request()` method.
-        '''
+        """
         if not await self.TelegramClient.is_user_authorized():
             try:
                 await self.TelegramClient.sign_in(self._phone_number, code)
@@ -436,14 +436,14 @@ class TelegramAccount:
                 await self.TelegramClient.sign_in(password=password)
 
     async def log_out(self) -> bool:
-        '''
+        """
         Logs out from Telegram. Returns `True` 
         if the operation was successful.
-        '''
+        """
         return await self.TelegramClient.log_out()
 
     async def resend_code(self, phone_code_hash: str) -> SentCode:
-        '''
+        """
         Send log-in code again. This can be used to
         force Telegram send you SMS or Call to dictate code.
 
@@ -458,17 +458,17 @@ class TelegramAccount:
                 sent_code = await tg_account.resend_code(sent_code.phone_code_hash)
                 ...
                 ```
-        '''
+        """
         return await self.TelegramClient(
             ResendCodeRequest(self._phone_number, phone_code_hash)
         )
 
     def get_session(self) -> str:
-        '''Returns `StringSession` as `str`'''
+        """Returns `StringSession` as `str`"""
         return self.TelegramClient.session.save()
     
     async def tgboxes(self, yield_with: str='tgbox: ') -> Generator:
-        '''
+        """
         Iterator over all Tgbox Channels in your account.
         It will return any channel with Tgbox prefix,
         `"tgbox: "` by default, you can override this.
@@ -476,13 +476,13 @@ class TelegramAccount:
         yield_with (`str`):
             Any channel that have `in` title this
             string will be returned as `RemoteBox`. 
-        '''
+        """
         async for d in self.TelegramClient.iter_dialogs():
             if yield_with in d.title and d.is_channel: 
                 yield RemoteBox(d, self)
 
 class RemoteBox:
-    '''
+    """
     `RemoteBox` is a remote cloud storage. You can
     upload files and download them later.
 
@@ -516,9 +516,9 @@ class RemoteBox:
         print(await rb.file_exists(drbf.id)
         ...
         ```
-    '''
+    """
     def __init__(self, box_channel: Channel, ta: TelegramAccount):
-        '''
+        """
         box_channel (`Channel`):
             Telegram channel that represents
             `RemoteBox`. By default have "tgbox: " 
@@ -527,7 +527,7 @@ class RemoteBox:
 
         ta (`TelegramAccount`):
             Telegram account that have `box_channel`.
-        '''
+        """
         self._ta = ta
         
         self._box_channel = box_channel
@@ -550,19 +550,19 @@ class RemoteBox:
         ))
     @property
     def box_channel(self) -> Channel:
-        '''Returns instance of `Channel`'''
+        """Returns instance of `Channel`"""
         return self._box_channel
     
     @property
     def box_channel_id(self) -> int:
-        '''Returns box channel id'''
+        """Returns box channel id"""
         return self._box_channel_id
     
     async def get_box_salt(self) -> bytes:
-        '''
+        """
         Returns BoxSalt. Will be cached 
         after first method call.
-        '''
+        """
         if not self._box_salt:
             full_rq = await self._ta.TelegramClient(
                 GetFullChannelRequest(channel=self._box_channel)
@@ -572,10 +572,10 @@ class RemoteBox:
         return self._box_salt
     
     async def get_box_name(self):
-        '''
+        """
         Returns name of `RemoteBox`. 
         Will be cached after first method call.
-        '''
+        """
         if not self._box_name:
             entity = await self._ta.TelegramClient.get_entity(self._box_channel_id)
             self._box_name = entity.title.split(': ')[1]
@@ -586,7 +586,7 @@ class RemoteBox:
             mainkey: Union[MainKey, ImportKey],
             basekey: BaseKey, 
             box_path: Optional[Union[Path, str]] = None) -> 'DecryptedLocalBox':
-        '''
+        """
         This method makes `LocalBox` from `RemoteBox` and
         imports all RemoteBoxFiles to it.
 
@@ -602,7 +602,7 @@ class RemoteBox:
         box_path (`Path`, `str`, optional):
             Direct path with filename included. If
             not specified, then `RemoteBox` name used.
-        '''
+        """
         box_path = self._box_name if not box_path else box_path
         tgbox_db = await TgboxDB.create(box_path)
 
@@ -633,7 +633,7 @@ class RemoteBox:
             mainkey: Optional[MainKey] = None,
             dlb: Optional['DecryptedLocalBox'] = None) ->\
             Generator[Union['EncryptedRemoteBoxFile', 'DecryptedRemoteBoxFile'], None, None]:
-        '''
+        """
         This method used to search for files in your `RemoteBox`.
         
         sf (`SearchFilter`):
@@ -648,7 +648,7 @@ class RemoteBox:
 
         If `dlb` and `mainkey` not specified, then method 
         will search on `EncryptedRemoteBoxFile`.
-        '''
+        """
         it_messages = self._ta.TelegramClient.iter_messages(
             self._box_channel, ids=sf.id if sf.id else None
         )
@@ -661,13 +661,13 @@ class RemoteBox:
             yield file
             
     async def push_file(self, ff: 'FutureFile') -> 'DecryptedRemoteBoxFile':
-        '''
+        """
         Uploads `FutureFile` to the `RemoteBox`.
         
         ff (`FutureFile`):
             File to upload. You should recieve
             it via `DecryptedLocalBox.make_file`.
-        '''
+        """
         state = AESwState(ff.filekey, ff.file_iv)
         oe = OpenPretender(ff.file, state, mode=1)
         oe.concat_metadata(ff.metadata)
@@ -688,13 +688,13 @@ class RemoteBox:
         return await erbf.decrypt(ff.dlb._mainkey)
     
     async def file_exists(self, id: int) -> bool:
-        '''
+        """
         Returns `True` if file with specified `id`
         exists in `RemoteBox`. `False` otherwise.
 
         id (`int`):
             File ID.
-        '''
+        """
         if await self.get_file(id, decrypt=False):
             return True
         else:
@@ -712,7 +712,7 @@ class RemoteBox:
                 'EncryptedRemoteBoxFile', 
                 'DecryptedRemoteBoxFile', None
             ]:
-        '''
+        """
         Returns file from the `RemoteBox` by the given ID.
         
         id (`int`):
@@ -753,7 +753,7 @@ class RemoteBox:
         cache_preview (`bool`, optional):
             Cache preview in returned by method
             RemoteBoxFiles or not. `True` by default.
-        '''     
+        """     
         file_iter = self.files(
             key, dlb=dlb, decrypt=decrypt, 
             ids=id, cache_preview=cache_preview,
@@ -783,7 +783,7 @@ class RemoteBox:
                       'DecryptedRemoteBoxFile'],
                 None, None
             ]:
-        '''
+        """
         Yields every RemoteBoxFile from `RemoteBox`.
         
         The default order is from newest to oldest, but this
@@ -878,7 +878,7 @@ class RemoteBox:
         cache_preview (`bool`, optional):
             Cache preview in yielded by generator
             RemoteBoxFiles or not. `True` by default.
-        '''        
+        """        
         if decrypt and not any((key, dlb)):
             raise ValueError(
                 'You need to specify key or dlb to be able to decrypt.'
@@ -930,8 +930,8 @@ class RemoteBox:
                                     continue
                                 else:
                                     raise NotImported(
-                                        '''You don\'t have FileKey for this file. '''
-                                        '''Set to True `return_imported_as_erbf`?'''
+                                        """You don\'t have FileKey for this file. """
+                                        """Set to True `return_imported_as_erbf`?"""
                                     ) from None
                             else:
                                 # We already imported file, so have FileKey
@@ -943,7 +943,7 @@ class RemoteBox:
                 yield rbf
     
     async def get_requestkey(self, mainkey: MainKey) -> RequestKey:
-        '''
+        """
         Returns `RequestKey` for this Box.
         You should use this method if you want
         to decrypt other's `RemoteBox`.
@@ -952,14 +952,14 @@ class RemoteBox:
             To make a `RequestKey` for other's `RemoteBox`
             you should have your own LocalBox. Take key from
             your `DecryptedLocalBoxFile` and specify it here.
-        '''
+        """
         box_salt = await self.get_box_salt()
         return make_requestkey(mainkey, box_salt=box_salt)
 
     async def get_sharekey(
             self, mainkey: MainKey, 
             reqkey: Optional[RequestKey] = None) -> ShareKey:
-        '''
+        """
         Returns `ShareKey` for this Box.
         You should use this method if you want
         to share your `RemoteBox` with other people.
@@ -974,7 +974,7 @@ class RemoteBox:
             returns `ShareKey` of this box without
             encryption, so anyone with this key can
             decrypt **ALL** files in your `RemoteBox`.
-        '''
+        """
         box_salt = await self.get_box_salt()
         if reqkey:
             return make_sharekey(
@@ -986,7 +986,7 @@ class RemoteBox:
             return make_sharekey(mainkey=mainkey)
 
 class EncryptedRemoteBoxFile:
-    '''
+    """
     Class that represents encrypted remote
     file. Without decryption you can only
     retrieve basic information, like Prefix,
@@ -1009,12 +1009,12 @@ class EncryptedRemoteBoxFile:
         print(erbf.prefix)
         ...
         ```
-    '''
+    """
     def __init__(
             self, sended_file: Message, 
             ta: TelegramAccount, 
             cache_preview: bool=True):
-        '''
+        """
         sended_file (`Message`):
             A `Telethon`'s message object. This
             message should contain `File`.
@@ -1025,7 +1025,7 @@ class EncryptedRemoteBoxFile:
         cache_preview (`bool`, optional):
             Cache preview in class or not. `True` by default. 
             This kwarg will be used later in `DecryptedRemoteBoxFile`
-        '''
+        """
         
         self._initialized = False
         
@@ -1072,74 +1072,74 @@ class EncryptedRemoteBoxFile:
         ))
     @property
     def initialized(self) -> bool:
-        '''Returns `True` if class was initialized.'''
+        """Returns `True` if class was initialized."""
         return self._initialized
     
     @property
     def sender(self) -> Union[str, None]:
-        '''
+        """
         Returns post author if sign
         messages is enabled in 
         `Channel`, `None` otherwise
-        '''
+        """
         return self._sender
 
     @property 
     def exported(self) -> bool:
-        '''
+        """
         Returns `True` if file was exported
         from other RemoteBox. `False` otherwise.
-        '''
+        """
         return self._exported
     
     @property
     def version_byte(self) -> Union[bytes, None]:
-        '''Returns Verbyte or `None` if not initialized'''
+        """Returns Verbyte or `None` if not initialized"""
         return self._version_byte
     
     @property
     def box_salt(self) -> Union[bytes, None]:
-        '''Returns BoxSalt or `None` if not initialized'''
+        """Returns BoxSalt or `None` if not initialized"""
         return self._box_salt
 
     @property
     def upload_time(self) -> Union[int, None]:
-        '''Returns upload time or `None` if not initialized'''
+        """Returns upload time or `None` if not initialized"""
         return self._upload_time
 
     @property
     def file_salt(self) -> Union[bytes, None]:
-        '''Returns FileSalt or `None` if not initialized'''
+        """Returns FileSalt or `None` if not initialized"""
         return self._file_salt
     
     @property
     def id(self) -> int:
-        '''Returns message id.'''
+        """Returns message id."""
         return self._id
      
     @property
     def file(self) -> File:
-        '''Returns Telethon's `File` object.'''
+        """Returns Telethon's `File` object."""
         return self._file
     
     @property
     def file_size(self) -> int:
-        '''Returns size of the `File` from `Message` object.'''
+        """Returns size of the `File` from `Message` object."""
         return self._file_size
 
     @property
     def file_file_name(self) -> bytes:
-        '''Returns **remote** file name.'''
+        """Returns **remote** file name."""
         return self._file_name
 
     @property
     def box_channel_id(self) -> int:
-        '''Returns ID of the Box Channel.'''
+        """Returns ID of the Box Channel."""
         return self._box_channel_id
 
     @property
     def prefix(self) -> Union[bytes, None]:
-        '''Returns file prefix or `None` if not initialized'''
+        """Returns file prefix or `None` if not initialized"""
         return self._file_name
     
     def __raise_initialized(self) -> NoReturn:
@@ -1147,23 +1147,23 @@ class EncryptedRemoteBoxFile:
             raise NotInitializedError('RemoteBoxFile must be initialized.')
 
     def disable_cache_preview(self) -> None:
-        '''
+        """
         Sets `self._cache_preview` to `False`
         and removes cached preview from memory.
-        '''
+        """
         self._cache_preview = False
         self._preview = None
     
     def enable_cache_preview(self) -> None:
-        '''
+        """
         Sets `self._cache_preview` to `True`.
         Preview will be cached after first
         `object.get_preview()` call.
-        '''
+        """
         self._cache_preview = True
     
     async def init(self) -> 'EncryptedRemoteBoxFile':
-        '''Downloads and parses Metadata constant header.'''
+        """Downloads and parses Metadata constant header."""
 
         async for fixed_metadata in self._ta.TelegramClient.iter_download(
             self._message.document, offset=0, request_size=103):
@@ -1177,7 +1177,7 @@ class EncryptedRemoteBoxFile:
         return self
 
     async def delete(self) -> None: 
-        '''
+        """
         TOTALLY removes file from RemoteBox. You and all
         participants of the `RemoteBox` will
         lose access to it FOREVER. This action can't be
@@ -1186,13 +1186,13 @@ class EncryptedRemoteBoxFile:
         Please note that if you want to delete file
         only from your LocalBox then you can use the
         same `delete()` method on your LocalBoxFile.
-        '''
+        """
         await self._ta.TelegramClient.delete_messages(
             self._box_channel_id, [self._id]
         )
     
     def get_requestkey(self, mainkey: MainKey) -> RequestKey:
-        '''
+        """
         Returns `RequestKey` for this file. You should
         use this method if you want to decrypt other's
         `EncryptedRemoteBoxFile`.
@@ -1201,26 +1201,26 @@ class EncryptedRemoteBoxFile:
             To make a `RequestKey` of other's RemoteBoxFile
             you need to have your own LocalBox & `RemoteBox`. 
             Take key from your `DecryptedLocalBox` and specify here.
-        '''
+        """
         self.__raise_initialized()
         return make_requestkey(mainkey, file_salt=self._file_salt)
     
     async def decrypt(
             self, key: Union[MainKey, FileKey, ImportKey, BaseKey])\
             -> 'DecryptedRemoteBoxFile':
-        '''
+        """
         Returns `DecryptedRemoteBoxFile`.
 
         key (`MainKey`, `FileKey`, `ImportKey`, `BaseKey`):
             Decryption key. All, except `FileKey` will be
             used to make `FileKey` for this file.
-        '''
+        """
         if not self.initialized:
             await self.init()
         return await DecryptedRemoteBoxFile(self, key).init()
 
 class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
-    '''
+    """
     This class represents decrypted remote file.
     You can retrieve all metadata info from properties.
 
@@ -1243,17 +1243,17 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         file = await drbf.download()
         ...
         ```
-    '''
+    """
     def __init__(
             self, erbf: EncryptedRemoteBoxFile, 
             key: Union[MainKey, FileKey, ImportKey]):
-        '''
+        """
         erbf (`EncryptedRemoteBoxFile`):
             Instance of `EncryptedRemoteBoxFile` to decrypt.
 
         key (`MainKey`, `FileKey`, `ImportKey`):
             Decryption key. 
-        '''
+        """
         if not erbf.initialized:
             raise NotInitializedError('RemoteBoxFile must be initialized.')
 
@@ -1294,27 +1294,27 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             
     @property
     def size(self) -> Union[int, None]:
-        '''Returns file size or `None` if not initialized.'''
+        """Returns file size or `None` if not initialized."""
         return self._size
     
     @property
     def duration(self) -> Union[float, None]:
-        '''Returns duration or `None` if not initialized.'''
+        """Returns duration or `None` if not initialized."""
         return self._duration
     
     @property
     def file_iv(self) -> Union[bytes, None]:
-        '''Returns file IV or `None` if not initialized.'''
+        """Returns file IV or `None` if not initialized."""
         return self._file_iv
     
     @property
     def comment(self) -> Union[bytes, None]:
-        '''Returns file comment or `None` if not initialized.'''
+        """Returns file comment or `None` if not initialized."""
         return self._comment
     
     @property
     def foldername(self) -> Union[bytes, None]:
-        '''Returns folder or `None` if not initialized.'''
+        """Returns folder or `None` if not initialized."""
         return self._foldername
 
     def __raise_initialized(self) -> NoReturn:
@@ -1322,12 +1322,12 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             raise NotInitializedError('RemoteBoxFile must be initialized.')
 
     async def init(self) -> 'DecryptedRemoteBoxFile':
-        '''
+        """
         This method will download, decrypt and parse all
         Metadata, along with preview if `cache_preview` is
         enabled. Max request per file is ~1064639 bytes. Usually
         it not exceed 20KB per one file.
-        '''
+        """
         dec_navbytes = next(aes_decrypt(
             self._erbf._navbytes, self._filekey, yield_all=True)
         )
@@ -1414,7 +1414,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             hide_folder: bool=False, hide_name: bool=False,
             decrypt: bool=True, offset: int=0,  
             request_size: int=524288) -> BinaryIO:
-        '''
+        """
         Downloads and saves remote box file to the `outfile`.
         
         oufile (`str`, `BinaryIO`, `Path`, optional):
@@ -1452,7 +1452,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             download should start. For example, if a file is 
             1024KB long and you just want the last 512KB, 
             you would use `offset=512 * 1024`.
-        '''
+        """
         self.__raise_initialized()
         
         if decrypt:
@@ -1496,7 +1496,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         return outfile
     
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
-        '''
+        """
         Returns `ShareKey` for this file. You should
         use this method if you want to share this
         file with other people.
@@ -1506,7 +1506,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             returns `ImportKey` of this file without
             encryption, so **ANYONE** with this key 
             can decrypt this remote file.
-        '''
+        """
         self.__raise_initialized()
 
         if reqkey:
@@ -1518,7 +1518,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             return make_sharekey(filekey=self._filekey)
         
 class EncryptedLocalBox:
-    '''
+    """
     This class represents an encrypted local box. On more
     low-level, that's a wrapper around `TgboxDB`. Usually
     you will never meet this class in your typical code, 
@@ -1549,12 +1549,12 @@ class EncryptedLocalBox:
         # Retrieve encrypted session
         print(dlb._elb.session)
         ```
-    '''
+    """
     def __init__(self, tgbox_db: TgboxDB):
-        '''
+        """
         tgbox_db (`TgboxDB`):
             Initialized Tgbox Database.
-        '''
+        """
         self._tgbox_db = tgbox_db
         
         self._mainkey = None
@@ -1586,62 +1586,62 @@ class EncryptedLocalBox:
 
     @property
     def tgbox_db(self) -> TgboxDB:
-        '''Returns `TgboxDB`.'''
+        """Returns `TgboxDB`."""
         return self._tgbox_db
    
     @property
     def is_enc_class(self) -> bool:
-        '''Returns `True` if we\'re in EncryptedLocalBox'''
+        """Returns `True` if we\'re in EncryptedLocalBox"""
         return self._enc_class
 
     @property
     def initialized(self) -> bool:
-        '''Returns `True` if you called `.init()`'''
+        """Returns `True` if you called `.init()`"""
         return self._initialized
 
     @property 
     def box_salt(self) -> Union[bytes, None]:
-        '''Returns BoxSalt or `None` if not initialized'''
+        """Returns BoxSalt or `None` if not initialized"""
         return self._box_salt
     
     @property
     def session(self) -> Union[bytes, str, None]:
-        '''
+        """
         Returns encrypted session from 
         `EncryptedLocalBox` and decrypted 
         from `DecryptedLocalBox`.
-        '''
+        """
         return self._session
     
     @property
     def box_channel_id(self) -> Union[bytes, int, None]:
-        '''
+        """
         Returns encrypted channel ID from 
         `EncryptedLocalBox` and decrypted 
         from `DecryptedLocalBox`.
-        '''
+        """
         return self._box_channel_id
     
     @property
     def box_cr_time(self) -> Union[bytes, int, None]:
-        '''
+        """
         Returns encrypted box creation time from 
         `EncryptedLocalBox` and decrypted 
         from `DecryptedLocalBox`.
-        '''
+        """
         return self._box_cr_time
     
     @property
     def last_file_id(self) -> Union[bytes, int, None]:
-        '''
+        """
         Returns encrypted last file ID from 
         `EncryptedLocalBox` and decrypted 
         from `DecryptedLocalBox`.
-        '''
+        """
         return self._last_file_id
     
     async def init(self) -> 'EncryptedLocalBox':
-        '''Will fetch and parse data from Database.'''
+        """Will fetch and parse data from Database."""
 
         if not await self._tgbox_db.BoxData.count_rows():
             raise NotInitializedError('Table is empty.') 
@@ -1658,7 +1658,7 @@ class EncryptedLocalBox:
 
     async def get_file(self, id: int, cache_preview: bool=True)\
             -> Union['DecryptedLocalBoxFile', 'EncryptedLocalBoxFile', None]:
-        '''
+        """
         Returns `EncryptedLocalBoxFile` from `EncryptedLocalBox`
         or `DecryptedLocalBoxFile` from `DecryptedLocalBox` if
         file exists. `None` otherwise.
@@ -1668,7 +1668,7 @@ class EncryptedLocalBox:
 
         cache_preview (`bool`, optional):
             Cache preview in class or not.
-        '''
+        """
         try:
             self.__raise_initialized()
             elbfi = EncryptedLocalBoxFile(
@@ -1684,20 +1684,20 @@ class EncryptedLocalBox:
     
     async def files(self, cache_preview: bool=True)\
             -> Union['DecryptedLocalBoxFile', 'EncryptedLocalBoxFile', None]:
-        '''
+        """
         Yields every local file as `EncryptedLocalBoxFile` if you
         call it on `EncryptedLocalBox` and `DecryptedLocalBoxFile`
         if on `DecryptedLocalBox`. Works via `self.get_file`
 
         cache_preview (`bool`, optional):
             Cache preview in class or not.
-        '''
+        """
         cursor = await self._tgbox_db.Files.execute(('SELECT ID FROM FILES',()))
         async for file_id in cursor:
             yield await self.get_file(file_id[0], cache_preview=cache_preview)
 
     def get_requestkey(self, mainkey: MainKey) -> RequestKey:
-        '''
+        """
         Returns `RequestKey` for this LocalBox. You
         should use this method if you want to decrypt
         other's `EncryptedLocalBox`.
@@ -1706,7 +1706,7 @@ class EncryptedLocalBox:
             To make a `RequestKey` for other's
             `EncryptedLocalBox` you need to have
             your own. Take key from it and specify here.
-        '''
+        """
         self.__raise_initialized()
         return make_requestkey(mainkey, box_salt=self._box_salt)
 
@@ -1716,7 +1716,7 @@ class EncryptedLocalBox:
         return DecryptedLocalBox(self, key)
 
 class DecryptedLocalBox(EncryptedLocalBox):
-    '''
+    """
     Class that represents decrypted local box. On
     more low-level it's wrapper around `TgboxDB` that
     decrypts and parses every row. You don't need to
@@ -1735,17 +1735,17 @@ class DecryptedLocalBox(EncryptedLocalBox):
         async for dlbfi in dlb.files():
             print(file.id, file.file_name, file.size)
         ```
-    '''
+    """
     def __init__(
             self, elb: EncryptedLocalBox, 
             key: Union[MainKey, ImportKey, BaseKey]):
-        '''
+        """
         elb (`EncryptedLocalBox`):
             Local box you want to decrypt.
 
         key (`MainKey`, `ImportKey`, `BaseKey`):
             Decryption key.
-        '''
+        """
         if not elb.initialized:
             raise NotInitializedError('Parent class isn\'t initialized.')
 
@@ -1790,17 +1790,17 @@ class DecryptedLocalBox(EncryptedLocalBox):
     @staticmethod
     def init() -> NoReturn:
         raise AttributeError(
-            '''This function was inherited from `EncryptedLocalBox` '''
-            '''and cannot be used on `DecryptedLocalBox`.'''
+            """This function was inherited from `EncryptedLocalBox` """
+            """and cannot be used on `DecryptedLocalBox`."""
         )
     @staticmethod
     def decrypt() -> NoReturn:
         raise AttributeError(
-            '''This function was inherited from `EncryptedLocalBox` '''
-            '''and cannot be used on `DecryptedLocalBox`.'''
+            """This function was inherited from `EncryptedLocalBox` """
+            """and cannot be used on `DecryptedLocalBox`."""
         )
     async def folders(self) -> 'LocalBoxFolder':
-        '''Iterate over all folders in LocalBox.'''
+        """Iterate over all folders in LocalBox."""
 
         folders_list = await self._tgbox_db.Folders.execute(
             (f'SELECT * FROM FOLDERS',)
@@ -1814,12 +1814,12 @@ class DecryptedLocalBox(EncryptedLocalBox):
             )
 
     async def search_file(self, sf: SearchFilter) -> 'DecryptedLocalBoxFile':
-        '''
+        """
         This method used to search for files in your `RemoteBox`.
         
         sf (`SearchFilter`):
             `SearchFilter` with kwargs you like.
-        '''
+        """
         async for file in _search_func(sf, lb=self, mainkey=self._mainkey):
             yield file
         
@@ -1829,7 +1829,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             foldername: bytes=DEF_NO_FOLDER, 
             comment: bytes=b'',
             make_preview: bool=True) -> 'FutureFile':
-        '''
+        """
         file (`BinaryIO`, `BytesIO`):
             `file` data to add to the LocalBox. In most
             cases it's just opened file. If you want to upload
@@ -1861,7 +1861,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         make_preview (`bool`, optional):
             Will try to add file preview to 
             the Metadata if `True` (default).
-        '''
+        """
         if len(comment) > COMMENT_MAX:
             raise ValueError(f'Comment length must be <= {COMMENT_MAX} bytes.')
                 
@@ -1947,14 +1947,14 @@ class DecryptedLocalBox(EncryptedLocalBox):
             self, drbf: DecryptedRemoteBoxFile,
             foldername: Optional[bytes] = None)\
             -> 'DecryptedLocalBoxFile':
-        '''
+        """
         drbf (`DecryptedRemoteBoxFile`):
             Remote file you want to import.
 
         foldername (`bytes`, optional):
             File's folder. Will be used
             `drbf._foldername` if `None`.
-        '''
+        """
         ff = FutureFile(
             self, file_name=drbf._file_name,
             foldername=(foldername if foldername else drbf._foldername), 
@@ -1972,7 +1972,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         return await ff.make_local(drbf._id, drbf._upload_time)
     
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
-        '''
+        """
         Returns `ShareKey` for this Box. You should use
         this method if you want to share your LocalBox
         with other people.
@@ -1982,7 +1982,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             returns `ImportKey` of this box without
             encryption, so anyone with this key can
             decrypt **ALL** files in your Boxes.
-        '''
+        """
         if reqkey:
             return make_sharekey(
                 requestkey=reqkey, 
@@ -1993,7 +1993,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             return make_sharekey(mainkey=self._mainkey)
     
 class LocalBoxFolder:
-    '''
+    """
     Class that represents abstract Tgbox folder. You
     can iterate over all files in this folder.
 
@@ -2006,14 +2006,14 @@ class LocalBoxFolder:
             # Iterate over all files
             async for dlbfi in folder.files():
                 print(dlbfi.id, dlbfi.file_name, dlbfi.comment)
-    '''
+    """
     def __init__(
             self, tgbox_db: TgboxDB, 
             mainkey: MainKey, 
             enc_foldername: bytes,
             folder_iv: bytes,
             folder_id: bytes):
-        '''
+        """
         To make a `LocalBoxFolder` you need to
         fetch one row from `FOLDERS` table.
 
@@ -2035,7 +2035,7 @@ class LocalBoxFolder:
         folder_id (`bytes`):
             `FOLDER_ID` from
             TgboxDB `FOLDERS` table.
-        '''
+        """
         self._tgbox_db = tgbox_db
         
         self._enc_foldername = enc_foldername
@@ -2059,22 +2059,22 @@ class LocalBoxFolder:
         ))
     @property
     def enc_foldername(self) -> bytes:
-        '''Returns encrypted foldername'''
+        """Returns encrypted foldername"""
         return self._enc_foldername
     
     @property
     def dec_foldername(self) -> bytes:
-        '''Returns decrypted foldername'''
+        """Returns decrypted foldername"""
         return self._dec_foldername
 
     async def files(self, cache_preview: bool=True) -> 'DecryptedLocalBoxFile':
-        '''
+        """
         Iterate over all files in this abstract folder.
 
         cache_preview (`bool`, optional):
             Cache preview in class or not. 
             `True` by default.
-        '''
+        """
         files_list = await self._tgbox_db.Files.execute( 
             ('SELECT * FROM FILES WHERE FOLDER_ID = ?', (self._folder_id,))
         )
@@ -2084,7 +2084,7 @@ class LocalBoxFolder:
     async def get_file(
             self, id: int, cache_preview: bool=True
             ) -> 'DecryptedLocalBoxFile':
-        '''
+        """
         Returns file by given ID.
         
         id (`int`):
@@ -2093,17 +2093,17 @@ class LocalBoxFolder:
         cache_preview (`bool`, optional):
             Will save preview image (max ~1MB) in 
             `EncryptedLocalBoxFile` object if `True` (default).
-        '''
+        """
         return await EncryptedLocalBoxFile(
             id, self._tgbox_db, cache_preview=cache_preview
         ).decrypt(self.__mainkey)
 
     async def delete(self) -> None: 
-        '''
+        """
         Will delete this folder with all files from your LocalBox.
         All files will stay in `RemoteBox`, so you can restore
         all your folders by importing files.
-        '''
+        """
         await self._tgbox_db.Files.execute(
             ('DELETE FROM FILES WHERE FOLDER_ID=?',(self._folder_id,))
         )
@@ -2111,11 +2111,33 @@ class LocalBoxFolder:
             ('DELETE FROM FOLDERS WHERE FOLDER_ID=?',(self._folder_id,))
         )
 
-class EncryptedLocalBoxFile:   
+class EncryptedLocalBoxFile:
+    """
+    This class represents an encrypted local file. On
+    more low-level that's a wrapper around row of
+    `FILES` table in Tgbox Database. Usually you
+    will not use this in your code.
+
+    You can access it via `DecryptedLocalBoxFile`:
+        ```
+        ...
+        dlbfi = await dlb.get_file(dlb.last_file_id)
+        print(dlbfi._elbfi.foldername) # Encrypted
+        ```
+    """
     def __init__(
             self, id: int, tgbox_db: TgboxDB, 
             cache_preview: bool=True) -> None:
-        
+        """
+        id (`int`):
+            File ID.
+
+        tgbox_db (`TgboxDB`):
+            Tgbox Database.
+
+        cache_preview (`bool`, optional):
+            Cache preview in class or not.
+        """
         self._tgbox_db = tgbox_db
         self._cache_preview = cache_preview
         
@@ -2142,15 +2164,23 @@ class EncryptedLocalBoxFile:
         ))
     @property
     def is_enc_class(self) -> bool:
+        """
+        Returns `True` if you call it 
+        on `EncryptedLocalBoxFile`
+        """
         return self._enc_class
    
     @property
     def initialized(self) -> bool:
+        """
+        Returns `True` if you 
+        already called `.init()`
+        """
         return self._initialized
     
     @property
     def file(self) -> Union[BinaryIO, None]:
-        '''
+        """
         Returns opened file as `BinaryIO` if it was 
         downloaded, otherwise `None`. File returns 
         "as is", and it will be not decrypted if 
@@ -2159,15 +2189,23 @@ class EncryptedLocalBoxFile:
         Will always return `None` from 
         `EncryptedLocalBoxFile`, because `FILE_PATH`
         is encrypted with filekey.
-        '''
+        """
         return self._file
     
     @property
     def exported(self) -> Union[bool, None]:
+        """
+        Returns `True` if file was 
+        forwarded to your BoxChannel.
+        """
         return self._exported
     
     @property
     def version_byte(self) -> Union[bytes, None]:
+        """
+        Returns Verbyte of this file. 
+        Returns `None` if class wasn't initialized
+        """
         return self._version_byte
     
     @property
@@ -2184,65 +2222,65 @@ class EncryptedLocalBoxFile:
 
     @property
     def size(self) -> Union[bytes, int, None]:
-        '''
+        """
         Returns bytes from `EncryptedLocalBoxFile`
             and int from `DecryptedLocalBoxFile`.
-        '''
+        """
         return self._size
     
     @property
     def duration(self) -> Union[bytes, float, None]:
-        '''
+        """
         Returns bytes from `EncryptedLocalBoxFile`
             and float from `DecryptedLocalBoxFile`.
-        '''
+        """
         return self._duration
     
     @property
     def comment(self) -> Union[bytes, None]:
-        '''Returns file comment.'''
+        """Returns file comment."""
         return self._comment
 
     @property
     def id(self) -> Union[bytes, int, None]:
-        '''
+        """
         Returns bytes from `EncryptedLocalBoxFile`
             and int from `DecryptedLocalBoxFile`.
-        '''
+        """
         return self._id
     
     @property
     def file_iv(self) -> Union[bytes, None]:
-        '''
+        """
         Returns encrypted FILE_IV from `EncryptedLocalBoxFile`
         and decrypted FILE_IV from `DecryptedLocalBoxFile`.
-        '''
+        """
         return self._file_iv
 
     @property
     def upload_time(self) -> Union[bytes, int, None]:
-        '''
+        """
         Returns bytes from `EncryptedLocalBoxFile`
             and int from `DecryptedLocalBoxFile`.
-        '''
+        """
         return self._upload_time
 
     @property
     def file_salt(self) -> Union[bytes, None]:
-        '''
+        """
         Returns `FILE_SALT`.
         
         You can get decryption key for this file
         with `.crypto.make_filekey(mainkey, file_salt)`.
-        '''
+        """
         return self._file_salt
 
     @property
     def preview(self) -> Union[bytes, None]:
-        '''
+        """
         Returns file preview. If there is no
         preview then returns `b''`.
-        ''' 
+        """ 
         return self._preview
     
     def __raise_initialized(self) -> NoReturn:
@@ -2253,9 +2291,9 @@ class EncryptedLocalBoxFile:
         preview = '' if not self._cache_preview else ' PREVIEW,'
 
         sql_query = (
-             '''SELECT ID, FOLDER_ID, COMMENT, DURATION, FILE_IV, '''
-            f'''FILE_KEY, FILE_NAME, FILE_SALT,{preview} SIZE, '''
-             '''UPLOAD_TIME, VERBYTE, FILE_PATH FROM FILES WHERE ID=?'''
+             """SELECT ID, FOLDER_ID, COMMENT, DURATION, FILE_IV, """
+            f"""FILE_KEY, FILE_NAME, FILE_SALT,{preview} SIZE, """
+             """UPLOAD_TIME, VERBYTE, FILE_PATH FROM FILES WHERE ID=?"""
         )
         sql_file_row = list(await self._tgbox_db.Files.select_once(
             sql_tuple = (sql_query, (self._id,))
@@ -2288,23 +2326,23 @@ class EncryptedLocalBoxFile:
         return self
 
     def disable_cache_preview(self) -> None:
-        '''
+        """
         Sets `self._cache_preview` to `False`
         and removes cached preview from memory.
-        '''
+        """
         self._cache_preview = False
         self._preview = b''
     
     def enable_cache_preview(self) -> None:
-        '''
+        """
         Sets `self._cache_preview` to `True`.
         Preview will be cached after first
         `object.preview` call.
-        '''
+        """
         self._cache_preview = True
     
     def get_requestkey(self, mainkey: MainKey) -> RequestKey:
-        ''' 
+        """ 
         Returns `RequestKey` for this File. You
         should use this method if you want to decrypt
         other's `EncryptedLocalBoxFile`.
@@ -2313,7 +2351,7 @@ class EncryptedLocalBoxFile:
             To make a `RequestKey` for other's
             `EncryptedLocalBoxFile` you need to have
             your own Box. Take key from it and specify here.
-        '''
+        """
         self.__raise_initialized()
         return make_requestkey(mainkey, file_salt=self._file_salt)
 
@@ -2323,12 +2361,12 @@ class EncryptedLocalBoxFile:
         return DecryptedLocalBoxFile(self, key)
 
     async def delete(self) -> None:
-        '''
+        """
         Will delete this file from your LocalBox.
         You can re-import it from `RemoteBox` with
         `import_file`. To remove your file totally
         please use same function on RemoteBoxFile.
-        '''
+        """
         # Getting file row for FOLDER_ID
         file_row = await self._tgbox_db.Files.select_once(
             sql_tuple=('SELECT * FROM FILES WHERE ID=?',(self._id,))
@@ -2442,26 +2480,26 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
     @staticmethod
     def init() -> NoReturn:
         raise AttributeError(
-            '''This function was inherited from `EncryptedLocalBoxFile` '''
-            '''and cannot be used on `DecryptedLocalBoxFile`.'''
+            """This function was inherited from `EncryptedLocalBoxFile` """
+            """and cannot be used on `DecryptedLocalBoxFile`."""
         )
     @staticmethod
     def decrypt() -> NoReturn:
         raise AttributeError(
-            '''This function was inherited from `EncryptedLocalBoxFile` '''
-            '''and cannot be used on `DecryptedLocalBoxFile`.'''
+            """This function was inherited from `EncryptedLocalBoxFile` """
+            """and cannot be used on `DecryptedLocalBoxFile`."""
         )
     @property
     def download_path(self) -> str:
         return self._download_path
 
     async def get_preview(self) -> bytes: 
-        '''
+        """
         Returns file preview. If there is no preview 
         then returns `b''`. If `EncryptedLocalBoxFile`
         parent (`self._elbfi`) disabled `cache_preview`, then
         every call of this method will open DB & decrypt PREVIEW.
-        '''
+        """
         if self._preview:
             return self._preview
         else:
@@ -2491,7 +2529,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         return self._folder
 
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
-        '''
+        """
         Returns `ShareKey` for this file. You should
         use this method if you want to share your
         `DecryptedLocalBoxFile` with other people.
@@ -2501,7 +2539,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             returns `ShareKey` of this file without
             encryption, so anyone with this key can
             decrypt this local & remote box file.
-        '''
+        """
         if reqkey:
             return make_sharekey(
                 requestkey=reqkey, filekey=self._filekey, 

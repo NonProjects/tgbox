@@ -119,8 +119,8 @@ class Key:
             'BaseKey','MainKey','RequestKey',
             'ShareKey','ImportKey','FileKey',
             'EncryptedMainkey']:
-        '''
-        '''
+        """
+        """
         ekey_types = {
             'B': BaseKey,    'M': MainKey,
             'R': RequestKey, 'S': ShareKey,
@@ -169,10 +169,10 @@ def make_basekey(
         phrase: [bytes,'Phrase'], *, salt: bytes=SCRYPT_SALT,
         n: int=SCRYPT_N, r: int=SCRYPT_R, p: int=SCRYPT_P, 
         dklen: int=SCRYPT_DKLEN) -> BaseKey:
-    '''
+    """
     Function for retrieving BaseKeys. Uses `sha256(scrypt)`.
     RAM consumption is calculated by `128 * r * (n + p + 2)`.
-    '''
+    """
     phrase = phrase.phrase if isinstance(phrase, Phrase) else phrase
     
     m = 128 * r * (n + p + 2)
@@ -184,7 +184,7 @@ def make_basekey(
     return BaseKey(sha256(scrypt_key).digest())
 
 def make_mainkey(basekey: BaseKey, box_salt: bytes) -> MainKey:
-    '''
+    """
     Function for retrieving mainkey.
 
     basekey (`bytes`): 
@@ -194,11 +194,11 @@ def make_mainkey(basekey: BaseKey, box_salt: bytes) -> MainKey:
     box_salt (`bytes`): 
         Salt generated on LocalBox creation.
         Must be on DB_PATH/BOX_DATA/BOX_SALT.
-    '''
+    """
     return MainKey(sha256(basekey + box_salt).digest())
 
 def make_filekey(mainkey: MainKey, file_salt: bytes) -> FileKey:
-    '''
+    """
     Function for retrieving filekeys.
 
     Every LocalBoxFile have random generated on encryption FILE_SALT.
@@ -206,13 +206,13 @@ def make_filekey(mainkey: MainKey, file_salt: bytes) -> FileKey:
 
     Thanks to this, you can share the key with which
     the file was encrypted (filekey) without revealing your mainkey.
-    '''
+    """
     return FileKey(sha256(mainkey + file_salt).digest())
 
 def make_requestkey(
         mainkey: MainKey, *, file_salt: Optional[bytes] = None, 
         box_salt: Optional[bytes] = None) -> RequestKey:
-    '''
+    """
     Function to retrieve requestkeys.
     
     All files in RemoteBoxes is encrypted with filekeys, so
@@ -254,7 +254,7 @@ def make_requestkey(
     box_salt (`bytes`, optional):
         Alice's BoxSalt. 
         Should be specified if `file_salt` is `None`.
-    '''
+    """
     if not any((file_salt, box_salt)):
         raise ValueError(
             'At least one of the box_salt or file_salt must be specified.'
@@ -275,7 +275,7 @@ def make_sharekey(
         filekey: Optional[FileKey] = None,
         file_salt: Optional[bytes] = None
         ) -> Union[ShareKey, ImportKey]:
-    '''
+    """
     Function for making ShareKeys.
     
     You may want to know what is `RequestKey` before reading
@@ -316,7 +316,7 @@ def make_sharekey(
     box_salt (`bytes`, optional):
         Box salt. Must be specified with
         `requestkey` if `file_salt` is `None`.
-    '''
+    """
     if not any((requestkey, box_salt, file_salt)):
         if mainkey:
             return ImportKey(mainkey.key)
@@ -324,15 +324,15 @@ def make_sharekey(
             return ImportKey(filekey.key)
         else:
             raise ValueError(
-                '''Please specify at least mainkey or '''
-                '''filekey, run help(make_sharekey) for help.'''
+                """Please specify at least mainkey or """
+                """filekey, run help(make_sharekey) for help."""
             )
     if not all((filekey, file_salt)): 
         if not box_salt:
             raise ValueError(
-                '''At least one pair must be specified: '''
-                '''(mainkey & box_salt) or (filekey & file_salt) '''
-                '''with requestkey.'''
+                """At least one pair must be specified: """
+                """(mainkey & box_salt) or (filekey & file_salt) """
+                """with requestkey."""
             )
         else:
             salt, key = box_salt, mainkey
@@ -368,8 +368,8 @@ def make_importkey(
         mainkey: MainKey, sharekey: ShareKey, *,
         box_salt: Optional[bytes] = None, 
         file_salt: Optional[bytes] = None) -> ImportKey:
-    '''
-    '''
+    """
+    """
     if len(sharekey) == 32: # Key isn't encrypted.
         return ImportKey(sharekey.key) 
     else:

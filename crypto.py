@@ -44,7 +44,7 @@ class Padding:
     
     @classmethod
     def pad(cls, plaintext: bytes, pad_func=None) -> bytes:
-        '''Pads block with PKCS#7 padding.'''
+        """Pads block with PKCS#7 padding."""
         if pad_func:
             pad_, custom = pad_func, True
         else:
@@ -54,7 +54,7 @@ class Padding:
     
     @classmethod
     def unpad(cls, plaintext: bytes, unpad_func=None) -> bytes:
-        '''Unpads block with PKCS#7 padding.'''
+        """Unpads block with PKCS#7 padding."""
         if unpad_func:
             unpad_, custom = unpad_func, True
         else:
@@ -68,10 +68,10 @@ class Padding:
 
     @classmethod
     def cycle_pad(cls, plaintext: bytes, to_len: int, pad_func=None) -> bytes:
-        '''
+        """
         Pads block with PKCS#7 padding to specified len. 
         `to_len` must be divisible by 16.
-        '''
+        """
         if not bool(to_len) or to_len % 16:
             raise ValueError('to_len must be divisible by 16.')
         elif to_len < len(plaintext):
@@ -89,19 +89,19 @@ class Padding:
 
 class _PyaesState:
     def __init__(self, key: Union[bytes, 'Key'], iv: bytes):
-        '''
+        """
         Class to wrap `pyaes.AESModeOfOperationCBC` 
         if there is no `FAST_ENCRYPTION`.
         
         You should use only `encrypt()` or 
         `decrypt()` method per one object.
-        '''
+        """
         key = key.key if hasattr(key, 'key') else key
         self._aes_state = AESModeOfOperationCBC(key=key, iv=iv)
         self.__mode = None # encrypt mode is 1 and decrypt is 2
         
     def encrypt(self, data: bytes) -> bytes:
-        '''`data` length must be divisible by 16.'''
+        """`data` length must be divisible by 16."""
         if not self.__mode:
             self.__mode = 1
         else:
@@ -117,7 +117,7 @@ class _PyaesState:
         return total
     
     def decrypt(self, data: bytes) -> bytes:
-        '''`data` length must be divisible by 16.'''
+        """`data` length must be divisible by 16."""
         if not self.__mode:
             self.__mode = 2
         else:
@@ -134,12 +134,12 @@ class _PyaesState:
 
 class AESwState:
     def __init__(self, key: Union[bytes, 'Key'], iv: bytes):
-        '''
+        """
         Wrap around AES CBC which saves state.
         
         You should use only `encrypt()` or 
         `decrypt()` method per one object.
-        '''
+        """
         self.key = key.key if hasattr(key, 'key') else key
         self.iv, self.__mode = iv, None
 
@@ -150,14 +150,14 @@ class AESwState:
     
     @property
     def mode(self) -> int:
-        '''
+        """
         Returns `1` if mode is encryption 
         and `2` if decryption. 
-        '''
+        """
         return self.__mode
     
     def encrypt(self, data: bytes, pad: bool=False) -> bytes:
-        '''Encrypts bytes. `data` length must equals to 16.'''
+        """Encrypts bytes. `data` length must equals to 16."""
         if not self.__mode:
             self.__mode = 1
         else:
@@ -169,7 +169,7 @@ class AESwState:
         return data
     
     def decrypt(self, data: bytes, unpad: bool=False) -> bytes:
-        '''Decrypts bytes. `data` length must equals to 16.'''
+        """Decrypts bytes. `data` length must equals to 16."""
         if not self.__mode:
             self.__mode = 2
         else:
@@ -186,7 +186,7 @@ def aes_encrypt(
         concat_iv: bool=True, yield_all: bool=False, 
         yield_size: int=2*10**8, add_padding: bool=True
         )-> Generator[bytes, None, None]:
-    '''
+    """
     Yields encrypted `plain_data` by `yield_size` amount of bytes.
     
     plain_data (`BinaryIO`, `bytes`):
@@ -215,7 +215,7 @@ def aes_encrypt(
     add_padding (`bool`, optional):
         Adds padding (even if length is divisible by 16) if
         True (by default). False is otherwise.
-    '''
+    """
     if yield_size % 16:
         raise AESError('yield_size must be divisible by 16.')
 
@@ -261,7 +261,7 @@ def aes_decrypt(
         iv: Optional[bytes] = None, yield_all: bool=False, 
         yield_size: int=AES_RETURN_SIZE, strip_padding: bool=True
         ) -> Generator[bytes, None, None]:
-    '''
+    """
     Yields decrypted `cipher_data` by `yield_size` amount of bytes.
     
     cipher_data (`BinaryIO`, `bytes`):
@@ -286,7 +286,7 @@ def aes_decrypt(
     
     strip_padding (`bool`, optional):
         Removes padding if `True`.
-    '''    
+    """    
     aes_cbc = None
     if yield_size % 16:
         raise AESError('yield_size must be divisible by 16.')
@@ -329,5 +329,5 @@ def aes_decrypt(
             raise AESError(f'Invalid configuration. {e}')
 
 def make_box_salt() -> bytes:
-    '''Generates box salt.'''
+    """Generates box salt."""
     return urandom(32)
