@@ -1641,6 +1641,8 @@ class EncryptedLocalBox:
         return self._last_file_id
     
     async def init(self) -> 'EncryptedLocalBox':
+        '''Will fetch and parse data from Database.'''
+
         if not await self._tgbox_db.BoxData.count_rows():
             raise NotInitializedError('Table is empty.') 
         else:
@@ -1656,6 +1658,17 @@ class EncryptedLocalBox:
 
     async def get_file(self, id: int, cache_preview: bool=True)\
             -> Union['DecryptedLocalBoxFile', 'EncryptedLocalBoxFile', None]:
+        '''
+        Returns `EncryptedLocalBoxFile` from `EncryptedLocalBox`
+        or `DecryptedLocalBoxFile` from `DecryptedLocalBox` if
+        file exists. `None` otherwise.
+
+        id (`int`):
+            File ID.
+
+        cache_preview (`bool`, optional):
+            Cache preview in class or not.
+        '''
         try:
             self.__raise_initialized()
             elbfi = EncryptedLocalBoxFile(
@@ -2162,9 +2175,19 @@ class EncryptedLocalBoxFile:
             raise NotInitializedError('Not initialized. Call .init().') 
     
     async def init(self) -> 'EncryptedLocalBoxFile':
-        sql_file_row = await self._tgbox_db.Files.select_once(
-            sql_tuple = ('SELECT * FROM FILES WHERE ID = ?', (self._id,))
+        preview = '' if not self._cache_preview else ' PREVIEW,'
+
+        sql_query = (
+             '''SELECT ID, FOLDER_ID, COMMENT, DURATION, FILE_IV, '''
+            f'''FILE_KEY, FILE_NAME, FILE_SALT,{preview} SIZE, '''
+             '''UPLOAD_TIME, VERBYTE, FILE_PATH FROM FILES WHERE ID=?'''
         )
+        sql_file_row = list(await self._tgbox_db.Files.select_once(
+            sql_tuple = (sql_query, (self._id,))
+        ))
+        if not self._cache_preview:
+            sql_file_row.insert(8, None)
+
         self._file_name, self._folder_id = sql_file_row[6], sql_file_row[1]
         
         self._comment, self._size = sql_file_row[2], sql_file_row[9]
@@ -2173,11 +2196,7 @@ class EncryptedLocalBoxFile:
         self._file_iv, self._filekey = sql_file_row[4], sql_file_row[5]
         self._version_byte, self._file_path = sql_file_row[11], sql_file_row[12]
         
-        if self._cache_preview:
-            self._preview = sql_file_row[8]
-        else:
-            self._preview = None
-        
+        self._preview = sql_file_row[8] if sql_file_row[8] else b''
         try:
             cursor = await self._tgbox_db.Folders.execute(
                 ('SELECT * FROM FOLDERS WHERE FOLDER_ID = ?',(self._folder_id,))
@@ -2199,7 +2218,7 @@ class EncryptedLocalBoxFile:
         and removes cached preview from memory.
         '''
         self._cache_preview = False
-        self._preview = None
+        self._preview = b''
     
     def enable_cache_preview(self) -> None:
         '''
@@ -2290,7 +2309,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         else:
             self.__mainkey = None
 
-        self._preview, self._folder = elbfi._preview, None
+        self._folder = None
+
         self._foldername_iv = elbfi._foldername_iv
         self._file_iv, self._folder_id = elbfi._file_iv, elbfi._folder_id
         self._id, self._file_salt = elbfi._id, elbfi._file_salt
@@ -2336,11 +2356,11 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         else:
             self._file = None
         
-        if self._preview and self._cache_preview:
+        if elbfi._preview and self._cache_preview:
             self._preview = next(aes_decrypt(
                 elbfi._preview, self._filekey, yield_all=True))
         else:
-            self._preview = None
+            self._preview = b''
         
         self._download_path = DOWNLOAD_PATH 
     
