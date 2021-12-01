@@ -1,3 +1,5 @@
+"""This module stores utils required by API."""
+
 from hashlib import sha256
 from random import randrange
 
@@ -49,7 +51,7 @@ __all__ = [
     'make_media_preview', 
     'make_image_preview'
 ]
-# Will generate `size` pseudo-random bytes.
+# Will generate ``size`` pseudo-random bytes.
 prbg = lambda size: bytes([randrange(256) for _ in range(size)])
 
 try:
@@ -58,7 +60,14 @@ except NameError:
     anext = lambda agen: agen.__anext__()
 
 @dataclass
-class RemoteBoxFileMetadata: # TODO __repr__?
+class RemoteBoxFileMetadata:
+    """
+    This dataclass represents ``RemoteBox``
+    file metadata. After calling ``.construct()``
+    method, all args will be checked, encrypted
+    and assembled. You will need to add it to
+    the file via ``OpenPretender.concat_metadata``.
+    """
     file_name: str
     enc_foldername: bytes
     filekey: FileKey
@@ -85,12 +94,14 @@ class RemoteBoxFileMetadata: # TODO __repr__?
 
     @property
     def constructed(self) -> Union[bytes, None]:
+        """Returns constructed metadata."""
         if not hasattr(self, '_constructed'):
             return self.construct()
         else:
             return self._constructed
 
-    def construct(self) -> bytes: 
+    def construct(self) -> bytes:
+        """Constructs and returns metadata"""
         assert len(self.verbyte) == VERBYTE_MAX
         assert len(self.file_salt) == FILE_SALT_SIZE
         assert len(self.box_salt) == FILE_SALT_SIZE
@@ -142,6 +153,10 @@ class RemoteBoxFileMetadata: # TODO __repr__?
         return self._constructed
         
 class SearchFilter:
+    """
+    Container that filters search 
+    in ``RemoteBox`` or ``DecryptedLocalBox``. 
+    """
     def __init__(
             self, *, id: Optional[Union[int, List[int]]] = None, 
             time: Optional[Union[int, List[int]]] = None,
@@ -155,32 +170,47 @@ class SearchFilter:
             exported: Optional[bool] = None, re: Optional[bool] = None
         ):
         """
-        Container that filters search in `RemoteBox` or 
-        `DecryptedLocalBox`. All kwargs will be converted to `List`.
-        
+        All kwargs will be converted to ``List``.
         If nothing specified, then search will nothing return. 
         
-        You can extend all params via (i.e) `sf.id.append` or via
-        concatenation (`+`) of two `SearchFilter` classes.
+        You can extend all params via (i.e) ``sf.id.append`` or via
+        concatenation (``+``) of two ``SearchFilter`` classes.
         
-        You can make a new `SearchFilter` from two other 
-        SearchFilters via floordiv (`//`).
+        You can make a new ``SearchFilter`` from two other 
+        SearchFilters via floordiv (``//``).
         
-        Any kwarg with `str` | `bytes` type 
-        can also be regular expression.
+        Any kwarg with ``bytes`` type can 
+        be also a regular expression.
         
-        kwarg `re` will tell the `tgbox.api._search_func` that
-        *all* filters that you use is Regular Expressions. 
+        kwarg ``re`` will tell the ``tgbox.api._search_func`` that
+        *all* bytes that you specify is Regular Expressions. 
         """
-        self.id = id if isinstance(id, list) else ([] if not id else [id])
-        self.time = time if isinstance(time, list) else ([] if not time else [time])
-        self.comment = comment if isinstance(comment, list) else ([] if not comment else [comment])
-        self.folder = folder if isinstance(folder, list) else ([] if not folder else [folder])
-        self.file_name = file_name if isinstance(file_name, list) else ([] if not file_name else [file_name])
-        self.min_size = min_size if isinstance(min_size, list) else ([] if not min_size else [min_size])
-        self.max_size = max_size if isinstance(max_size, list) else ([] if not max_size else [max_size])
-        self.file_salt = file_salt if isinstance(file_salt, list) else ([] if not file_salt else [file_salt])
-        self.verbyte = verbyte if isinstance(verbyte, list) else ([] if not verbyte else [verbyte])
+        self.id = id if isinstance(id, list)\
+            else ([] if not id else [id])
+
+        self.time = time if isinstance(time, list)\
+            else ([] if not time else [time])
+
+        self.comment = comment if isinstance(comment, list)\
+            else ([] if not comment else [comment])
+
+        self.folder = folder if isinstance(folder, list)\
+            else ([] if not folder else [folder])
+
+        self.file_name = file_name if isinstance(file_name, list)\
+            else ([] if not file_name else [file_name])
+
+        self.min_size = min_size if isinstance(min_size, list)\
+            else ([] if not min_size else [min_size])
+
+        self.max_size = max_size if isinstance(max_size, list)\
+            else ([] if not max_size else [max_size])
+
+        self.file_salt = file_salt if isinstance(file_salt, list)\
+            else ([] if not file_salt else [file_salt])
+
+        self.verbyte = verbyte if isinstance(verbyte, list)\
+            else ([] if not verbyte else [verbyte])
         
         self.exported = exported
         self.re = re
@@ -196,13 +226,13 @@ class SearchFilter:
             self.__hash__() == hash(other)
         ))
     def __bool__(self) -> bool:
-        """Will return `True` if any(kwargs)"""
+        """Will return ``True`` if any(kwargs)"""
         return any((
             self.id, self.time, self.comment, self.folder, self.exported, self.max_size,
             self.file_name, self.min_size, self.file_salt, self.verbyte, self.re
         ))
     def __add__(self, other: 'SearchFilter') -> None:
-        """Extends filters with `other` filters."""
+        """Extends filters with ``other`` filters."""
         self.id.extend(other.id)
         self.time.extend(other.time)
         self.comment.extend(other.comment)
@@ -215,8 +245,8 @@ class SearchFilter:
     
     def __floordiv__(self, other: 'SearchFilter') -> 'SearchFilter':
         """
-        Makes a new `SearchFilter` from `self` and `other` filters.
-        Kwarg `exported` will be used from `other` class.
+        Makes a new ``SearchFilter`` from ``self`` and ``other`` filters.
+        Kwarg ``exported`` will be used from ``other`` class.
         """
         return SearchFilter(
             id = self.id + other.id,
@@ -236,21 +266,22 @@ class OpenPretender:
         Class to wrap Tgbox AES Generators and make it look
         like opened to "rb"-read file. Designed to work with Telethon.
         
-        flo (`BinaryIO`):
-            File-like object. Like `open('file','rb')`.
+        Arguments:
+            flo (``BinaryIO``):
+                File-like object. Like ``open('file','rb')``.
 
-        aes_state (`AESwState`):
-            `AESwState` with Key and IV.
+            aes_state (``AESwState``):
+                ``AESwState`` with Key and IV.
 
-        mode (`int`):
-            Mode of `AESwState` (1=Enc, 2=Dec).
+            mode (``int``):
+                Mode of ``AESwState`` (1=Enc, 2=Dec).
         """
         self._aes_state = aes_state
         self._mode, self._flo = mode, flo
         self._buffered_bytes = b''
         self._total_size = None
 
-    def concat_metadata(self, metadata: bytes) -> None:
+    def concat_metadata(self, metadata: RemoteBoxFileMetadata) -> None:
         """Concates metadata to the file as (metadata + file)."""
         assert len(metadata) <= METADATA_MAX
 
@@ -261,11 +292,12 @@ class OpenPretender:
     
     def read(self, size: int=-1) -> bytes: 
         """
-        Returns `size` bytes from Generator.
+        Returns ``size`` bytes from Generator.
         
-        size (`int`):
-            Amount of bytes to return. By default 
-            is negative (return all). 
+        Arguments:
+            size (``int``):
+                Amount of bytes to return. By default 
+                is negative (return all). 
         """
         if size % 16 and not size == -1:
             raise ValueError('size must be divisible by 16 or -1 (return all)')
@@ -327,19 +359,21 @@ class OpenPretender:
 
 def pad_request_size(request_size: int, blocksize: int=4096) -> int:
     """
-    This function pads `request_size` to divisible
-    by 4096 bytes. If `request_size` < 4096, then
+    This function pads ``request_size`` to divisible
+    by 4096 bytes. If ``request_size`` < 4096, then
     it's not padded. This function designed for 
-    Telethon's `GetFileRequest`. See issue #3.
+    Telethon's ``GetFileRequest``. See issue #3.
+    
+    .. note::
+        You need to strip extra bytes from result.
+    
+    Arguments:
+        request_size (``int``):
+            Amount of requested bytes.
 
-    You need to strip extra bytes.
-
-    request_size (`int`):
-        Amount of requested bytes.
-
-    blocksize (`int`, optional):
-        Size of block. Typically we
-        don't need to change this.
+        blocksize (``int``, optional):
+            Size of block. Typically we
+            don't need to change this.
     """
     # Check amount of blocks
     block_count = request_size/blocksize
@@ -360,6 +394,17 @@ def pad_request_size(request_size: int, blocksize: int=4096) -> int:
     return request_size
 
 def make_folder_id(mainkey: MainKey, foldername: bytes) -> bytes:
+    """
+    Returns folder ID. Every folder
+    has unique ID. Case-sensitive.
+    
+    Arguments:
+        mainkey (``MainKey``):
+            Your Box's mainkey.
+
+        foldername (``bytes``):
+            Folder name.
+    """
     return sha256(sha256(mainkey.key).digest() + foldername).digest()[:16]
         
 def int_to_bytes(int_: int, length: Optional[int] = None, signed: Optional[bool] = True) -> bytes:
@@ -402,7 +447,8 @@ async def make_media_preview(
         y: int=-1) -> BinaryIO:
     """
     Makes x:y sized thumbnail of the 
-    video/audio with ffmpeg.
+    video/audio with ffmpeg. "-1"
+    preserves one of side size.
     """
     thumbnail_path = Path(output_path, prbg(8).hex()+'.jpg')
     

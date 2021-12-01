@@ -65,9 +65,10 @@ class Phrase:
     def generate(cls, words_count: int=12) -> 'Phrase':
         """
         Generates passphrase
-
-        words_count (`int`, optional):
-            Words count in `Phrase`.
+        
+        Arguments:
+            words_count (``int``, optional):
+                Words count in ``Phrase``.
         """
         sysrnd = SystemRandom(urandom(32))
         words_list = open(WORDS_PATH,'rb').readlines()
@@ -82,18 +83,19 @@ class Key:
     """Metaclass that represents all keys."""
     def __init__(self, key: bytes, key_type: int):
         """
-        key (`bytes`):
-            Raw bytes key.
+        Arguments:
+            key (``bytes``):
+                Raw bytes key.
 
-        key_type (`int`):
-            Type of key, where:
-                1: `BaseKey`
-                2: `MainKey`
-                3: `RequestKey`
-                4: `ShareKey`
-                5: `ImportKey`
-                6: `FileKey`
-                7: `EncryptedMainkey`
+            key_type (``int``):
+                Type of key, where:
+                    1: ``BaseKey``
+                    2: ``MainKey``
+                    3: ``RequestKey``
+                    4: ``ShareKey``
+                    5: ``ImportKey``
+                    6: ``FileKey``
+                    7: ``EncryptedMainkey``
         """
         self._key = key
         self._key_type = key_type
@@ -153,19 +155,19 @@ class Key:
             'EncryptedMainkey']:
         """
         Decodes Key by prefix and returns
-        `Key` in one of `Key` classes.
+        ``Key`` in one of ``Key`` classes.
 
-        B: BaseKey    
-        M: MainKey
-        R: RequestKey 
-        S: ShareKey
-        I: ImportKey  
-        F: FileKey
-        E: EncryptedMainkey
+        B: ``BaseKey``
+        M: ``MainKey``
+        R: ``RequestKey`` 
+        S: ``ShareKey``
+        I: ``ImportKey`` 
+        F: ``FileKey``
+        E: ``EncryptedMainkey``
 
         Key example:
-            `MSGVsbG8hIEkgYW0gTm9uISBJdCdzIDI5LzExLzIwMjE=`.
-            You can decode it with `Key.decode`.
+            ``MSGVsbG8hIEkgYW0gTm9uISBJdCdzIDI5LzExLzIwMjE=``.
+            You can decode it with ``Key.decode``.
         """
         ekey_types = {
             'B': BaseKey,    'M': MainKey,
@@ -177,7 +179,7 @@ class Key:
         return ekey_type(urlsafe_b64decode(encoded_key[1:]))
     
     def encode(self) -> str:
-        """Encode raw key with `urlsafe_b64encode` and add prefix."""
+        """Encode raw key with ``urlsafe_b64encode`` and add prefix."""
         prefix = self._key_types[self._key_type][0]
         return prefix + urlsafe_b64encode(self._key).decode()
     
@@ -187,58 +189,59 @@ class Key:
 
 class BaseKey(Key):
     """
-    This `Key` used for `MainKey` creation and
-    cloned `RemoteBox` decryption. In API
-    it's usually result of `keys.make_basekey`.
+    This ``Key`` used for ``MainKey`` creation and
+    cloned ``RemoteBox`` decryption. In API
+    it's usually result of ``keys.make_basekey``.
     """
     def __init__(self, key: bytes):
         super().__init__(key, 1)    
 
 class MainKey(Key):
     """
-    `MainKey` may be reffered as "BoxKey". This
-    key encrypts all BoxData and used in `FileKey`
-    creation. It's one of your most important `Key`,
+    ``MainKey`` may be reffered as "BoxKey". This
+    key encrypts all BoxData and used in ``FileKey``
+    creation. It's one of your most important ``Key``,
     as leakage of it will result in compromising all
-    your encrypted files in `RemoteBox` & LocalBox.
+    your encrypted files in ``RemoteBox`` & LocalBox.
 
-    When you clone other's `RemoteBox`, Session data
-    encrypts with `BaseKey`, not `MainKey`.
+    When you clone other's ``RemoteBox``, Session data
+    encrypts with ``BaseKey``, not ``MainKey``.
 
-    Usually you will see this `Key` as a result of
-    `keys.make_mainkey` function.
+    Usually you will see this ``Key`` as a result of
+    ``keys.make_mainkey`` function.
     """
     def __init__(self, key: bytes):
         super().__init__(key, 2)
 
 class RequestKey(Key):
-    """Run `help(tgbox.keys.make_requestkey)` for info."""
+    """Run ``help(tgbox.keys.make_requestkey)`` for info."""
     def __init__(self, key: bytes):
         super().__init__(key, 3)
 
 class ShareKey(Key):
-    """Run `help(tgbox.keys.make_sharekey)` for info."""
+    """Run ``help(tgbox.keys.make_sharekey)`` for info."""
     def __init__(self, key: bytes):
         super().__init__(key, 4)
 
 class ImportKey(Key):
-    """Run `help(tgbox.keys.make_importkey)` for info."""
+    """Run ``help(tgbox.keys.make_importkey)`` for info."""
     def __init__(self, key: bytes):
         super().__init__(key, 5)
 
 class FileKey(Key):
     """
-    `FileKey` is used for encrypting `RemoteBox` files
+    ``FileKey`` is used for encrypting ``RemoteBox`` files
     and information about them in your LocalBox. If
-    you share one `FileKey`, other people will be able
+    you share one ``FileKey``, other people will be able
     to decrypt only file, that key corresponds to, and
     no more. They will not be able to get folder of this
-    file. Only those, who have `MainKey` can access 
+    file. Only those, who have ``MainKey`` can access 
     folder information from file's Metadata.
-
-    Usually you will not work with this code, API
-    converts `MainKey` to `FileKey` under the hood,
-    but you can make it with `keys.make_filekey`.
+    
+    .. note::
+        Usually you will not work with this code, API
+        converts ``MainKey`` to ``FileKey`` under the hood,
+        but you can make it with ``keys.make_filekey``.
     """
     def __init__(self, key: bytes):
         super().__init__(key, 6)
@@ -246,8 +249,8 @@ class FileKey(Key):
 class EncryptedMainkey(Key):
     """
     This class represents encrypted mainkey. When
-    you clone other's `RemoteBox`, it's `MainKey`
-    encrypts with your `BaseKey`.
+    you clone other's ``RemoteBox``, it's ``MainKey``
+    encrypts with your ``BaseKey``.
     """
     def __init__(self, key: bytes):
         super().__init__(key, 7)
@@ -257,27 +260,30 @@ def make_basekey(
         n: int=SCRYPT_N, r: int=SCRYPT_R, p: int=SCRYPT_P, 
         dklen: int=SCRYPT_DKLEN) -> BaseKey:
     """
-    Function for retrieving BaseKeys. Uses `sha256(scrypt)`.
-    RAM consumption is calculated by `128 * r * (n + p + 2)`.
+    Function for retrieving BaseKeys. Uses ``sha256(scrypt(*))``.
 
-    phrase (`bytes`, `Phrase`):
-        Passphrase from which 
-        `BaseKey` will be created.
+    .. warning::
+        RAM consumption is calculated by ``128 * r * (n + p + 2)``.
+    
+    Arguments:
+        phrase (``bytes``, ``Phrase``):
+            Passphrase from which 
+            ``BaseKey`` will be created.
 
-    salt (`bytes`, optional):
-        Scrypt Salt.
+        salt (``bytes``, optional):
+            Scrypt Salt.
 
-    n (`int`, optional):
-        Scrypt N.
+        n (``int``, optional):
+            Scrypt N.
 
-    r (`int`, optional):
-        Scrypt R.
+        r (``int``, optional):
+            Scrypt R.
 
-    p (`int`, optional):
-        Scrypt P.
+        p (``int``, optional):
+            Scrypt P.
 
-    dklen (`int`, optional):
-        Scrypt dklen.
+        dklen (``int``, optional):
+            Scrypt dklen.
     """
     phrase = phrase.phrase if isinstance(phrase, Phrase) else phrase
     
@@ -292,13 +298,14 @@ def make_basekey(
 def make_mainkey(basekey: BaseKey, box_salt: bytes) -> MainKey:
     """
     Function for retrieving mainkey.
+    
+    Arguments:
+        basekey (``bytes``): 
+            Key which you recieved with scrypt
+            function or any other key you want.
 
-    basekey (`bytes`): 
-        Key which you recieved with scrypt
-        function or any other key you want.
-
-    box_salt (`bytes`): 
-        Salt generated on LocalBox creation.
+        box_salt (``bytes``): 
+            Salt generated on LocalBox creation.
     """
     return MainKey(sha256(basekey + box_salt).digest())
 
@@ -307,7 +314,7 @@ def make_filekey(mainkey: MainKey, file_salt: bytes) -> FileKey:
     Function for retrieving filekeys.
 
     Every LocalBoxFile have random generated on encryption FileSalt.
-    Key for file encryption we create as `sha256(mainkey + FileSalt)`.
+    Key for file encryption we create as ``sha256(mainkey + FileSalt)``.
 
     Thanks to this, you can share the key with which
     the file was encrypted (filekey) without revealing your mainkey.
@@ -322,43 +329,45 @@ def make_requestkey(
     
     All files in RemoteBoxes is encrypted with filekeys, so
     if you want to share (or import) file, then you need to
-    get filekey. For this purpose you can create `RequestKey`.
+    get filekey. For this purpose you can create ``RequestKey``.
     
     Alice has file in her Box which she wants to send to Bob.
     Then: A sends file to B. B forwards file to his Box, takes
-    FileSalt from A File and `mainkey` of his Box and (i.e) calls
-    `make_requestkey(mainkey=mainkey, file_salt=file_salt)`.
+    FileSalt from A File and ``mainkey`` of his Box and (i.e) calls
+    ``make_requestkey(mainkey=mainkey, file_salt=file_salt)``.
     
     RequestKeys is compressed pubkeys of ECDH on secp256k1, 
-    B makes privkey with `sha256(mainkey + salt)` & exports pubkey
+    B makes privkey with ``sha256(mainkey + salt)`` & exports pubkey
     to make a shared secret bytes (key, with which A will be
     encrypt her filekey/mainkey, encrypted (file/main)key 
-    is called `ShareKey`. Use help on `make_sharekey`.).
+    is called ``ShareKey``. Use help on ``make_sharekey``.).
     
-    B sends received `RequestKey` to A. A makes `ShareKey`
-    and sends it to B. B calls `get_importkey` and recieves filekey.
+    B sends received ``RequestKey`` to A. A makes ``ShareKey``
+    and sends it to B. B calls ``get_importkey`` and recieves filekey.
     
     No one except Alice and Bob will have filekey. If Alice want
     to share entire Box (mainkey) with Bob, then Bob creates
-    slightly different `RequestKey` with same function:
-    `make_requestkey(mainkey=mainkey, box_salt=box_salt)`.
+    slightly different ``RequestKey`` with same function:
+    ``make_requestkey(mainkey=mainkey, box_salt=box_salt)``.
     
-    To get BoxSalt Alice should only add Bob to her Box(`Channel`).
+    To get BoxSalt Alice should only add Bob to her Box(``Channel``).
     
-    Functions in this module is low-level, you can make `RequestKey` for
-    a forwarded from A file by calling `get_requestkey(...)` 
-    method on `EncryptedRemoteBoxFile`.
-    
-    mainkey (`MainKey`):
-        Bob's `MainKey`. 
-    
-    file_salt (`bytes`, optional):
-        Alice's FileSalt. 
-        Should be specified if `box_salt` is `None`.
-    
-    box_salt (`bytes`, optional):
-        Alice's BoxSalt. 
-        Should be specified if `file_salt` is `None`.
+    .. note::
+        Functions in this module is low-level, you can make ``RequestKey`` for
+        a forwarded from A file by calling ``get_requestkey(...)`` 
+        method on ``EncryptedRemoteBoxFile``.
+
+    Arguments:
+        mainkey (``MainKey``):
+            Bob's ``MainKey``. 
+        
+        file_salt (``bytes``, optional):
+            Alice's FileSalt. 
+            Should be specified if ``box_salt`` is ``None``.
+        
+        box_salt (``bytes``, optional):
+            Alice's BoxSalt. 
+            Should be specified if ``file_salt`` is ``None``.
     """
     if not any((file_salt, box_salt)):
         raise ValueError(
@@ -383,44 +392,46 @@ def make_sharekey(
     """
     Function for making ShareKeys.
     
-    You may want to know what is `RequestKey` before reading
-    this. Please, run help on `make_requestkey` to get info.
+    .. note::
+        You may want to know what is ``RequestKey`` before reading
+        this. Please, run help on ``make_requestkey`` to get info.
     
-    Alice recieves `RequestKey` from Bob. But what she should do
+    Alice recieves ``RequestKey`` from Bob. But what she should do
     next? As reqkey is just EC-pubkey, she wants to make a shared
     secret key. A makes her own privkey as B, with
-    `sha256(mainkey + salt)` & initializes ECDH with B pubkey
+    ``sha256(mainkey + salt)`` & initializes ECDH with B pubkey
     and her privkey. After this, A makes a shared secret, which
     is 32-byte length AES-CBC key & encrypts her file/main key. 
-    IV here is first 16 byte of `sha256(requestkey)`. Then she
+    IV here is first 16 byte of ``sha256(requestkey)``. Then she
     prepends her pubkey to the result and sends it to Bob.
     
     With A pubkey, B can easily get the same shared secret and
-    decrypt `ShareKey` to make the `ImportKey`.
+    decrypt ``ShareKey`` to make the ``ImportKey``.
     
     The things will be much less complicated if Alice don't mind
     to share her File or Box with ALL peoples. Then she drops only
     her file or main key in raw. Simple is better than complex, after all.
     
-    mainkey (`MainKey`, optional):
-        Your Box key. Specify only this kwarg if you want to
-        share your Box with **ALL** peoples. No decryption.
-    
-    filekey (`FileKey`, optional):
-        Your Filekey. Specify only this kwarg if you want to
-        share your File with **ALL** peoples. No decryption.
-    
-    requestkey (`RequestKey`, optional):
-        `RequestKey` of Bob. With this must be specified
-        `file_salt` or `box_salt`.
-    
-    file_salt (`bytes`, optional):
-        Salt (`FILE_SALT`) of the file. Must be specified with
-        `requestkey` if `box_salt` is `None`.
-    
-    box_salt (`bytes`, optional):
-        Box salt. Must be specified with
-        `requestkey` if `file_salt` is `None`.
+    Arguments:
+        mainkey (``MainKey``, optional):
+            Your Box key. Specify only this kwarg if you want to
+            share your Box with **ALL** peoples. No decryption.
+        
+        filekey (``FileKey``, optional):
+            Your Filekey. Specify only this kwarg if you want to
+            share your File with **ALL** peoples. No decryption.
+        
+        requestkey (``RequestKey``, optional):
+            ``RequestKey`` of Bob. With this must be specified
+            ``file_salt`` or ``box_salt``.
+        
+        file_salt (``bytes``, optional):
+            Salt (``FILE_SALT``) of the file. Must be specified with
+            ``requestkey`` if ``box_salt`` is ``None``.
+        
+        box_salt (``bytes``, optional):
+            Box salt. Must be specified with
+            ``requestkey`` if ``file_salt`` is ``None``.
     """
     if not any((requestkey, box_salt, file_salt)):
         if mainkey:
@@ -474,34 +485,37 @@ def make_importkey(
         box_salt: Optional[bytes] = None, 
         file_salt: Optional[bytes] = None) -> ImportKey:
     """
-    You may want to know what is `RequestKey` and 
-    `ShareKey` before using this. Use `help()` on
-    another `make_*key` functions.
+    .. note::
+        You may want to know what is ``RequestKey`` and 
+        ``ShareKey`` before using this. Use ``help()`` on
+        another ``make_*key`` functions.
     
-    `ShareKey` is a combination of encrypted by Alice
+    ``ShareKey`` is a combination of encrypted by Alice
     (File/Main)Key and her pubkey. As Bob can create
-    again `RequestKey`, which is PubKey of ECDH from
-    `sha256(mainkey + salt)` PrivKey, and already have
+    again ``RequestKey``, which is PubKey of ECDH from
+    ``sha256(mainkey + salt)`` PrivKey, and already have
     PubKey of A, -- B can create a shared secret, and
-    decrypt A `ShareKey` to make an `ImportKey`.
+    decrypt A ``ShareKey`` to make an ``ImportKey``.
+    
+    Arguments:
+        mainkey (``MainKey``):
+            ``MainKey`` that was used 
+            in ``RequestKey`` creation.
 
-    mainkey (`MainKey`):
-        `MainKey` that was used 
-        in `RequestKey` creation.
+        sharekey (``ShareKey``):
+            Alice's ``ShareKey``.
 
-    sharekey (`ShareKey`):
-        Alice's `ShareKey`.
+        box_salt (``bytes``, optional):
+            BoxSalt that was used in
+            ``RequestKey`` creation. 
 
-    box_salt (`bytes`, optional):
-        BoxSalt that was used in
-        `RequestKey` creation. 
-
-    file_salt (`bytes`, optional):
-        FileSalt that was used in
-        `RequestKey` creation. 
-
-    At least `box_salt` or `file_salt` must
-    be specified in function.
+        file_salt (``bytes``, optional):
+            FileSalt that was used in
+            ``RequestKey`` creation. 
+    
+    .. note::
+        At least ``box_salt`` or ``file_salt`` must
+        be specified in function.
     """
     if len(sharekey) == 32: # Key isn't encrypted.
         return ImportKey(sharekey.key) 

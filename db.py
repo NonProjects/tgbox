@@ -18,7 +18,7 @@ class SqlTableWrapper:
         self._aiosql_conn = aiosql_conn
     
     async def __aiter__(self) -> tuple:
-        """Will yield rows as self.select without `sql_statement`"""
+        """Will yield rows as self.select without ``sql_statement``"""
         async for row in self.select():
             yield row
    
@@ -34,7 +34,7 @@ class SqlTableWrapper:
 
     async def select(self, *, sql_tuple: Optional[tuple] = None) -> Generator:
         """
-        If `sql_tuple` isn't specified, then will be used
+        If ``sql_tuple`` isn't specified, then will be used
         (SELECT * FROM TABLE_NAME, ()) statement.
         """
         if not sql_tuple:
@@ -45,8 +45,8 @@ class SqlTableWrapper:
     
     async def select_once(self, *, sql_tuple: Optional[tuple] = None) -> tuple:
         """
-        Will return first row which match the `sql_tuple`,
-        see `select()` method for `sql_tuple` details.
+        Will return first row which match the ``sql_tuple``,
+        see ``select()`` method for ``sql_tuple`` details.
         """
         return await anext(self.select(sql_tuple=sql_tuple))
 
@@ -54,7 +54,7 @@ class SqlTableWrapper:
             self, *args, sql_statement: Optional[str] = None, 
             commit: bool=True) -> None:
         """
-        If `sql_statement` isn't specified, then will be used
+        If ``sql_statement`` isn't specified, then will be used
         INSERT INTO TABLE_NAME values (...).
 
         This method doesn't check if you insert correct data
@@ -78,6 +78,11 @@ class SqlTableWrapper:
 
 class TgboxDB:
     def __init__(self, db_path: Union[Path, str]):
+        """
+        Arguments:
+            db_path (````Path````, ````str````):
+                Path to the Tgbox DB.
+        """
         if isinstance(db_path, Path):
             self._db_path = db_path
         else:
@@ -101,7 +106,7 @@ class TgboxDB:
     @property
     def closed(self) -> bool:
         """
-        This method will return `None` if DB wasn't opened,
+        This method will return ``None`` if DB wasn't opened,
         False if it's still opened, True if it's was closed.
         """
         return self._aiosql_db_is_closed
