@@ -1253,6 +1253,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
     .. code-block:: python
 
         from tgbox.api import get_local_box, get_remote_box
+        from tgbox.keys import Phrase, make_basekey
+
+        basekey = make_basekey(Phrase('very_bad_phrase'))
 
         dlb = await get_local_box(basekey)
         rb = await get_remote_box(dlb)
