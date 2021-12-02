@@ -1,7 +1,7 @@
 regex
 
 aiosqlite==0.17.0
-telethon==1.23.0
+telethon==1.24.0
 ecdsa==0.16.1
 filetype==1.0.8
 
