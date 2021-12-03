@@ -78,7 +78,8 @@ __all__ = [
     'make_local_box', 
     'get_local_box', 
     'TelegramAccount', 
-    'RemoteBox', 
+    'EncryptedRemoteBox',
+    'DecryptedRemoteBox',
     'EncryptedRemoteBoxFile', 
     'DecryptedRemoteBoxFile', 
     'EncryptedLocalBox', 
@@ -205,7 +206,7 @@ async def make_remote_box(
         ta: 'TelegramAccount', 
         tgbox_db_name: str=DEF_TGBOX_NAME, 
         box_image_path: Union[Path, str] = BOX_IMAGE_PATH,
-        box_salt: Optional[bytes] = None) -> 'RemoteBox':
+        box_salt: Optional[bytes] = None) -> 'EncryptedRemoteBox':
     """
     Function used for making ``RemoteBox``. 
     
@@ -240,14 +241,16 @@ async def make_remote_box(
     await ta.TelegramClient(EditPhotoRequest(channel, box_image)) 
     await ta.TelegramClient(EditChatAboutRequest(channel, box_salt.decode()))
     
-    return RemoteBox(channel, ta)
+    return EncryptedRemoteBox(channel, ta)
 
 async def get_remote_box(
         dlb: Optional['DecryptedLocalBox'] = None, 
         ta: Optional['TelegramAccount'] = None,
-        entity: Optional[Union[int, str, PeerChannel]] = None) -> 'RemoteBox':
+        entity: Optional[Union[int, str, PeerChannel]] = None)\
+        -> Union['EncryptedRemoteBox', 'DecryptedRemoteBox']:
     """
-    Returns ``RemoteBox`` (``Channel``).
+    Returns ``EncryptedRemoteBox`` or 
+    ``DecryptedRemoteBox`` if you specify ``dlb``.
     
     .. note::
         Must be specified at least ``dlb`` or ``ta`` with ``entity``. 
@@ -278,37 +281,42 @@ async def get_remote_box(
     
     entity = entity if entity else PeerChannel(dlb._box_channel_id)
     channel_entity = await account.TelegramClient.get_entity(entity)
-    return RemoteBox(channel_entity, account)
+
+    if not dlb:
+        return EncryptedRemoteBox(channel_entity, account)
+    else:
+        return await EncryptedRemoteBox(
+            channel_entity, account).decrypt(dlb=dlb)
 
 async def make_local_box(
-        rb: 'RemoteBox', ta: 'TelegramAccount', 
+        erb: 'EncryptedRemoteBox', 
+        ta: 'TelegramAccount', 
         basekey: BaseKey) -> 'DecryptedLocalBox':
     """
     Makes LocalBox
 
     Arguments:
-        rb (``RemoteBox``):
-            Created ``RemoteBox``. Pretty obvious, huh?!
+        erb (``RemoteBox``):
+            ``EncryptedRemoteBox``. You will
+            recieve it after ``make_remote_box``.
 
         ta (``TelegramAccount``):
-            ``TelegramAccount`` connected with servers.
+            ``TelegramAccount`` connected to Telegram.
 
         basekey (``BaseKey``):
-            ``BaseKey`` that will be used for ``MainKey``
-            creation. Furtherly you will need to always 
-            specify it for downloading files from 
-            your ``RemoteBox``, so don't forget your ``Phrase``.
+            ``BaseKey`` that will be used 
+            for ``MainKey`` creation. 
     """
-    tgbox_db = await TgboxDB.create(await rb.get_box_name())
+    tgbox_db = await TgboxDB.create(await erb.get_box_name())
     if (await tgbox_db.BoxData.count_rows()): 
         raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
 
-    box_salt = await rb.get_box_salt()
+    box_salt = await erb.get_box_salt()
     mainkey = make_mainkey(basekey, box_salt)
 
     await tgbox_db.BoxData.insert(
         next(aes_encrypt(int_to_bytes(0), mainkey, yield_all=True)),
-        next(aes_encrypt(int_to_bytes(rb._box_channel_id), mainkey, yield_all=True)),
+        next(aes_encrypt(int_to_bytes(erb._box_channel_id), mainkey, yield_all=True)),
         next(aes_encrypt(int_to_bytes(int(time())), mainkey, yield_all=True)),
         box_salt,
         None, # We aren't cloned box, so Mainkey is empty
@@ -356,8 +364,9 @@ class TelegramAccount:
         from tgbox.api import TelegramAccount, make_remote_box
         from getpass import getpass # For hidden input
 
-        ta = TelegramAccount(phone_number=input('Phone: '))
-
+        ta = TelegramAccount(
+            phone_number = input('Phone: ')
+        )
         await ta.connect()
         await ta.send_code_request()
 
@@ -365,7 +374,7 @@ class TelegramAccount:
             code = int(input('Code: ')),
             password = getpass('Pass: ')
         )
-        rb = await make_remote_box(ta)
+        erb = await make_remote_box(ta)
     """
     def __init__(
             self, api_id: int=API_ID, 
@@ -479,7 +488,7 @@ class TelegramAccount:
     
     async def tgboxes(self, yield_with: str='tgbox: ') -> Generator:
         """
-        Iterator over all Tgbox Channels in your account.
+        Iterate over all Tgbox Channels in your account.
         It will return any channel with Tgbox prefix,
         ``"tgbox: "`` by default, you can override this.
         
@@ -490,43 +499,45 @@ class TelegramAccount:
         """
         async for d in self.TelegramClient.iter_dialogs():
             if yield_with in d.title and d.is_channel: 
-                yield RemoteBox(d, self)
+                yield EncryptedRemoteBox(d, self)
 
-class RemoteBox:
+class EncryptedRemoteBox:
     """
-    ``RemoteBox`` is a remote cloud storage. You can
+    *RemoteBox* is a remote cloud storage. You can
     upload files and download them later.
 
-    Locally we only keep info about files (in ``LocalBox``).
-    You can fully restore your ``LocalBox`` from ``RemoteBox``.
-
+    Locally we only keep info about files (in *LocalBox*).
+    You can fully restore your LocalBox from RemoteBox.
+    
+    .. note::
+        In ``EncryptedRemoteBox`` you should specify ``MainKey``
+        or ``DecryptedLocalBox``. Usually you want to use
+        ``DecryptedRemoteBox``, not this class.
+    
     Typical usage:
 
     .. code-block:: python
-
-        from tgbox.api import get_local_box, get_remote_box
-        from tgbox.keys import make_basekey, Phrase
-    
-        phrase = Phrase('very_bad_phrase')
-        basekey = make_basekey(phrase)
-
-        dlb = await dlb.get_local_box(basekey)
-        rb = await get_remote_box(dlb)
         
-        # Make a FutureFile
-        ff = await dlb.make_file(open('cats.jpg','rb'))
+        from tgbox.api import (
+            TelegramAccount, 
+            make_local_box, 
+            make_remote_box
+        )
+        from getpass import getpass
 
-        # Waiting file for upload; Return DecryptedRemoteBoxFile
-        drbf = await rb.push_file(ff)
+        # Connecting and logging to Telegram
+        ta = TelegramAccount(
+            phone_number = input('Phone: ')
+        )
+        await ta.connect()
+        await ta.send_code_request()
 
-        # Get some info
-        print(drbf.file_name, drbf.size)
-
-        # Remove file from RemoteBox
-        await drbf.delete()
-        
-        # Check if file exists
-        print(await rb.file_exists(drbf.id)
+        await ta.sign_in(
+            code = int(input('Code: ')),
+            password = getpass('Pass: ')
+        )
+        # Making base RemoteBox (EncryptedRemoteBox)
+        erb = await make_remote_box(ta)
     """
     def __init__(self, box_channel: Channel, ta: TelegramAccount):
         """
@@ -541,7 +552,8 @@ class RemoteBox:
                 Telegram account that have ``box_channel``.
         """
         self._ta = ta
-        
+        self._enc_class = True
+
         self._box_channel = box_channel
         self._box_channel_id = box_channel.id
 
@@ -560,6 +572,14 @@ class RemoteBox:
             isinstance(other, self.__class__), 
             self._box_channel_id == other.box_channel_id
         ))
+    @property
+    def is_enc_class(self) -> bool:
+        """
+        Returns ``True`` if you call it on
+        ``EncryptedRemoteBox``.
+        """
+        return self._enc_class
+
     @property
     def box_channel(self) -> Channel:
         """Returns instance of ``Channel``"""
@@ -593,116 +613,6 @@ class RemoteBox:
             self._box_name = entity.title.split(': ')[1]
         return self._box_name
 
-    async def clone(
-            self, 
-            mainkey: Union[MainKey, ImportKey],
-            basekey: BaseKey, 
-            box_path: Optional[Union[Path, str]] = None) -> 'DecryptedLocalBox':
-        """
-        This method makes ``LocalBox`` from ``RemoteBox`` and
-        imports all RemoteBoxFiles to it.
-        
-        Arguments:
-            mainkey (``MainKey``, ``ImportKey``):
-                ``MainKey`` used for ``RemoteBox`` decryption.
-                You may also use ``ImportKey`` if you have ``ShareKey``.
-
-            basekey (``BaseKey``):
-                ``BaseKey`` with which you will decrypt your
-                cloned ``EncryptedLocalBox``. ``BaseKey`` encrypts
-                Session and ``MainKey`` of original LocalBox.
-
-            box_path (``Path``, ``str``, optional):
-                Direct path with filename included. If
-                not specified, then ``RemoteBox`` name used.
-        """
-        box_path = self._box_name if not box_path else box_path
-        tgbox_db = await TgboxDB.create(box_path)
-
-        async for erbf in self.files(decrypt=False, return_imported_as_erbf=True):
-            last_file_id = erbf.id; break
-
-        if (await tgbox_db.BoxData.count_rows()): 
-            raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
-
-        await tgbox_db.BoxData.insert(
-            next(aes_encrypt(int_to_bytes(last_file_id), mainkey, yield_all=True)),
-            next(aes_encrypt(int_to_bytes(self._box_channel_id), mainkey, yield_all=True)),
-            next(aes_encrypt(int_to_bytes(int(time())), mainkey, yield_all=True)),
-            await self.get_box_salt(),
-            next(aes_encrypt(mainkey.key, basekey, yield_all=True)),
-            next(aes_encrypt(self._ta.get_session().encode(), basekey, yield_all=True))
-        )
-        dlb = await EncryptedLocalBox(tgbox_db).decrypt(basekey)
-
-        async for drbf in self.files(key=mainkey, decrypt=True, reverse=True):
-            await dlb.import_file(drbf, foldername=drbf.foldername)
-        
-        return dlb
-        
-    async def search_file(
-            self, 
-            sf: SearchFilter, 
-            mainkey: Optional[MainKey] = None,
-            dlb: Optional['DecryptedLocalBox'] = None) ->\
-            Generator[Union['EncryptedRemoteBoxFile', 'DecryptedRemoteBoxFile'], None, None]:
-        """
-        This method used to search for files in your ``RemoteBox``.
-        
-        Arguments:
-            sf (``SearchFilter``):
-                ``SearchFilter`` with kwargs you like.
-
-            mainkey (``MainKey``, optional):
-                ``MainKey`` for this ``RemoteBox``. 
-
-            dlb (``DecryptedLocalBox``, optional):
-                LocalBox associated with this ``RemoteBox``. We
-                take ``MainKey`` from it.
-        
-        .. note::
-            If ``dlb`` and ``mainkey`` not specified, then method 
-            will search on ``EncryptedRemoteBoxFile``.
-        """
-        it_messages = self._ta.TelegramClient.iter_messages(
-            self._box_channel, ids=sf.id if sf.id else None
-        )
-        sfunc = _search_func(
-            sf, mainkey=mainkey, 
-            it_messages=it_messages, 
-            lb=dlb, ta=self._ta
-        )
-        async for file in sfunc:
-            yield file
-            
-    async def push_file(self, ff: 'FutureFile') -> 'DecryptedRemoteBoxFile':
-        """
-        Uploads ``FutureFile`` to the ``RemoteBox``.
-        
-        Arguments:
-            ff (``FutureFile``):
-                File to upload. You should recieve
-                it via ``DecryptedLocalBox.make_file``.
-        """
-        state = AESwState(ff.filekey, ff.file_iv)
-        oe = OpenPretender(ff.file, state, mode=1)
-        oe.concat_metadata(ff.metadata)
-            
-        ifile = await self._ta.TelegramClient.upload_file(
-            oe, file_name=urlsafe_b64encode(ff.file_salt).decode(), 
-            part_size_kb=512, file_size=ff.size
-        )
-        file_message = await self._ta.TelegramClient.send_file(
-            self._box_channel, file=ifile, silent=True,
-            force_document=True
-        )        
-        await ff.make_local(file_message.id, 
-            int(file_message.date.timestamp())) 
-        
-        erbf = await EncryptedRemoteBoxFile(
-            file_message, self._ta).init()
-        return await erbf.decrypt(ff.dlb._mainkey)
-    
     async def file_exists(self, id: int) -> bool:
         """
         Returns ``True`` if file with specified ``id``
@@ -731,6 +641,10 @@ class RemoteBox:
             ]:
         """
         Returns file from the ``RemoteBox`` by the given ID.
+
+        .. note::
+            You may ignore ``key` and ``dlb`` if you call
+            this method on ``DecryptedRemoteBox``.
         
         Arguments:
             id (``int``):
@@ -772,6 +686,12 @@ class RemoteBox:
                 Cache preview in returned by method
                 RemoteBoxFiles or not. ``True`` by default.
         """     
+        if hasattr(self, '_mainkey'):
+            key = self._mainkey
+
+        if hasattr(self, '_dlb'):
+            dlb = self._dlb
+
         file_iter = self.files(
             key, dlb=dlb, decrypt=decrypt, 
             ids=id, cache_preview=cache_preview,
@@ -780,7 +700,8 @@ class RemoteBox:
         )
         try:
             return await anext(file_iter)
-        except StopAsyncIteration: # If there is no file by ``id``.
+        # If there is no file by ``id``.
+        except StopAsyncIteration: 
             return None
 
     async def files(
@@ -805,8 +726,11 @@ class RemoteBox:
         Yields every RemoteBoxFile from ``RemoteBox``.
         
         .. note::
-            The default order is from newest to oldest, but this
+            - The default order is from newest to oldest, but this
             behaviour can be changed with the ``reverse`` parameter.
+
+            - You may ignore ``key` and ``dlb`` if you call
+            this method on ``DecryptedRemoteBox``.
         
         Arguments:
             key (``MainKey``, ``FileKey``, optional):
@@ -898,7 +822,13 @@ class RemoteBox:
             cache_preview (``bool``, optional):
                 Cache preview in yielded by generator
                 RemoteBoxFiles or not. ``True`` by default.
-        """        
+        """
+        if hasattr(self, '_mainkey'):
+            key = self._mainkey
+
+        if hasattr(self, '_dlb'):
+            dlb = self._dlb
+
         if decrypt and not any((key, dlb)):
             raise ValueError(
                 'You need to specify key or dlb to be able to decrypt.'
@@ -961,7 +891,79 @@ class RemoteBox:
                         else: 
                             raise e # Unknown Exception
                 yield rbf
-    
+
+    async def search_file(
+            self, 
+            sf: SearchFilter, 
+            mainkey: Optional[MainKey] = None,
+            dlb: Optional['DecryptedLocalBox'] = None) ->\
+            Generator[Union['EncryptedRemoteBoxFile', 'DecryptedRemoteBoxFile'], None, None]:
+        """
+        This method used to search for files in your ``RemoteBox``.
+        
+        Arguments:
+            sf (``SearchFilter``):
+                ``SearchFilter`` with kwargs you like.
+
+            mainkey (``MainKey``, optional):
+                ``MainKey`` for this ``RemoteBox``. 
+
+            dlb (``DecryptedLocalBox``, optional):
+                LocalBox associated with this ``RemoteBox``. We
+                will take ``MainKey`` from it.
+        
+        .. note::
+            - If ``dlb`` and ``mainkey`` not specified, then method 
+            will search on ``EncryptedRemoteBoxFile``. 
+
+            - You may ignore this kwargs if you call this 
+            method on ``DecryptedRemoteBox`` class.
+        """
+        if hasattr(self, '_mainkey'):
+            mainkey = self._mainkey
+        
+        if hasattr(self, '_dlb'):
+            dlb = self._dlb
+
+        it_messages = self._ta.TelegramClient.iter_messages(
+            self._box_channel, ids=sf.id if sf.id else None
+        )
+        sfunc = _search_func(
+            sf, mainkey=mainkey, 
+            it_messages=it_messages, 
+            lb=dlb, ta=self._ta
+        )
+        async for file in sfunc:
+            yield file
+
+    async def push_file(self, ff: 'FutureFile') -> 'DecryptedRemoteBoxFile':
+        """
+        Uploads ``FutureFile`` to the ``RemoteBox``.
+        
+        Arguments:
+            ff (``FutureFile``):
+                File to upload. You should recieve
+                it via ``DecryptedLocalBox.make_file``.
+        """
+        state = AESwState(ff.filekey, ff.file_iv)
+        oe = OpenPretender(ff.file, state, mode=1)
+        oe.concat_metadata(ff.metadata)
+            
+        ifile = await self._ta.TelegramClient.upload_file(
+            oe, file_name=urlsafe_b64encode(ff.file_salt).decode(), 
+            part_size_kb=512, file_size=ff.size
+        )
+        file_message = await self._ta.TelegramClient.send_file(
+            self._box_channel, file=ifile, silent=True,
+            force_document=True
+        )        
+        await ff.make_local(file_message.id, 
+            int(file_message.date.timestamp())) 
+        
+        erbf = await EncryptedRemoteBoxFile(
+            file_message, self._ta).init()
+        return await erbf.decrypt(ff.dlb._mainkey)
+
     async def get_requestkey(self, mainkey: MainKey) -> RequestKey:
         """
         Returns ``RequestKey`` for this Box.
@@ -976,19 +978,135 @@ class RemoteBox:
         """
         box_salt = await self.get_box_salt()
         return make_requestkey(mainkey, box_salt=box_salt)
+    
+    async def decrypt(
+            self, key: Optional[Union[MainKey, ImportKey, BaseKey]] = None, 
+            dlb: Optional['DecryptedLocalBox'] = None):
+        """
+        """
+        if not key and not dlb:
+            raise ValueError('Must be specified at least key or dlb')
+        else:
+            # We need BoxSalt if Key is BaseKey
+            if isinstance(key, BaseKey):
+                await self.get_box_salt()
 
-    async def get_sharekey(
-            self, mainkey: MainKey, 
-            reqkey: Optional[RequestKey] = None) -> ShareKey:
+            return DecryptedRemoteBox(self, key=key, dlb=dlb) 
+
+class DecryptedRemoteBox(EncryptedRemoteBox):
+    def __init__(
+            self, erb: EncryptedRemoteBox, 
+            key: Optional[Union[MainKey, ImportKey, BaseKey]] = None,
+            dlb: Optional['DecryptedLocalBox'] = None):
+        """
+        *RemoteBox* is a remote cloud storage. You can
+        upload files and download them later.
+
+        Locally we only keep info about files (in *LocalBox*).
+        You can fully restore your LocalBox from RemoteBox.
+
+        This class represents decrypted RemoteBox, you can
+        iterate over all decrypted files, clone and upload.
+        
+        .. code-block:: python
+
+            from tgbox.api import get_local_box, get_remote_box
+            from tgbox.keys import make_basekey, Phrase
+        
+            phrase = Phrase('very_bad_phrase')
+            basekey = make_basekey(phrase)
+
+            dlb = await dlb.get_local_box(basekey)
+            drb = await get_remote_box(dlb)
+            
+            # Make a FutureFile
+            ff = await dlb.make_file(open('cats.jpg','rb'))
+
+            # Waiting file for upload, return DecryptedRemoteBoxFile
+            drbf = await drb.push_file(ff)
+
+            # Get some info
+            print(drbf.file_name, drbf.size)
+
+            # Remove file from RemoteBox
+            await drbf.delete()
+            
+            # Check if file exists
+            print(await drb.file_exists(drbf.id)
+        """
+        self._ta = erb._ta
+        self._enc_class = False
+
+        self._box_channel = erb._box_channel
+        self._box_channel_id = erb._box_channel_id
+
+        self._box_salt = erb._box_salt
+        self._box_name = erb._box_name
+        self._dlb = dlb
+
+        if self._dlb:
+            self._mainkey = dlb._mainkey
+        else:
+            if not key:
+                raise ValueError('Must be specified at least key or dlb')
+
+            if isinstance(key, (MainKey, ImportKey)):
+                self._mainkey = MainKey(key.key)
+                
+            elif isinstance(key, BaseKey):
+                if isinstance(elb._mainkey, EncryptedMainkey):
+                    self._mainkey = make_mainkey(key, self._box_salt)
+            else:
+                raise IncorrectKey('key is not Union[MainKey, ImportKey, BaseKey]')
+    
+    async def clone(
+            self, basekey: BaseKey, 
+            box_path: Optional[Union[Path, str]] = None) -> 'DecryptedLocalBox':
+        """
+        This method makes ``LocalBox`` from ``RemoteBox`` and
+        imports all RemoteBoxFiles to it.
+        
+        Arguments:
+            basekey (``BaseKey``):
+                ``BaseKey`` with which you will decrypt your
+                cloned ``EncryptedLocalBox``. ``BaseKey`` encrypts
+                Session and ``MainKey`` of original LocalBox.
+
+            box_path (``Path``, ``str``, optional):
+                Direct path with filename included. If
+                not specified, then ``RemoteBox`` name used.
+        """
+        box_path = self._box_name if not box_path else box_path
+        tgbox_db = await TgboxDB.create(box_path)
+
+        async for erbf in self.files(decrypt=False, return_imported_as_erbf=True):
+            last_file_id = erbf.id; break
+
+        if (await tgbox_db.BoxData.count_rows()): 
+            raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
+
+        await tgbox_db.BoxData.insert(
+            next(aes_encrypt(int_to_bytes(last_file_id), self._mainkey, yield_all=True)),
+            next(aes_encrypt(int_to_bytes(self._box_channel_id), self._mainkey, yield_all=True)),
+            next(aes_encrypt(int_to_bytes(int(time())), self._mainkey, yield_all=True)),
+            await self.get_box_salt(),
+            next(aes_encrypt(self._mainkey, basekey, yield_all=True)),
+            next(aes_encrypt(self._ta.get_session().encode(), basekey, yield_all=True))
+        )
+        dlb = await EncryptedLocalBox(tgbox_db).decrypt(basekey)
+
+        async for drbf in self.files(key=self._mainkey, decrypt=True, reverse=True):
+            await dlb.import_file(drbf, foldername=drbf.foldername)
+        
+        return dlb
+        
+    async def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """
         Returns ``ShareKey`` for this Box.
         You should use this method if you want
         to share your ``RemoteBox`` with other people.
 
         Arguments:
-            mainkey (``MainKey``, optional):
-                ``MainKey`` assigned to this ``RemoteBox``.
-            
             reqkey (``RequestKey``, optional):
                 User's ``RequestKey``. If isn't specified
                 returns ``ShareKey`` of this box without
@@ -999,11 +1117,11 @@ class RemoteBox:
         if reqkey:
             return make_sharekey(
                 requestkey=reqkey, 
-                mainkey=mainkey, 
+                mainkey=self._mainkey, 
                 box_salt=box_salt
             )
         else:
-            return make_sharekey(mainkey=mainkey)
+            return make_sharekey(mainkey=self._mainkey)
 
 class EncryptedRemoteBoxFile:
     """
@@ -1022,11 +1140,11 @@ class EncryptedRemoteBoxFile:
         from tgbox.api import get_remote_box, get_local_box
 
         dlb = await get_local_box(basekey)
-        rb = await get_remote_box(dlb)
+        drb = await get_remote_box(dlb)
         
-        erbf = await rb.get_file(
-            id=dlb.last_file_id, 
-            decrypt=False
+        erbf = await drb.get_file(
+            id = dlb.last_file_id, 
+            decrypt = False
         )
         print(erbf.file_salt)
         print(erbf.prefix)
@@ -1049,7 +1167,8 @@ class EncryptedRemoteBoxFile:
                 This kwarg will be used later in ``DecryptedRemoteBoxFile``
         """
         self._initialized = False
-        
+        self._enc_class = True
+
         self._message = sended_file
         self._id = sended_file.id
         self._file = sended_file.file
@@ -1063,7 +1182,7 @@ class EncryptedRemoteBoxFile:
         self._file_size = self._file.size
         self._file_file_name = self._file.name
 
-        self._size = None
+        self._size, self._file_name = None, None
         self._file_iv, self._file_salt = None, None
         self._comment, self._foldername = None, None
         self._duration, self._version_byte = None, None
@@ -1081,7 +1200,7 @@ class EncryptedRemoteBoxFile:
             raise NotInitializedError(
                 'Must be initialized before hashing'
             )
-        if hasattr(self, '_file_file_name'):
+        if self._enc_class:
             return hash((self._id, self._file_file_name))
         else:
             return hash((self._id, self._file_name))
@@ -1091,6 +1210,14 @@ class EncryptedRemoteBoxFile:
             isinstance(other, self.__class__), 
             self.__hash__() == hash(other)
         ))
+    @property
+    def is_enc_class(self) -> bool:
+        """
+        Returns ``True`` if you call it on
+        ``EncryptedRemoteBoxFile``.
+        """
+        return self._enc_class
+
     @property
     def initialized(self) -> bool:
         """Returns ``True`` if class was initialized."""
@@ -1149,9 +1276,17 @@ class EncryptedRemoteBoxFile:
         return self._file_size
 
     @property
-    def file_file_name(self) -> bytes:
-        """Returns **remote** file name."""
+    def file_name(self) -> Union[bytes, None]:
+        """
+        Returns file name from ``DecryptedRemoteBoxFile``
+        and always ``None`` from ``EncryptedRemoteBoxFile``.
+        """
         return self._file_name
+
+    @property
+    def file_file_name(self) -> bytes:
+        """Returns *remote file* name."""
+        return self._file_file_name
 
     @property
     def box_channel_id(self) -> int:
@@ -1200,7 +1335,7 @@ class EncryptedRemoteBoxFile:
     async def delete(self) -> None: 
         """
         TOTALLY removes file from RemoteBox. You and all
-        participants of the ``RemoteBox`` will
+        participants of the ``EncryptedRemoteBox`` will
         lose access to it FOREVER. This action can't be
         undone. You need to have rights for this action.
         
@@ -1258,10 +1393,11 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         basekey = make_basekey(Phrase('very_bad_phrase'))
 
         dlb = await get_local_box(basekey)
-        rb = await get_remote_box(dlb)
+        drb = await get_remote_box(dlb)
 
-        drbf = await rb.get_file(
-            id=dlb.last_file_id, dlb=dlb
+        drbf = await drb.get_file(
+            id = dlb.last_file_id, 
+            dlb = dlb
         )
         print(drbf.foldername)
 
@@ -1290,6 +1426,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._erbf = erbf
         
         self._initialized = False
+        self._enc_class = False
+
         self._message = erbf._message
         self._id = erbf._id
         self._file = erbf._file
@@ -1310,6 +1448,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._prefix, self._navbytes = erbf._prefix, None
         self._box_salt, self._file_name = erbf._box_salt, None
         self._preview_pos, self._file_pos = None, None
+        self._file_file_name = erbf._file_file_name
 
         if isinstance(key, (FileKey, ImportKey)):
             self._filekey = FileKey(key.key)
@@ -2679,8 +2818,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 class FutureFile:
     """
     This dataclass stores data needed for upload 
-    in future, by ``RemoteBox.push_file``. After
-    pushing used for LocalBoxFile creation.
+    in future, by ``DecryptedRemoteBox.push_file``. 
+    After pushing used for LocalBoxFile creation.
 
     Usually it's only for internal use.
     """
