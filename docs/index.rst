@@ -4,7 +4,12 @@ TGBOX: encrypted cloud storage based on Telegram API
 Motivation
 ----------
 
-The Telegram is beautiful app. Not only by mean of features and Client API, but it's also good in cryptography and secure messaging. In the last years, core and client devs of Telegram mostly work for "social-network features", i.e video chats and message reactions, which is OK, but there also can be plenty of "crypto-related" things. Library target to be a PoC of **encrypted file storage**, but can be used as standalone API.
+The Telegram is beautiful app. Not only by mean of features and Client API, but it's also good in cryptography and secure messaging. In the last years, core and client devs of Telegram mostly work for "social-network features", i.e video chats and message reactions, which is OK, but there also can be plenty of "crypto-related" things. 
+
+Target
+------
+
+This library targets to be a PoC of **encrypted file storage**, but can be used as standalone API.
 
 Abstract
 --------
