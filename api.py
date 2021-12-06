@@ -986,7 +986,7 @@ class EncryptedRemoteBox:
         return make_requestkey(mainkey, box_salt=box_salt)
     
     async def decrypt(
-            self, key: Optional[Union[MainKey, ImportKey, BaseKey]] = None, 
+            self, *, key: Optional[Union[MainKey, ImportKey, BaseKey]] = None, 
             dlb: Optional['DecryptedLocalBox'] = None):
         """
         """
