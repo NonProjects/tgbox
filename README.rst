@@ -30,7 +30,7 @@ TGBOX: encrypted cloud storage based on Telegram API
             erb = await make_remote_box(ta)
             dlb = await make_local_box(erb, ta, basekey)
             
-            drb = await erb.decrypt(dlb)
+            drb = await erb.decrypt(dlb=dlb)
 
             ff = await dlb.make_file(
                 file = open('cats.png','rb'),
