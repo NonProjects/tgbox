@@ -70,8 +70,8 @@ WORDS_PATH: Path=Path(abspath(''), 'tgbox', 'other', 'words.txt')
 # Think of it as 2FA. Changing salt doesn't help if your mainkey was leaked,
 # but will protect you from passphrase leakage.
 SCRYPT_SALT: bytes = bytes.fromhex(
-    '37ce65c834c6efe05dfad02413c0950072a1fe3ed48a33368333848d9c782167') 
-
+    '37ce65c834c6efe05dfad02413c0950072a1fe3ed48a33368333848d9c782167'
+) 
 # You can change any Scrypt params. Please note that resulted
 # key will be hashed with sha256, so BaseKey is always 32-byte.
 # Default constants balanced to use 1GB of RAM.

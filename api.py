@@ -361,20 +361,24 @@ class TelegramAccount:
 
     .. code-block:: python
 
+        from asyncio import run as asyncio_run
         from tgbox.api import TelegramAccount, make_remote_box
         from getpass import getpass # For hidden input
+        
+        async def main():
+            ta = TelegramAccount(
+                phone_number = input('Phone: ')
+            )
+            await ta.connect()
+            await ta.send_code_request()
 
-        ta = TelegramAccount(
-            phone_number = input('Phone: ')
-        )
-        await ta.connect()
-        await ta.send_code_request()
+            await ta.sign_in(
+                code = int(input('Code: ')),
+                password = getpass('Pass: ')
+            )
+            erb = await make_remote_box(ta)
 
-        await ta.sign_in(
-            code = int(input('Code: ')),
-            password = getpass('Pass: ')
-        )
-        erb = await make_remote_box(ta)
+        asyncio_run(main())
     """
     def __init__(
             self, api_id: int=API_ID, 
@@ -524,20 +528,24 @@ class EncryptedRemoteBox:
             make_remote_box
         )
         from getpass import getpass
+        from asyncio import run as asyncio_run
+        
+        async def main():
+            # Connecting and logging to Telegram
+            ta = TelegramAccount(
+                phone_number = input('Phone: ')
+            )
+            await ta.connect()
+            await ta.send_code_request()
 
-        # Connecting and logging to Telegram
-        ta = TelegramAccount(
-            phone_number = input('Phone: ')
-        )
-        await ta.connect()
-        await ta.send_code_request()
+            await ta.sign_in(
+                code = int(input('Code: ')),
+                password = getpass('Pass: ')
+            )
+            # Making base RemoteBox (EncryptedRemoteBox)
+            erb = await make_remote_box(ta)
 
-        await ta.sign_in(
-            code = int(input('Code: ')),
-            password = getpass('Pass: ')
-        )
-        # Making base RemoteBox (EncryptedRemoteBox)
-        erb = await make_remote_box(ta)
+        asyncio_run(main())
     """
     def __init__(self, box_channel: Channel, ta: TelegramAccount):
         """
@@ -726,12 +734,11 @@ class EncryptedRemoteBox:
         Yields every RemoteBoxFile from ``RemoteBox``.
         
         .. note::
-            - The default order is from newest to oldest, but this
+            - The default order is from newest to oldest, but this\
             behaviour can be changed with the ``reverse`` parameter.
-
-            - You may ignore ``key` and ``dlb`` if you call
+            - You may ignore ``key` and ``dlb`` if you call\
             this method on ``DecryptedRemoteBox``.
-        
+
         Arguments:
             key (``MainKey``, ``FileKey``, optional):
                 Will be used to decrypt ``EncryptedRemoteBoxFile``.
@@ -913,10 +920,9 @@ class EncryptedRemoteBox:
                 will take ``MainKey`` from it.
         
         .. note::
-            - If ``dlb`` and ``mainkey`` not specified, then method 
+            - If ``dlb`` and ``mainkey`` not specified, then method\
             will search on ``EncryptedRemoteBoxFile``. 
-
-            - You may ignore this kwargs if you call this 
+            - You may ignore this kwargs if you call this\
             method on ``DecryptedRemoteBox`` class.
         """
         if hasattr(self, '_mainkey'):
@@ -1136,18 +1142,22 @@ class EncryptedRemoteBoxFile:
     Retrieving:
 
     .. code-block:: python
-
-        from tgbox.api import get_remote_box, get_local_box
-
-        dlb = await get_local_box(basekey)
-        drb = await get_remote_box(dlb)
         
-        erbf = await drb.get_file(
-            id = dlb.last_file_id, 
-            decrypt = False
-        )
-        print(erbf.file_salt)
-        print(erbf.prefix)
+        from asyncio import run as asyncio_run
+        from tgbox.api import get_remote_box, get_local_box
+        
+        async def main():
+            dlb = await get_local_box(basekey)
+            drb = await get_remote_box(dlb)
+            
+            erbf = await drb.get_file(
+                id = dlb.last_file_id, 
+                decrypt = False
+            )
+            print(erbf.file_salt)
+            print(erbf.prefix)
+
+        asyncio_run(main())
     """
     def __init__(
             self, sended_file: Message, 
@@ -1386,27 +1396,31 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
     Typical usage:
 
     .. code-block:: python
-
+        
+        from asyncio import run as asyncio_run
         from tgbox.api import get_local_box, get_remote_box
         from tgbox.keys import Phrase, make_basekey
+        
+        async def main():
+            basekey = make_basekey(Phrase('very_bad_phrase'))
 
-        basekey = make_basekey(Phrase('very_bad_phrase'))
+            dlb = await get_local_box(basekey)
+            drb = await get_remote_box(dlb)
 
-        dlb = await get_local_box(basekey)
-        drb = await get_remote_box(dlb)
+            drbf = await drb.get_file(
+                id = dlb.last_file_id, 
+                dlb = dlb
+            )
+            print(drbf.foldername)
 
-        drbf = await drb.get_file(
-            id = dlb.last_file_id, 
-            dlb = dlb
-        )
-        print(drbf.foldername)
+            # Download file preview
+            with open(f'preview_{drbf.file_name}','wb') as f:
+                f.write((await drbf.get_preview()).read())
 
-        # Download file preview
-        with open(f'preview_{drbf.file_name}','wb') as f:
-            f.write((await drbf.get_preview()).read())
+            # Download file, return BinaryIO
+            file = await drbf.download()
 
-        # Download file, return BinaryIO
-        file = await drbf.download()
+        asyncio_run(main())
     """
     def __init__(
             self, erbf: EncryptedRemoteBoxFile, 
@@ -1699,30 +1713,38 @@ class EncryptedLocalBox:
     Usage:
 
     .. code-block:: python
-
+        
+        from asyncio import run as asyncio_run
         from tgbox.api import EncryptedLocalBox
         from tgbox.db import TgboxDB
         
-        # Make or open TgboxDB
-        tdb = await TgboxDB.create('TGBOX')
-        # Initialize EncryptedLocalBox
-        elb = await EncryptedLocalBox(tdb).init()
+        async def main():
+            # Make or open TgboxDB
+            tdb = await TgboxDB.create('TGBOX')
+            # Initialize EncryptedLocalBox
+            elb = await EncryptedLocalBox(tdb).init()
+            
+            # Retrieve encrypted session
+            print(elb.session)
         
-        # Retrieve encrypted session
-        print(elb.session)
+        asyncio_run(main())
 
     You can acces it from ``DecryptedLocalBox``:
 
     .. code-block:: python
-
+        
+        from asyncio import run as asyncio_run
         from tgbox.api import get_local_box
         from tgbox.keys import make_basekey, Phrase
+        
+        async def main():
+            basekey = make_basekey(Phrase('very_bad_phrase'))
+            dlb = await get_local_box(basekey)
 
-        basekey = make_basekey(Phrase('very_bad_phrase'))
-        dlb = await get_local_box(basekey)
+            # Retrieve encrypted session
+            print(dlb._elb.session)
 
-        # Retrieve encrypted session
-        print(dlb._elb.session)
+        asyncio_run(main())
     """
     def __init__(self, tgbox_db: TgboxDB):
         """
@@ -1904,16 +1926,20 @@ class DecryptedLocalBox(EncryptedLocalBox):
     Typical usage:
 
     .. code-block: python
-
+        
+        from asyncio import run as asyncio_run
         from tgbox.api import get_local_box
         from tgbox.keys import make_basekey, Phrase
         
-        basekey = make_basekey(Phrase('very_bad_phrase'))
-        dlb = await get_local_box(basekey)
-        
-        # Iterating over all files
-        async for dlbfi in dlb.files():
-            print(file.id, file.file_name, file.size)
+        async def main():
+            basekey = make_basekey(Phrase('very_bad_phrase'))
+            dlb = await get_local_box(basekey)
+            
+            # Iterating over all files
+            async for dlbfi in dlb.files():
+                print(file.id, file.file_name, file.size)
+
+        asyncio_run(main())
     """
     def __init__(
             self, elb: EncryptedLocalBox, 
@@ -1993,7 +2019,10 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 folder_id=folder[2]
             )
 
-    async def search_file(self, sf: SearchFilter) -> 'DecryptedLocalBoxFile':
+    async def search_file(
+            self, sf: SearchFilter) -> Generator[
+                'DecryptedLocalBoxFile', None, None
+            ]:
         """
         This method used to search for files in your ``DecryptedLocalBox``.
         

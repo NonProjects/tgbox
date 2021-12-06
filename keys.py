@@ -256,7 +256,7 @@ class EncryptedMainkey(Key):
         super().__init__(key, 7)
 
 def make_basekey(
-        phrase: [bytes, Phrase], *, salt: bytes=SCRYPT_SALT,
+        phrase: Union[bytes, Phrase], *, salt: bytes=SCRYPT_SALT,
         n: int=SCRYPT_N, r: int=SCRYPT_R, p: int=SCRYPT_P, 
         dklen: int=SCRYPT_DKLEN) -> BaseKey:
     """
