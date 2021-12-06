@@ -77,7 +77,7 @@ Synchronous
             # Making upload file, returns FutureFile
             ff = await dlb.make_file(
                 file = open('cats.png','rb'),
-                comment = b'Cats are cool B-)',,
+                comment = b'Cats are cool B-)',
                 foldername = b'Pictures/Kitties' 
             )
             # Uploading FutureFile to the RemoteBox

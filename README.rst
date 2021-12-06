@@ -34,7 +34,7 @@ TGBOX: encrypted cloud storage based on Telegram API
 
             ff = await dlb.make_file(
                 file = open('cats.png','rb'),
-                comment = b'Cats are cool B-)',,
+                comment = b'Cats are cool B-)',
                 foldername = b'Pictures/Kitties' 
             )
             drbfi = await drb.push_file(ff)
