@@ -28,7 +28,7 @@ TGBOX: encrypted cloud storage based on Telegram API
             basekey = make_basekey(b'very_bad_phrase')
 
             erb = await make_remote_box(ta)
-            dlb = await make_local_box(rb, ta, basekey)
+            dlb = await make_local_box(erb, ta, basekey)
             
             drb = await erb.decrypt(dlb)
 
