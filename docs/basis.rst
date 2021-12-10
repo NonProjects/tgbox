@@ -37,7 +37,7 @@ Encryption Keys
 So, there is **three** encryption Keys: *BaseKey*, *MainKey*, *FileKey*.
 
 .. note::
-    - When you clone other's *RemoteBox* (via ``RemoteBox.clone``), ``BaseKey`` used to encrypt Telegram's session data and cloned Box *MainKey*, to prevent stealing your session.
+    - We're always encrypt Telegram session with ``BaseKey``, so attacker can't decrypt it even with ``MainKey``.
     - It's impossible to restore *MainKey* from *FileKey*, so exposing it will **only** give access to file, with which this key is associated.
 
 Transfer keys

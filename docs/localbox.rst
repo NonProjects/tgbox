@@ -27,7 +27,7 @@ BLOB         BLOB           BLOB        BLOB     BLOB|NULL BLOB
 - ``BOX_CR_TIME`` — *LocalBox* creation time;
 - ``BOX_SALT`` — *BoxSalt* for ``MainKey`` creation;
 - ``MAINKEY`` — encrypted by ``BaseKey`` ``MainKey``. Used if *RemoteBox* was cloned;
-- ``SESSION`` — encoded & encrypted Telethon's ``StringSession``.
+- ``SESSION`` — encoded & encrypted by ``BaseKey`` Telethon's ``StringSession``.
 
 FILES
 -----
