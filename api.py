@@ -325,14 +325,14 @@ async def make_local_box(
     return await EncryptedLocalBox(tgbox_db).decrypt(basekey)
 
 async def get_local_box(
-        key: Optional[BaseKey] = None,
+        basekey: Optional[BaseKey] = None,
         tgbox_db_path: Optional[Union[Path, str]] = DEF_TGBOX_NAME,
         ) -> Union['EncryptedLocalBox', 'DecryptedLocalBox']:
     """
     Returns LocalBox.
     
     Arguments:
-        key (``BaseKey``, optional):
+        basekey (``BaseKey``, optional):
             Returns ``DecryptedLocalBox`` if specified,
             ``EncryptedLocalBox`` otherwise (default).
             
@@ -348,8 +348,8 @@ async def get_local_box(
     else:
         tgbox_db = await TgboxDB(tgbox_db_path).init()
 
-    if key:
-        return await EncryptedLocalBox(tgbox_db).decrypt(key)
+    if basekey:
+        return await EncryptedLocalBox(tgbox_db).decrypt(basekey)
     else:
         return await EncryptedLocalBox(tgbox_db).init()
 
@@ -987,9 +987,8 @@ class EncryptedRemoteBox:
     
     async def decrypt(
             self, *, key: Optional[Union[MainKey, ImportKey, BaseKey]] = None, 
-            dlb: Optional['DecryptedLocalBox'] = None):
-        """
-        """
+            dlb: Optional['DecryptedLocalBox'] = None) -> 'DecryptedRemoteBox':
+        
         if not key and not dlb:
             raise ValueError('Must be specified at least key or dlb')
         else:
@@ -1910,10 +1909,10 @@ class EncryptedLocalBox:
         self.__raise_initialized()
         return make_requestkey(mainkey, box_salt=self._box_salt)
 
-    async def decrypt(self, key: BaseKey) -> 'DecryptedLocalBox':
+    async def decrypt(self, basekey: BaseKey) -> 'DecryptedLocalBox':
         if not self.initialized:
             await self.init()
-        return DecryptedLocalBox(self, key)
+        return DecryptedLocalBox(self, basekey)
 
 class DecryptedLocalBox(EncryptedLocalBox):
     """
@@ -1967,13 +1966,13 @@ class DecryptedLocalBox(EncryptedLocalBox):
             try:
                 # We encrypt Session with Basekey to prevent stealing 
                 # Session information by people who also have mainkey 
-                # of the same box. So there is decryption with ``key``.
+                # of the same box. So there is decryption with ``basekey``.
                 self._session = next(aes_decrypt(
                     elb._session, basekey, yield_all=True)).decode()
             except UnicodeDecodeError:
                 raise IncorrectKey('Can\'t decrypt Session. Invalid Basekey?') 
         else:
-            raise IncorrectKey('key is not BaseKey')
+            raise IncorrectKey('basekey is not BaseKey')
 
         self._box_channel_id = bytes_to_int(next(
             aes_decrypt(elb._box_channel_id, self._mainkey, yield_all=True))
@@ -2107,8 +2106,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
             elif file_size > FILESIZE_MAX:
                 raise Exception(f'File size limit is {FILESIZE_MAX} bytes.')
         
-        if make_preview:
-            file_type = filetype_guess(file_name)
+        if make_preview and file_path:
+            file_type = filetype_guess(file_path)
             file_type = file_type if not file_type\
                 else file_type.mime.split('/')[0]
         else:
