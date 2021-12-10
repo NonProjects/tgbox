@@ -313,26 +313,26 @@ async def make_local_box(
 
     box_salt = await erb.get_box_salt()
     mainkey = make_mainkey(basekey, box_salt)
-
+    
     await tgbox_db.BoxData.insert(
         next(aes_encrypt(int_to_bytes(0), mainkey, yield_all=True)),
         next(aes_encrypt(int_to_bytes(erb._box_channel_id), mainkey, yield_all=True)),
         next(aes_encrypt(int_to_bytes(int(time())), mainkey, yield_all=True)),
         box_salt,
         None, # We aren't cloned box, so Mainkey is empty
-        next(aes_encrypt(ta.get_session().encode(), mainkey, yield_all=True))
+        next(aes_encrypt(ta.get_session().encode(), basekey, yield_all=True))
     )
-    return await EncryptedLocalBox(tgbox_db).decrypt(mainkey)
+    return await EncryptedLocalBox(tgbox_db).decrypt(basekey)
 
 async def get_local_box(
-        key: Optional[Union[MainKey, BaseKey]] = None,
+        key: Optional[BaseKey] = None,
         tgbox_db_path: Optional[Union[Path, str]] = DEF_TGBOX_NAME,
         ) -> Union['EncryptedLocalBox', 'DecryptedLocalBox']:
     """
     Returns LocalBox.
     
     Arguments:
-        key (``MainKey``, ``BaseKey``, optional):
+        key (``BaseKey``, optional):
             Returns ``DecryptedLocalBox`` if specified,
             ``EncryptedLocalBox`` otherwise (default).
             
@@ -1530,7 +1530,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     filedata, self._filekey, yield_all=True)
                 )
                 self._size = bytes_to_int(dec_filedata[:4],signed=False)
-                self._duration = bytes_to_int(dec_filedata[4:8],signed=False)
+                self._duration = bytes_to_float(dec_filedata[4:8])
                 folder_len = bytes_to_int(dec_filedata[8:10],signed=False)
                 
                 self._foldername = dec_filedata[10:10+folder_len] 
@@ -1910,7 +1910,7 @@ class EncryptedLocalBox:
         self.__raise_initialized()
         return make_requestkey(mainkey, box_salt=self._box_salt)
 
-    async def decrypt(self, key: Union[MainKey, ImportKey, BaseKey]) -> 'DecryptedLocalBox':
+    async def decrypt(self, key: BaseKey) -> 'DecryptedLocalBox':
         if not self.initialized:
             await self.init()
         return DecryptedLocalBox(self, key)
@@ -1941,16 +1941,14 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         asyncio_run(main())
     """
-    def __init__(
-            self, elb: EncryptedLocalBox, 
-            key: Union[MainKey, ImportKey, BaseKey]):
+    def __init__(self, elb: EncryptedLocalBox, basekey: BaseKey):
         """
         Arguments:
             elb (``EncryptedLocalBox``):
                 Local box you want to decrypt.
 
-            key (``MainKey``, ``ImportKey``, ``BaseKey``):
-                Decryption key.
+            basekey (``BaseKey``):
+                Your ``BaseKey``. 
         """
         if not elb.initialized:
             raise NotInitializedError('Parent class isn\'t initialized.')
@@ -1960,26 +1958,22 @@ class DecryptedLocalBox(EncryptedLocalBox):
         self._initialized = True 
         self._enc_class = False
         
-        if isinstance(key, (MainKey, ImportKey)):
-            self._mainkey = MainKey(key.key)
-            
-        elif isinstance(key, BaseKey):
+        if isinstance(basekey, BaseKey):
             if isinstance(elb._mainkey, EncryptedMainkey):
-                mainkey = next(aes_decrypt(elb._mainkey.key, key, yield_all=True))
+                mainkey = next(aes_decrypt(elb._mainkey.key, basekey, yield_all=True))
                 self._mainkey = MainKey(mainkey)
             else:
-                self._mainkey = make_mainkey(key, self._elb._box_salt)
-                key = self._mainkey
+                self._mainkey = make_mainkey(basekey, self._elb._box_salt)
+            try:
+                # We encrypt Session with Basekey to prevent stealing 
+                # Session information by people who also have mainkey 
+                # of the same box. So there is decryption with ``key``.
+                self._session = next(aes_decrypt(
+                    elb._session, basekey, yield_all=True)).decode()
+            except UnicodeDecodeError:
+                raise IncorrectKey('Can\'t decrypt Session. Invalid Basekey?') 
         else:
-            raise IncorrectKey('key is not Union[MainKey, ImportKey, BaseKey]')
-        try:
-            # When we clone other's RemoteBox, we encrypt Session with Basekey
-            # to prevent stealing Session information by people who also have
-            # mainkey of the same box. So there is decryption with ``key``.
-            self._session = next(aes_decrypt(
-                elb._session, key, yield_all=True)).decode()
-        except UnicodeDecodeError:
-            raise IncorrectKey('Can\'t decrypt Session. Invalid Basekey?') from None
+            raise IncorrectKey('key is not BaseKey')
 
         self._box_channel_id = bytes_to_int(next(
             aes_decrypt(elb._box_channel_id, self._mainkey, yield_all=True))
