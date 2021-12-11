@@ -22,6 +22,7 @@ from telethon.tl.types import (
     Channel, Message, PeerChannel
 )
 from telethon.tl.types.auth import SentCode
+from .fastelethon import upload_file, download_file
 
 from .crypto import (
     aes_decrypt, aes_encrypt, 
@@ -955,9 +956,11 @@ class EncryptedRemoteBox:
         oe = OpenPretender(ff.file, state, mode=1)
         oe.concat_metadata(ff.metadata)
             
-        ifile = await self._ta.TelegramClient.upload_file(
-            oe, file_name=urlsafe_b64encode(ff.file_salt).decode(), 
-            part_size_kb=512, file_size=ff.size
+        ifile = await upload_file(
+            self._ta.TelegramClient, oe,
+            file_name = urlsafe_b64encode(ff.file_salt).decode(), 
+            part_size_kb = 512, 
+            file_size = ff.wm_size
         )
         file_message = await self._ta.TelegramClient.send_file(
             self._box_channel, file=ifile, silent=True,
@@ -1665,17 +1668,26 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         elif not offset:
             offset = self._file_pos
         
-        iter_down = self._ta.TelegramClient.iter_download(
-            self._message.document, offset=offset, 
-            request_size=request_size
+        iter_down = download_file(
+            client=self._ta.TelegramClient,
+            location=self._message.document,
+            request_size=request_size,
         )
-        downloaded = 0
-        async for chunk in iter_down: 
-            downloaded += len(chunk)
-            if downloaded >= self.size:
-                outfile.write(aws.decrypt(chunk, unpad=True) if decrypt else chunk)
+        buffered = b''
+        async for chunk in iter_down:
+            if buffered:
+                buffered += chunk
+                chunk = buffered[:request_size]
+                buffered = buffered[request_size:]
             else:
-                outfile.write(aws.decrypt(chunk) if decrypt else chunk)
+                buffered += chunk[offset:]
+                offset = None
+                continue
+
+            outfile.write(aws.decrypt(chunk) if decrypt else chunk)
+        
+        if buffered:
+            outfile.write(aws.decrypt(buffered, unpad=True) if decrypt else chunk)
 
         return outfile
     
@@ -2858,6 +2870,11 @@ class FutureFile:
     file_iv: bytes
     verbyte: bytes
     imported: bool
+
+    @property
+    def wm_size(self) -> int:
+        """Returns file + metadata length."""
+        return self.size + len(self.metadata)
 
     @property
     def metadata(self) -> RemoteBoxFileMetadata:
