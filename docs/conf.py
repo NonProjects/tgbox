@@ -13,7 +13,7 @@
 import os
 import sys
 
-sys.path.insert(0, ['tgbox'])
+sys.path.insert(0, ['.'])
 
 # -- Project information -----------------------------------------------------
 
