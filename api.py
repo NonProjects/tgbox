@@ -178,7 +178,7 @@ async def _search_func(
             if sf.comment: continue
 
         for folder in sf.folder:
-            if in_func(folder, file.folder):
+            if in_func(folder, file.foldername):
                 break
         else: 
             if sf.folder: continue
@@ -228,6 +228,9 @@ async def make_remote_box(
             Random 32 bytes. Will be used in ``MainKey``
             creation. Default is ``crypto.make_box_salt()``.
     """
+    if box_salt and len(box_salt) != 32:
+        raise ValueError('Box salt len != 32')
+
     tgbox_db = await TgboxDB.create(tgbox_db_name)
     if (await tgbox_db.BoxData.count_rows()): 
         raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
@@ -345,7 +348,7 @@ async def get_local_box(
         tgbox_db_path = Path(tgbox_db_path)
 
     if not tgbox_db_path.exists():
-        raise FileNotFoundError('Can\'t open {tgbox_db_path.absolute()}') 
+        raise FileNotFoundError(f'Can\'t open {tgbox_db_path.absolute()}') 
     else:
         tgbox_db = await TgboxDB(tgbox_db_path).init()
 
@@ -625,7 +628,7 @@ class EncryptedRemoteBox:
     async def file_exists(self, id: int) -> bool:
         """
         Returns ``True`` if file with specified ``id``
-        exists in ``RemoteBox``. ``False`` otherwise.
+        exists in RemoteBox. ``False`` otherwise.
         
         Arguments:
             id (``int``):
@@ -1153,7 +1156,7 @@ class EncryptedRemoteBoxFile:
             drb = await get_remote_box(dlb)
             
             erbf = await drb.get_file(
-                id = dlb.last_file_id, 
+                id = await dlb.get_last_file_id(), 
                 decrypt = False
             )
             print(erbf.file_salt)
@@ -1410,7 +1413,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             drb = await get_remote_box(dlb)
 
             drbf = await drb.get_file(
-                id = dlb.last_file_id, 
+                id = await dlb.get_last_file_id(), 
                 dlb = dlb
             )
             print(drbf.foldername)
@@ -1598,8 +1601,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
     async def download( 
             self, *, outfile: Union[str, BinaryIO, Path] = DOWNLOAD_PATH, 
             hide_folder: bool=False, hide_name: bool=False,
-            decrypt: bool=True, offset: int=0,  
-            request_size: int=524288) -> BinaryIO:
+            decrypt: bool=True, request_size: int=524288) -> BinaryIO:
         """
         Downloads and saves remote box file to the ``outfile``.
         
@@ -1632,13 +1634,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 data in smaller sizes, adjust this parameter.
 
                 Note that values outside the valid range will be clamped, 
-                and the final value will also be a multiple of the minimum allowed size.
-            
-            offset (``int``, optional):
-                The offset in bytes into the file from where the 
-                download should start. For example, if a file is 
-                1024KB long and you just want the last 512KB, 
-                you would use ``offset=512 * 1024``.
+                and the final value will also be a multiple 
+                of the minimum allowed size.
         """
         self.__raise_initialized()
         
@@ -1654,26 +1651,20 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             name = prbg(16).hex() if hide_name else self._file_name
             
             outfile = Path(outfile, folder.decode())
-            outfile.mkdir(exist_ok=True, parents=True)
-
-            outfile = open(Path(outfile, name.decode()),'wb')
+            outfile.parent.mkdir(exist_ok=True, parents=True)
+            outfile = open(Path(outfile),'wb')
             
         elif isinstance(outfile, BinaryIO) or hasattr(outfile, 'write'):
             pass # We already can write 
         else:
             raise TypeError('outfile not Union[BinaryIO, str, Path].')
         
-        if offset and decrypt:
-            raise ValueError('Can\'t decrypt with ``offset``')
-        elif not offset:
-            offset = self._file_pos
-        
         iter_down = download_file(
             client=self._ta.TelegramClient,
             location=self._message.document,
             request_size=request_size,
         )
-        buffered = b''
+        buffered, offset = b'', self._file_pos
         async for chunk in iter_down:
             if buffered:
                 buffered += chunk
@@ -1681,8 +1672,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 buffered = buffered[request_size:]
             else:
                 buffered += chunk[offset:]
-                offset = None
-                continue
+                offset = None; continue
 
             outfile.write(aws.decrypt(chunk) if decrypt else chunk)
         
@@ -1770,7 +1760,6 @@ class EncryptedLocalBox:
         self._session = None
         self._box_channel_id = None
         self._box_cr_time = None
-        self._last_file_id = None
 
         self._initialized = False
         self._enc_class = True
@@ -1839,14 +1828,20 @@ class EncryptedLocalBox:
         """
         return self._box_cr_time
     
-    @property
-    def last_file_id(self) -> Union[bytes, int, None]:
+    async def get_last_file_id(self) -> Union[bytes, int, None]:
         """
         Returns encrypted last file ID from 
         ``EncryptedLocalBox`` and decrypted 
         from ``DecryptedLocalBox``.
         """
-        return self._last_file_id
+        lfi = await self._tgbox_db.BoxData.select_once(
+            sql_tuple = ('SELECT LAST_FILE_ID FROM BOX_DATA', ())
+        )
+        if not self._enc_class:
+            lfi = bytes_to_int(next(aes_decrypt(
+                lfi[0], self._mainkey, yield_all=True))
+            )
+        return lfi[0] if self._enc_class else lfi
     
     async def init(self) -> 'EncryptedLocalBox':
         """Will fetch and parse data from Database."""
@@ -1855,7 +1850,7 @@ class EncryptedLocalBox:
             raise NotInitializedError('Table is empty.') 
         else:
             box_data = await self._tgbox_db.BoxData.select_once()
-            self._last_file_id, self._box_channel_id = box_data[:2]
+            last_file_id, self._box_channel_id = box_data[:2]
             self._box_cr_time, self._box_salt, self._mainkey = box_data[2:5]
             self._session, self._initialized = box_data[5], True
             
@@ -1891,8 +1886,14 @@ class EncryptedLocalBox:
         except StopAsyncIteration: # No file by ``id``.
             return None
     
-    async def files(self, cache_preview: bool=True)\
-            -> Union['DecryptedLocalBoxFile', 'EncryptedLocalBoxFile', None]:
+    async def files(
+            self, cache_preview: bool=True,
+            min_id: Optional[int] = None,
+            max_id: Optional[int] = None)\
+            -> Union[
+                'DecryptedLocalBoxFile', 
+                'EncryptedLocalBoxFile', None
+               ]:
         """
         Yields every local file as ``EncryptedLocalBoxFile`` if you
         call it on ``EncryptedLocalBox`` and ``DecryptedLocalBoxFile``
@@ -1902,7 +1903,12 @@ class EncryptedLocalBox:
             cache_preview (``bool``, optional):
                 Cache preview in class or not.
         """
-        cursor = await self._tgbox_db.Files.execute(('SELECT ID FROM FILES',()))
+        min_id = f'WHERE ID > {min_id}' if min_id else ''
+        max_id = f'AND ID < {max_id}' if max_id else ''
+
+        sql_query = f'SELECT ID FROM FILES {min_id} {max_id}'
+        cursor = await self._tgbox_db.Files.execute((sql_query ,()))
+
         async for file_id in cursor:
             yield await self.get_file(file_id[0], cache_preview=cache_preview)
 
@@ -1992,10 +1998,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
         self._box_cr_time = bytes_to_int(next(
             aes_decrypt(elb._box_cr_time, self._mainkey, yield_all=True))
         )
-        if elb._last_file_id:
-            self._last_file_id = bytes_to_int(next(
-                aes_decrypt(elb._last_file_id, self._mainkey, yield_all=True))
-            )
         self._box_salt = elb._box_salt 
 
     @staticmethod
@@ -2351,7 +2353,9 @@ class EncryptedLocalBoxFile:
     .. code-block:: python
 
         ...
-        dlbfi = await dlb.get_file(dlb.last_file_id)
+        dlbfi = await dlb.get_file(
+            await dlb.get_last_file_id()
+        )
         print(dlbfi._elbfi.foldername) # Encrypted
     """
     def __init__(
@@ -2669,7 +2673,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
     .. code-block:: python
 
         ...
-        dlbfi = await dlb.get_file(dlb.last_file_id)
+        dlbfi = await dlb.get_file(
+            await dlb.get_last_file_id()
+        )
         print(dlbfi.foldername) # Decrypted
     """
     def __init__(
@@ -2731,7 +2737,10 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             self._file_path = next(aes_decrypt(
                 elbfi._file_path, self._filekey, yield_all=True)
             ).decode()
-            self._file = open(self._file_path,'rb')
+            try:
+                self._file = open(self._file_path,'rb')
+            except:
+                self._file = None
         else:
             self._file_path, self._file = None, None
 
@@ -2760,11 +2769,6 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         )) 
         if not self._cache_preview:
             self._preview = None
-        
-        if self._file_path:
-            self._file = open(self._file_path,'rb')
-        else:
-            self._file = None
         
         if elbfi._preview and self._cache_preview:
             self._preview = next(aes_decrypt(
@@ -2826,7 +2830,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 self._folder_id
             )
         return self._folder
-
+    
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """
         Returns ``ShareKey`` for this file. You should
