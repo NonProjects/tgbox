@@ -60,7 +60,7 @@ We name *"encrypted cloud storage"* as **Box** and the API to it as **Tgbox**. T
 Documentation
 -------------
 
-*TODO / ReadTheDocs*
+See `ReadTheDocs <https://tgbox.readthedocs.io/en/indev/>`_ for main information and help.
 
 Third party & thanks to
 -----------------------
