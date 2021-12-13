@@ -12,10 +12,8 @@
 #
 import os
 import sys
-import site
 
-for p in site.getsitepackages() + ['../..']:
-    sys.path.insert(0, p)
+sys.path.insert(0, ['../..'])
 
 # -- Project information -----------------------------------------------------
 

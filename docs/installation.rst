@@ -18,7 +18,7 @@ Clone from GitHub
    cd tgbox; python3 -m pip install -r requirements.txt
 
 Optional dependencies
---------------------
+---------------------
 
 - Library can work without ``pycryptodome``, with ``pyaes``, but this will be **much** slower.
 - `ECDSA <https://github.com/tlsfuzzer/python-ecdsa>`_ will be faster with ``gmpy2``. You can install it with `pip <https://pip.pypa.io/en/stable/installation/>`_.
