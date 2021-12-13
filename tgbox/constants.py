@@ -1,6 +1,5 @@
 """This module stores API constants."""
 
-from os.path import abspath
 from pathlib import Path
 
 __all__ = [
@@ -59,8 +58,13 @@ METADATA_MAX:   int=1064639
 FILEDATA_MAX:   int=64584 # IV included
 NAVBYTES_SIZE:  int=32 # IV included
 
-BOX_IMAGE_PATH: Path=Path(abspath(''), 'tgbox', 'other', 'tgbox_logo.png')
-WORDS_PATH: Path=Path(abspath(''), 'tgbox', 'other', 'words.txt')
+
+# Get path to "other" folder where we store
+# words.txt and tgbox_logo.png files.
+_other = Path(Path(__file__).parent, 'other')
+
+BOX_IMAGE_PATH: Path=Path(_other, 'tgbox_logo.png')
+WORDS_PATH: Path=Path(_other, 'words.txt')
 
 # This salt affects basekeys, you can change it to protect your RemoteBox
 # from bruteforcing, but be sure to backup your own salt, because if you
