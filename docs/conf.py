@@ -13,9 +13,11 @@
 import os
 import sys
 
-sys.path.insert(0, [os.path.abspath('../..')])
-
-print(sys.path, 'SYS.PATH')
+sys.path.insert(0, [
+    os.path.abspath('.'),
+    os.path.abspath('../..'),
+    os.path.abspath('../../../../'), # ReadTheDocs may need this
+])
 
 # -- Project information -----------------------------------------------------
 
