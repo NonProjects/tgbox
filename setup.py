@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name             = 'tgbox',
-    packages         = ['tgbox']
+    packages         = ['tgbox'],
     version          = '0.1',
     license          = 'LGPL-2.1',
     description      = 'Encrypted cloud storage based on Telegram API',
@@ -30,7 +30,7 @@ setup(
         'Topic :: Software Development :: Libraries',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: System :: Archiving :: Backup',
-        'License :: OSI Approved :: LGPL-2.1',
+        'License :: OSI Approved :: GNU General Public License v2 (GPLv2)',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
