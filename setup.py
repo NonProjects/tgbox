@@ -1,14 +1,19 @@
-from distutils.core import setup
+from setuptools import setup
 
 setup(
     name             = 'tgbox',
     packages         = ['tgbox'],
-    version          = '0.1.2',
+    version          = '0.1.6',
     license          = 'LGPL-2.1',
     description      = 'Encrypted cloud storage based on Telegram API',
     author           = 'NonProjects',
     url              = 'https://github.com/NonProjects/tgbox',
-    download_url     = 'https://github.com/NonProjects/tgbox/releases/tag/indev%230.1.2',
+    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/indev%230.1.6.tar.gz',
+
+    package_data = {
+        'tgbox': ['tgbox/other'],
+    },
+    include_package_data = True,
 
     install_requires = [
         'aiosqlite==0.17.0',
