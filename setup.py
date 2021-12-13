@@ -3,12 +3,12 @@ from distutils.core import setup
 setup(
     name             = 'tgbox',
     packages         = ['tgbox'],
-    version          = '0.1',
+    version          = '0.1.2',
     license          = 'LGPL-2.1',
     description      = 'Encrypted cloud storage based on Telegram API',
     author           = 'NonProjects',
     url              = 'https://github.com/NonProjects/tgbox',
-    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/indev%230.1.tar.gz',
+    download_url     = 'https://github.com/NonProjects/tgbox/releases/tag/indev%230.1.2',
 
     install_requires = [
         'aiosqlite==0.17.0',
@@ -16,7 +16,7 @@ setup(
         'ecdsa==0.16.1',
         'filetype==1.0.8',
         'cryptg==0.2.post2',
-        'pycryptodome==3.10.1'
+        'pycryptodome==3.10.1',
         'sphinx-rtd-theme', 'regex'
     ],
     keywords = [
