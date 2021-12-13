@@ -13,7 +13,7 @@
 import os
 import sys
 
-sys.path.insert(0, [os.path.abspath('..')])
+sys.path.insert(0, [os.path.abspath('../..')])
 
 # -- Project information -----------------------------------------------------
 
@@ -22,7 +22,7 @@ copyright = '2021, NonProjects'
 author = 'NonProjects'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1'
+release = '0.1.6'
 
 
 # -- General configuration ---------------------------------------------------
