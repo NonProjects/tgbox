@@ -50,7 +50,7 @@ The Telegram is beautiful app. Not only by mean of features and Client API, but 
 Target
 ------
 
-This library targets to be a PoC of **encrypted file storage**, but can be used as standalone API.
+This library targets to be a PoC of **encrypted file storage** inside Telegram, but can be used as standalone API.
 
 Abstract
 --------
