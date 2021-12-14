@@ -1,9 +1,6 @@
 tgbox package
 =============
 
-Submodules
-----------
-
 tgbox.api module
 ----------------
 
@@ -49,6 +46,15 @@ tgbox.errors module
    :show-inheritance:
    :inherited-members:
 
+tgbox.fastelethon module
+------------------------
+
+.. automodule:: tgbox.fastelethon
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+
 tgbox.keys module
 -----------------
 
@@ -62,15 +68,6 @@ tgbox.tools module
 ------------------
 
 .. automodule:: tgbox.tools
-   :members:
-   :undoc-members:
-   :show-inheritance:
-   :inherited-members:
-
-Module contents
----------------
-
-.. automodule:: tgbox
    :members:
    :undoc-members:
    :show-inheritance:

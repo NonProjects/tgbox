@@ -9,7 +9,11 @@
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#
+
+# To show inherited methods on all classes we need to specify some env args:
+#    export SPHINX_APIDOC_OPTIONS="members,undoc-members,show-inheritance,inherited-members"
+#    sphinx-apidoc -o _docs {project_path}
+
 import os
 import sys
 
