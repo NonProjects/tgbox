@@ -14,7 +14,7 @@ Clone from GitHub
 
 .. code-block:: console
 
-   git clone https://github.com/NonProject/tgbox
+   git clone https://github.com/NonProject/tgbox --branch=<branch>
    cd tgbox; python3 -m pip install -r requirements.txt
 
 Optional dependencies
