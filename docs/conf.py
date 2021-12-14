@@ -4,18 +4,22 @@
 # list see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-# -- Path setup --------------------------------------------------------------
-
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
-
 # To show inherited methods on all classes we need to specify some env args:
 #    export SPHINX_APIDOC_OPTIONS="members,undoc-members,show-inheritance,inherited-members"
 #    sphinx-apidoc -o _docs {project_path}
 
 import os
 import sys
+
+# RTD have problems with importing scrypt
+# from hashlib. Try to ignore it.
+autodoc_mock_imports = ['hashlib', 'scrypt']
+
+# -- Path setup --------------------------------------------------------------
+
+# If extensions (or modules to document with autodoc) are in another directory,
+# add these directories to sys.path here. If the directory is relative to the
+# documentation root, use os.path.abspath to make it absolute, like shown here.
 
 sys.path.insert(0, os.path.abspath('..'))
 
