@@ -2,7 +2,14 @@
 
 from os import urandom
 from random import SystemRandom
-from hashlib import sha256, scrypt
+
+from hashlib import sha256
+try:
+    from hashlib import scrypt
+except ImportError:
+    # This is for ReadTheDocs. Maybe TODO.
+    from Crypto.Protocol.KDF import scrypt
+
 from typing import Generator, Union, Optional
 
 from base64 import (
