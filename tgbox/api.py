@@ -732,7 +732,7 @@ class EncryptedRemoteBox:
             cache_preview: bool=True) -> AsyncGenerator[
                 Union['EncryptedRemoteBoxFile', 
                       'DecryptedRemoteBoxFile'],
-                None, None
+                None
             ]:
         """
         Yields every RemoteBoxFile from ``RemoteBox``.
@@ -908,7 +908,7 @@ class EncryptedRemoteBox:
             sf: SearchFilter, 
             mainkey: Optional[MainKey] = None,
             dlb: Optional['DecryptedLocalBox'] = None) ->\
-            AsyncGenerator[Union['EncryptedRemoteBoxFile', 'DecryptedRemoteBoxFile'], None, None]:
+            AsyncGenerator[Union['EncryptedRemoteBoxFile', 'DecryptedRemoteBoxFile'], None]:
         """
         This method used to search for files in your ``RemoteBox``.
         
@@ -1087,21 +1087,23 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
                 Direct path with filename included. If
                 not specified, then ``RemoteBox`` name used.
         """
-        box_path = self._box_name if not box_path else box_path
-        tgbox_db = await TgboxDB.create(box_path)
+        box_path = await self.get_box_name()\
+            if not box_path else box_path
 
-        async for erbf in self.files(decrypt=False, return_imported_as_erbf=True):
-            last_file_id = erbf.id; break
+        tgbox_db = await TgboxDB.create(box_path)
 
         if (await tgbox_db.BoxData.count_rows()): 
             raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
+
+        async for erbf in self.files(decrypt=False, return_imported_as_erbf=True):
+            last_file_id = erbf.id; break
 
         await tgbox_db.BoxData.insert(
             next(aes_encrypt(int_to_bytes(last_file_id), self._mainkey, yield_all=True)),
             next(aes_encrypt(int_to_bytes(self._box_channel_id), self._mainkey, yield_all=True)),
             next(aes_encrypt(int_to_bytes(int(time())), self._mainkey, yield_all=True)),
             await self.get_box_salt(),
-            next(aes_encrypt(self._mainkey, basekey, yield_all=True)),
+            next(aes_encrypt(self._mainkey.key, basekey, yield_all=True)),
             next(aes_encrypt(self._ta.get_session().encode(), basekey, yield_all=True))
         )
         dlb = await EncryptedLocalBox(tgbox_db).decrypt(basekey)
@@ -1650,9 +1652,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             folder = DEF_NO_FOLDER if not folder else folder
             name = prbg(16).hex() if hide_name else self._file_name
             
-            outfile = Path(outfile, folder.decode())
+            outfile = Path(outfile, folder.decode(), name.decode())
             outfile.parent.mkdir(exist_ok=True, parents=True)
-            outfile = open(Path(outfile),'wb')
+            outfile = open(outfile,'wb')
             
         elif isinstance(outfile, BinaryIO) or hasattr(outfile, 'write'):
             pass # We already can write 
@@ -2028,7 +2030,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
     async def search_file(
             self, sf: SearchFilter) -> AsyncGenerator[
-                'DecryptedLocalBoxFile', None, None
+                'DecryptedLocalBoxFile', None
             ]:
         """
         This method used to search for files in your ``DecryptedLocalBox``.
