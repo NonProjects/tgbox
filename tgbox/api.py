@@ -58,7 +58,7 @@ from .tools import (
 )
 from typing import (
     BinaryIO, Union, NoReturn, 
-    Generator, List, Optional
+    AsyncGenerator, List, Optional
 )
 from sqlite3 import IntegrityError
 from dataclasses import dataclass
@@ -96,15 +96,15 @@ async def _search_func(
         sf: SearchFilter, 
         ta: Optional['TelegramAccount'] = None,
         mainkey: Optional[MainKey] = None,
-        it_messages: Optional[Generator] = None,
-        lb: Optional[Union['DecryptedLocalBox', 'EncryptedLocalBox']] = None) -> Generator:
+        it_messages: Optional[AsyncGenerator] = None,
+        lb: Optional[Union['DecryptedLocalBox', 'EncryptedLocalBox']] = None) -> AsyncGenerator:
     """
     Function used to search for files in dlb and rb. It's
     only for internal use, and you shouldn't use it in your
     own projects. ``ta`` must be specified with ``it_messages``.
     
     If file is imported from other ``RemoteBox`` and was exported
-    to your LocalBox, then we can specify box as ``lb``. Generator
+    to your LocalBox, then we can specify box as ``lb``. AsyncGenerator
     will try to get FILEKEY and decrypt ``EncryptedRemoteBoxFile``.
     Otherwise imported file will be ignored.
     """
@@ -494,7 +494,7 @@ class TelegramAccount:
         """Returns ``StringSession`` as ``str``"""
         return self.TelegramClient.session.save()
     
-    async def tgboxes(self, yield_with: str='tgbox: ') -> Generator:
+    async def tgboxes(self, yield_with: str='tgbox: ') -> AsyncGenerator:
         """
         Iterate over all Tgbox Channels in your account.
         It will return any channel with Tgbox prefix,
@@ -729,7 +729,7 @@ class EncryptedRemoteBox:
             wait_time: Optional[float] = None, 
             ids: Optional[Union[int, List[int]]] = None, 
             reverse: bool=False, decrypt: bool=True,
-            cache_preview: bool=True) -> Generator[
+            cache_preview: bool=True) -> AsyncGenerator[
                 Union['EncryptedRemoteBoxFile', 
                       'DecryptedRemoteBoxFile'],
                 None, None
@@ -908,7 +908,7 @@ class EncryptedRemoteBox:
             sf: SearchFilter, 
             mainkey: Optional[MainKey] = None,
             dlb: Optional['DecryptedLocalBox'] = None) ->\
-            Generator[Union['EncryptedRemoteBoxFile', 'DecryptedRemoteBoxFile'], None, None]:
+            AsyncGenerator[Union['EncryptedRemoteBoxFile', 'DecryptedRemoteBoxFile'], None, None]:
         """
         This method used to search for files in your ``RemoteBox``.
         
@@ -2027,7 +2027,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             )
 
     async def search_file(
-            self, sf: SearchFilter) -> Generator[
+            self, sf: SearchFilter) -> AsyncGenerator[
                 'DecryptedLocalBoxFile', None, None
             ]:
         """
