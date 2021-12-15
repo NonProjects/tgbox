@@ -17,7 +17,7 @@ try:
 except ModuleNotFoundError: 
     # We can use PyAES if there is no pycryptodome.
     # PyAES is about 30x slower in CPython than pycryptodome.
-    # This is too slow and not so usable, but anyway.
+    # This is too, TOO slow and not so usable, but anyway.
     from pyaes.util import ( 
         append_PKCS7_padding as pad_, 
         strip_PKCS7_padding as unpad_
@@ -121,7 +121,7 @@ class Padding:
         return bytedata
 
 class _PyaesState:
-    def __init__(self, key: Union[bytes, 'Key'], iv: bytes):
+    def __init__(self, key: Union[bytes, 'Key'], iv: Union[bytes, memoryview]):
         """
         Class to wrap ``pyaes.AESModeOfOperationCBC`` 
         if there is no ``FAST_ENCRYPTION``.
@@ -138,10 +138,20 @@ class _PyaesState:
                 AES Initialization Vector.
         """
         key = key.key if hasattr(key, 'key') else key
-        self._aes_state = AESModeOfOperationCBC(key=key, iv=iv)
+
+        self._aes_state = AESModeOfOperationCBC(
+            key = bytes(key), iv = bytes(iv)
+        )
         self.__mode = None # encrypt mode is 1 and decrypt is 2
-        
-    def encrypt(self, data: bytes) -> bytes:
+    
+    @staticmethod
+    def __convert_memoryview(data: Union[bytes, memoryview]) -> bytes:
+        # PyAES doesn't support memoryview, convert to bytes
+        if isinstance(data, memoryview) and not FAST_ENCRYPTION:
+            data = data.tobytes()
+        return data
+
+    def encrypt(self, data: Union[bytes, memoryview]) -> bytes:
         """``data`` length must be divisible by 16."""
         if not self.__mode:
             self.__mode = 1
@@ -149,6 +159,7 @@ class _PyaesState:
             if self.__mode != 1:
                 raise ModeInvalid('You should use only decrypt function.')
         
+        data = self.__convert_memoryview(data)
         assert not len(data) % 16; total = b''
         
         for _ in range(len(data) // 16):
@@ -157,14 +168,15 @@ class _PyaesState:
         
         return total
     
-    def decrypt(self, data: bytes) -> bytes:
+    def decrypt(self, data: Union[bytes, memoryview]) -> bytes:
         """``data`` length must be divisible by 16."""
         if not self.__mode:
             self.__mode = 2
         else:
             if self.__mode != 2:
                 raise ModeInvalid('You should use only encrypt function.')
-                
+        
+        data = self.__convert_memoryview(data)
         assert not len(data) % 16; total = b''
         
         for _ in range(len(data) // 16):
