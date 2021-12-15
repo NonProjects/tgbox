@@ -1,13 +1,13 @@
-# Copied from https://github.com/tulir/mautrix-telegram/blob/master/mautrix_telegram/util/parallel_file_transfer.py
-# Copyright (C) 2021 Tulir Asokan
+"""
+Copied from github.com/tulir/mautrix-telegram/
+Copyright (C) 2021 Tulir Asokan.
 
-# Copied again from https://gist.github.com/painor/7e74de80ae0c819d3e9abcf9989a8dd6
-# This file was patched for TGBOX project (https://github.com/NonProjects/tgbox)
-# and may not work as you expected in your libraries.
+Copied again from gist.github.com/painor/7e74de80ae0c819d3e9abcf9989a8dd6
+This file was patched for TGBOX project (github.com/NonProjects/tgbox)
+and may not work as you expected in your libraries.
 
-# "Beautiful is better than ugly", but... "If It Works Don’t Touch It".
-# Big thanks to all contributors of this module.
-
+Big thanks to all contributors of this module.
+"""
 import asyncio
 import hashlib
 import inspect
