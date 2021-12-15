@@ -3,7 +3,7 @@
 import aiosqlite
 
 from pathlib import Path
-from typing import Optional, Union, Generator
+from typing import Optional, Union, AsyncGenerator
 
 from .errors import PathIsDirectory
 from .tools import anext
@@ -32,7 +32,7 @@ class SqlTableWrapper:
         async with self._aiosql_conn.execute(f'SELECT count(*) FROM {self._table_name}') as cursor:
             return (await cursor.fetchone())[0]
 
-    async def select(self, *, sql_tuple: Optional[tuple] = None) -> Generator:
+    async def select(self, *, sql_tuple: Optional[tuple] = None) -> AsyncGenerator:
         """
         If ``sql_tuple`` isn't specified, then will be used
         (SELECT * FROM TABLE_NAME, ()) statement.

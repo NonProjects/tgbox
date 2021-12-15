@@ -10,8 +10,10 @@ except ImportError:
     # This is for ReadTheDocs. Maybe TODO.
     from Crypto.Protocol.KDF import scrypt
 
-from typing import Generator, Union, Optional
-
+from typing import (
+    AsyncGenerator, 
+    Union, Optional
+)
 from base64 import (
     urlsafe_b64encode,
     urlsafe_b64decode 
@@ -136,7 +138,7 @@ class Key:
     def __getitem__(self, key) -> int:
         return self._key[key]
     
-    def __iter__(self) -> Generator[int, None, None]:
+    def __iter__(self) -> AsyncGenerator[int, None]:
         for i in self._key:
             yield i
     

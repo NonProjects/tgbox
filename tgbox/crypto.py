@@ -3,7 +3,7 @@
 from os import urandom
 
 from typing import (
-    BinaryIO, Generator, 
+    BinaryIO, AsyncGenerator, 
     Union, Optional, Callable
 )
 from .constants import AES_RETURN_SIZE
@@ -234,7 +234,7 @@ def aes_encrypt(
         key: Union[bytes, 'Key'], iv: Optional[bytes] = None, 
         concat_iv: bool=True, yield_all: bool=False, 
         yield_size: int=2*10**8, add_padding: bool=True
-        )-> Generator[bytes, None, None]:
+        )-> AsyncGenerator[bytes, None]:
     """
     Yields encrypted ``plain_data`` by ``yield_size`` amount of bytes.
     
@@ -309,7 +309,7 @@ def aes_decrypt(
         cipher_data: Union[BinaryIO, bytes], key: Union[bytes, 'Key'], 
         iv: Optional[bytes] = None, yield_all: bool=False, 
         yield_size: int=AES_RETURN_SIZE, strip_padding: bool=True
-        ) -> Generator[bytes, None, None]:
+        ) -> AsyncGenerator[bytes, None]:
     """
     Yields decrypted ``cipher_data`` by ``yield_size`` amount of bytes.
     
