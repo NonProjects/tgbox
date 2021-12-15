@@ -62,6 +62,14 @@ Documentation
 
 See `ReadTheDocs <https://tgbox.readthedocs.io/en/indev/>`_ for main information and help.
 
+You can also build docs from the source
+
+.. code-block:: console
+
+   git clone https://github.com/NonProject/tgbox --branch=indev
+   cd tgbox; python3 -m pip install -r requirements.txt
+   cd docs; make html; <your-browser> _build/html/index.html
+
 Third party & thanks to
 -----------------------
 
