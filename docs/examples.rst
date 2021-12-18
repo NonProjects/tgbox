@@ -167,7 +167,7 @@ Download file preview
     # You can also call this methods on DecryptedLocalBox.
     ... # some code omitted
 
-    last_drbfi = await drb.get_file(dlb.last_file_id)
+    last_drbfi = await drb.get_file(await dlb.get_last_file_id())
     with open(f'{last_drbfi.file_name}_preview.jpg', 'wb') as f:
         f.write(await last_drbfi.get_preview())
 
@@ -192,7 +192,6 @@ File search
 
     # See help(SearchFilter) for more
     # keyword arguments.
-
     sf = SearchFilter(
         file_name = [b'.jpg', b'.png'],
         folder = b'Pictures',
@@ -202,6 +201,63 @@ File search
     async for dlbfi in dlb.search_file(ff):
         print(dlbfi.id, dlbfi.file_name)
 
+
+Box clone
+---------
+
+.. code-block:: python
+        from tgbox import loop
+
+        from tgbox.api import (
+            TelegramAccount,
+            get_remote_box
+        )
+        from tgbox.keys import make_basekey
+        from getpass import getpass
+
+
+        async def main():
+            ta = TelegramAccount(
+                phone_number = input('Phone: ')
+            )
+            await ta.connect()
+            await ta.send_code_request()
+
+            await ta.sign_in(
+                code = int(input('Code: ')),
+                password = getpass('Pass: ')
+            )
+            # Make decryption key for cloned Box.
+            # Please, use strength Phrase, we
+            # encrypt with it your Telegram session.
+            # See keys.Phrase.generate method.
+            basekey = make_basekey(b'very_bad_phrase')
+            # Retreive RemoteBox by username (entity),
+            # you may also use here invite link.
+            # 
+            # In this example we will clone created
+            # by Non RemoteBox. MainKey of it is
+            # already disclosed. NEVER DO THIS
+            # with your private Boxes. If you
+            # want to share your with someone
+            # else, use ShareKey. See docs.
+            #
+            # Retreiving MainKey will give
+            # FULL R/O ACCESS to your files.
+            erb = await get_remote_box(
+                ta = ta, entity = 'nontgbox_non'
+            )
+            # Disclosed MainKey of the @nontgbox_non
+            # RemoteBox. See t.me/nontgbox_non/3
+            mainkey = Key.decode(
+                'MhxUY3w7niJhDtwdkpQ-vvniIq4tGDJh1IIJXCsBevpc='
+            )
+            # Decrypt @nontgbox_non
+            drb = await erb.decrypt(key=mainkey)
+            # Clone and retreive DecryptedLocalBox
+            dlb = await drb.clone(basekey)
+
+        loop.run_until_complete(main())
 
 Telethon
 --------
