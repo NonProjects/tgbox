@@ -8,8 +8,8 @@ from subprocess import (
     run as subprocess_run
 )
 from typing import (
-    BinaryIO, List,
-    Union, Optional
+    BinaryIO, List, Union, 
+    Optional, Dict
 )
 from struct import (
     pack as struct_pack, 
@@ -51,13 +51,73 @@ __all__ = [
     'make_media_preview', 
     'make_image_preview'
 ]
-# Will generate ``size`` pseudo-random bytes.
-prbg = lambda size: bytes([randrange(256) for _ in range(size)])
-
 try:
     anext() # Python 3.10+
 except NameError:
     anext = lambda agen: agen.__anext__()
+
+class CustomAttributes:
+    """
+    This class may be used for adding custom
+    attributes to the RemoteBoxFile.
+
+    You should attach it to the ``comment``
+    kwarg of ``api.make_file`` function.
+
+    This is part of TGBOX standart. If
+    you don't need this, you can insert
+    plain comments in ``api.make_file``.
+    
+    See issue #4 for more details.
+    """
+    @staticmethod
+    def make(**kwargs) -> bytes:
+        """
+        Will make bytestring from your kwargs. 
+        Please note that max comment size is
+        255 bytes. See ``constants.COMMENT_MAX``.
+
+        Kwarg must **always** be ``bytes``.
+
+        ``make(x=5)`` is not OK, 
+        ``make(x=b'\x05')`` is OK.
+        """
+        cattr = bytes([0xFF])
+        for k,v in kwargs.items():
+            cattr += bytes([len(k)]) + k.encode()
+            cattr += bytes([len(v)]) + v
+        return cattr
+    
+    @staticmethod
+    def parse(cattr: bytes) -> Dict[str, bytes]:
+        """
+        Will parse CustomAttributes.make
+        bytestring and convert it to the
+        python dictionary.
+
+        Every CustomAttributes bytestring
+        must contain ``0xFF`` as first byte. 
+        If not, or if error, will return ``b''``. 
+        """
+        try:
+            assert cattr[0] == 0xFF
+            cattr_d, cattr = {}, cattr[1:]
+
+            while cattr:
+                key_len = cattr[0] + 1
+                key = cattr[1:key_len]
+                
+                value_len = cattr[key_len]
+                cattr = cattr[key_len:]
+                
+                value = cattr[1:value_len+1]
+                cattr = cattr[value_len+1:]
+
+                cattr_d[key.decode()] = value
+
+            return cattr_d
+        except:
+            return b''
 
 @dataclass
 class RemoteBoxFileMetadata:
@@ -407,6 +467,10 @@ def make_folder_id(mainkey: MainKey, foldername: bytes) -> bytes:
     """
     return sha256(sha256(mainkey.key).digest() + foldername).digest()[:16]
         
+def prbg(size: int) -> bytes:
+    """Will generate ``size`` pseudo-random bytes."""
+    return bytes([randrange(256) for _ in range(size)])
+
 def int_to_bytes(int_: int, length: Optional[int] = None, signed: Optional[bool] = True) -> bytes:
     """Converts int to bytes with Big byteorder."""
     length = length if length else (int_.bit_length() + 8) // 8
