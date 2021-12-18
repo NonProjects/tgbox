@@ -585,6 +585,11 @@ class EncryptedRemoteBox:
             self._box_channel_id == other.box_channel_id
         ))
     @property
+    def ta(self) -> TelegramAccount:
+        """Returns ``TelegramAccount``"""
+        return self._ta
+
+    @property
     def is_enc_class(self) -> bool:
         """
         Returns ``True`` if you call it on
