@@ -97,7 +97,7 @@ class CustomAttributes:
 
         Every CustomAttributes bytestring
         must contain ``0xFF`` as first byte. 
-        If not, or if error, will return ``b''``. 
+        If not, or if error, will return ``{}``.
         """
         try:
             assert cattr[0] == 0xFF
@@ -117,7 +117,7 @@ class CustomAttributes:
 
             return cattr_d
         except:
-            return b''
+            return {}
 
 @dataclass
 class RemoteBoxFileMetadata:
