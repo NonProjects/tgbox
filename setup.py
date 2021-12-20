@@ -3,12 +3,12 @@ from setuptools import setup
 setup(
     name             = 'tgbox',
     packages         = ['tgbox'],
-    version          = '0.1.6',
+    version          = '0.2',
     license          = 'LGPL-2.1',
     description      = 'Encrypted cloud storage based on Telegram API',
     author           = 'NonProjects',
     url              = 'https://github.com/NonProjects/tgbox',
-    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/indev%230.1.6.tar.gz',
+    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/indev%230.2.tar.gz',
 
     package_data = {
         'tgbox': ['tgbox/other'],
