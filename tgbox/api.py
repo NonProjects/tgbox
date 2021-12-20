@@ -4,6 +4,7 @@ try:
 except ImportError:
     from re import search as re_search
 
+from asyncio import iscoroutinefunction
 from filetype import guess as filetype_guess
 
 from telethon import TelegramClient
@@ -57,7 +58,7 @@ from .tools import (
     bytes_to_float, prbg, anext, pad_request_size
 )
 from typing import (
-    BinaryIO, Union, NoReturn, 
+    BinaryIO, Union, NoReturn, Callable,
     AsyncGenerator, List, Optional
 )
 from sqlite3 import IntegrityError
@@ -951,7 +952,10 @@ class EncryptedRemoteBox:
         async for file in sfunc:
             yield file
 
-    async def push_file(self, ff: 'FutureFile') -> 'DecryptedRemoteBoxFile':
+    async def push_file(
+            self, ff: 'FutureFile', 
+            progress_callback: Optional[Callable[[int, int], None]] = None,
+            ) -> 'DecryptedRemoteBoxFile':
         """
         Uploads ``FutureFile`` to the ``RemoteBox``.
         
@@ -959,6 +963,10 @@ class EncryptedRemoteBox:
             ff (``FutureFile``):
                 File to upload. You should recieve
                 it via ``DecryptedLocalBox.make_file``.
+
+            progress_callback (``Callable[[int, int], None]``, optional):
+                A callback function accepting two parameters: 
+                (downloaded_bytes, total). 
         """
         state = AESwState(ff.filekey, ff.file_iv)
         oe = OpenPretender(ff.file, state, mode=1)
@@ -967,8 +975,8 @@ class EncryptedRemoteBox:
         ifile = await upload_file(
             self._ta.TelegramClient, oe,
             file_name = urlsafe_b64encode(ff.file_salt).decode(), 
-            part_size_kb = 512, 
-            file_size = ff.wm_size
+            part_size_kb = 512, file_size = ff.wm_size,
+            progress_callback = progress_callback
         )
         file_message = await self._ta.TelegramClient.send_file(
             self._box_channel, file=ifile, silent=True,
@@ -1608,7 +1616,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
     async def download( 
             self, *, outfile: Union[str, BinaryIO, Path] = DOWNLOAD_PATH, 
             hide_folder: bool=False, hide_name: bool=False,
-            decrypt: bool=True, request_size: int=524288) -> BinaryIO:
+            decrypt: bool=True, request_size: int=524288,
+            progress_callback: Optional[Callable[[int, int], None]] = None) -> BinaryIO:
         """
         Downloads and saves remote box file to the ``outfile``.
         
@@ -1643,6 +1652,10 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 Note that values outside the valid range will be clamped, 
                 and the final value will also be a multiple 
                 of the minimum allowed size.
+
+            progress_callback (``Callable[[int, int], None]``, optional):
+                A callback function accepting two parameters: 
+                (downloaded_bytes, total). 
         """
         self.__raise_initialized()
         
@@ -1671,7 +1684,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             location=self._message.document,
             request_size=request_size,
         )
-        buffered, offset = b'', self._file_pos
+        buffered, offset, total = b'', self._file_pos, 0
         async for chunk in iter_down:
             if buffered:
                 buffered += chunk
@@ -1680,12 +1693,27 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             else:
                 buffered += chunk[offset:]
                 offset = None; continue
+            
+            chunk = aws.decrypt(chunk) if decrypt else chunk
+            outfile.write(chunk)
 
-            outfile.write(aws.decrypt(chunk) if decrypt else chunk)
-        
+            if progress_callback:
+                total += len(chunk)
+                if iscoroutinefunction(progress_callback):
+                    await progress_callback(total, self._file_size)
+                else:
+                    progress_callback(total, self._file_size)
+
         if buffered:
             outfile.write(aws.decrypt(buffered, unpad=True) if decrypt else chunk)
 
+            if progress_callback:
+                if iscoroutinefunction(progress_callback):
+                    await progress_callback(
+                        self._file_size, self._file_size)
+                else:
+                    progress_callback(
+                        self._file_size, self._file_size)
         return outfile
     
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
