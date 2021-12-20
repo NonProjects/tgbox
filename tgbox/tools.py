@@ -340,6 +340,7 @@ class OpenPretender:
         self._mode, self._flo = mode, flo
         self._buffered_bytes = b''
         self._total_size = None
+        self._position = 0
 
     def concat_metadata(self, metadata: RemoteBoxFileMetadata) -> None:
         """Concates metadata to the file as (metadata + file)."""
@@ -374,12 +375,11 @@ class OpenPretender:
             self._buffered_bytes = b''
 
             if size == -1:
-                self._total_size = 0
                 if self._mode == 1:
-                    return buffered + self._aes_state.encrypt(
+                    block = buffered + self._aes_state.encrypt(
                         self._flo.read(), pad=True)
                 else:
-                    return buffered + self._aes_state.decrypt(
+                    block = buffered + self._aes_state.decrypt(
                         self._flo.read(), unpad=True)
             
             elif self._mode == 1:
@@ -401,16 +401,20 @@ class OpenPretender:
                     self._buffered_bytes = chunk[shift:]
 
                 self._total_size -= size
-                return chunk[:shift]
+                block = chunk[:shift]
             else:
                 self._total_size -= size
                 if self._total_size <= 16:
                     block = aes_t(self._flo.read(size), unpad=True)
                 else:
                     block = aes_t(self._flo.read(size), unpad=False)
-
+        
+        self._position += len(block)
         return block
     
+    def tell(self) -> int:
+        return self._position
+
     def seekable(*args, **kwargs) -> bool:
         return False
     
