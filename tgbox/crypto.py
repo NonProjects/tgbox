@@ -51,9 +51,9 @@ class Padding:
     pad_ = pad_ if not FAST_ENCRYPTION else lambda b: pad_(b,16)
     unpad_ = unpad_ if not FAST_ENCRYPTION else lambda b: unpad_(b,16)
     
-    @staticmethod
+    @classmethod
     def pad(
-            bytedata: bytes, 
+            cls, bytedata: bytes, 
             pad_func: Optional[Callable[
                 [bytes], bytes]] = None) -> bytes:
         """
@@ -73,9 +73,9 @@ class Padding:
         
         return pad_(bytedata)
     
-    @staticmethod
+    @classmethod
     def unpad(
-            bytedata: bytes, 
+            cls, bytedata: bytes, 
             unpad_func: Optional[Callable[
                 [bytes], bytes]] = None) -> bytes:
         """
