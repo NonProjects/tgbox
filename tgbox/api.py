@@ -22,6 +22,7 @@ from telethon.tl.functions.channels import (
 from telethon.tl.types import (
     Channel, Message, PeerChannel
 )
+from telethon import events
 from telethon.tl.types.auth import SentCode
 from .fastelethon import upload_file, download_file
 
@@ -585,6 +586,17 @@ class EncryptedRemoteBox:
             isinstance(other, self.__class__), 
             self._box_channel_id == other.box_channel_id
         ))
+    @property
+    def event(self) -> events.NewMessage:
+        """
+        Will return ``events.NewMessage`` for
+        ``Channel`` of this *RemoteBox*.
+
+        You can use it in Telethon's decorator,
+        see *"Events Reference"* in Docs.
+        """
+        return events.NewMessage(chats=self.box_channel_id)
+
     @property
     def ta(self) -> TelegramAccount:
         """Returns ``TelegramAccount``"""
