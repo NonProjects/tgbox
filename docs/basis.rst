@@ -1,7 +1,7 @@
 Basis
 =====
 
-Encryption
+Algorithms
 ----------
 
 - We use `AES CBC <https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Cipher_block_chaining_(CBC)>`_ with **256 bit** key. First 16 bytes of any encrypted by library data is `IV <https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Initialization_vector_(IV)>`_.
@@ -14,7 +14,7 @@ Abstract Box
 .. note::
     More detailed in :doc:`remotebox` and :doc:`localbox`
 
-- The *Box* is something that have *BoxSalt* — 32 (usually random) bytes. With this salt and user phrase we make encryption key (see :ref:`Keys hierarchy`). 
+- The *Box* is something that have *BoxSalt* — 32 (usually random) bytes. With this salt and user phrase we make encryption key (see :ref:`Encryption keys`). 
 
 - *Box* splits into two types, — the *Remote* and *Local*. They have a two states, — the *Encrypted* and *Decrypted*. 
 
@@ -22,11 +22,8 @@ Abstract Box
 
 - *LocalBox* can be restored from *RemoteBox* if you have decryption key.
 
-Keys hierarchy
---------------
-
-Encryption Keys
-^^^^^^^^^^^^^^^
+Encryption keys 
+---------------
 
 1. We start from user's ``Phrase``, that can be generated via ``Phrase.generate()``. Then we make the ``BaseKey``, with ``make_basekey``. That's a *Scrypt* function, by default configured to use 1GB of RAM for key creation. We use salt from ``constants.SCRYPT_SALT`` if not specified. If changed, may be reffered as 2FA — obtaining only *Phrase* will be not enough for *Box* decryption.
 
@@ -40,19 +37,74 @@ So, there is **three** encryption Keys: *BaseKey*, *MainKey*, *FileKey*.
     - We're always encrypt Telegram session with ``BaseKey``, so attacker can't decrypt it even with ``MainKey``.
     - It's impossible to restore *MainKey* from *FileKey*, so exposing it will **only** give access to file, with which this key is associated.
 
-Transfer keys
-^^^^^^^^^^^^^
+Transfer keys & File sharing
+----------------------------
 
-To clone other's *RemoteBox* we need to obtain its *MainKey*. This can be done in two ways:
-1. Alice *(owner)* can send or hand over key in plain, just via ``DecryptedLocalBox._mainkey.encode()``. But it's can be dangerous because of `MITM <https://en.wikipedia.org/wiki/Man-in-the-middle_attack>`_, and thus not recommended.
-2. Bob *(recipient)* can make the ``RequestKey``. Alice invites Bob to her *Box* Telegram channel, Bob takes *BoxSalt* from description and makes *RequestKey* via ``EncryptedRemoteBox.get_requestkey`` or ``keys.make_requestkey``. After that, Bob sends *RequestKey* to Alice, she makes the ``ShareKey`` via ``DecryptedRemoteBox.get_sharekey`` and sends *ShareKey* to Bob. He use ``keys.make_importkey`` with received *ShareKey* and makes the ``ImportKey``, which is *MainKey*.
+Let's imagine that Alice have encrypted file in her *RemoteBox* that she want to share with Bob. As every *RemoteBoxFile* has unique encryption key (``FileKey``) file sharing shouldn't be a big problem, but how we can make it *secure*? There is two ways:
 
-So, there is **three** transfer keys: *RequestKey*, *ShareKey*, *ImportKey*.
+1. Get ``FileKey`` of ``DecryptedRemoteBoxFile`` and send it to Bob through Telegram's **secret chat**;
+2. Encrypt ``FileKey`` with a *shared secret key* (see `asymmetric cryptography <https://en.wikipedia.org/wiki/Public-key_cryptography>`_).
 
-.. note::
-    - We use `ECDH <https://en.wikipedia.org/wiki/Elliptic-curve_Diffie%E2%80%93Hellman>`_ for secure key transfer. This is simplified description of how this "magic" works. More details you can get from ``keys.make_requestkey`` docstring.
-    - ECDH curve is `secp256k1 <https://en.bitcoin.it/wiki/Secp256k1>`_ (used in `Bitcoin <https://en.wikipedia.org/wiki/Bitcoin>`_).
-    - You can transfer *FileKey* similarly to *MainKey*.
+Sending encryption keys via *plain chats* in Telegram **isn't secure**. Secret chat may be not available or not so conveniently. So in TGBOX we use `ECDH <https://en.wikipedia.org/wiki/Elliptic-curve_Diffie%E2%80%93Hellman>`_ for making *shared secret*. File sharing routine for users simplifies to follows:
+
+1. Alice forward file from her *RemoteBox* channel to Bob;
+2. Bob forwards received file to his *RemoteBox* channel;
+3. B gets ``EncryptedRemoteBoxFile`` and calls ``get_requestkey`` on it;
+4. A receives ``RequestKey`` from B *(can be shared via insecure canals)*;
+5. A makes ``ShareKey`` with B's ``RequestKey`` and sends it to B *(can be shared via insecure canals)*;
+6. B makes ``ImportKey`` with A's ``ShareKey``, decrypts ``EncryptedRemoteBoxFile`` and imports it.
+
+In more low-level
+^^^^^^^^^^^^^^^^^
+
+Let's analyze *RemoteBox* sharing, there is no difference with file sharing.
+
+- **0. Bob makes BaseKey**
+
+  To clone other's *RemoteBox* Bob firstly should create ``BaseKey`` for it.
+
+- **1. Alice invites Bob to her RemoteBox channel**
+
+  This can be done with Telethon or with Telegram. If you
+  are developer and want to make an App with TGBOX, then you
+  need to implement this.
+
+- **2. B gets EncryptedRemoteBox and calls get_requestkey on it**
+
+  Every *RemoteBox* has *BoxSalt*. The *RemoteBox* store it in
+  channel description, encoded by url safe base64. From concated 
+  *BoxSalt* and B's new ``BaseKey`` we make a `sha256 hash <https://en.wikipedia.org/wiki/SHA-2#Test_vectors>`_. This
+  hash acts as *private key* for ECDH on `secp256k1 curve <https://en.bitcoin.it/wiki/Secp256k1>`_. We
+  create *public key* from this *private key*, `compress it <https://bitcoin.stackexchange.com/a/69322>`_,
+  and return (``get_requestkey``) ``RequestKey(compressed_pubkey)``. Generally,
+  ``RequestKey`` is compressed ECDH pubkey.
+
+- **3. A receives RequestKey from B**
+
+  Can be done with Telethon / Telegram or any other
+  insecure communication canal.
+
+- **4. A makes ShareKey with B's RequestKey and sends it to B**
+
+  1. A makes own *private key* similarly to B, with 
+     ``sha256(a_mainkey + box_salt)``, extracts B's pubkey from
+     ``RequestKey`` and makes a shared 32byte-secret with 
+     ``ECDH(a_privkey, b_pubkey, secp256k1)``. This is
+     encryption key for AES CBC;
+
+  2. A makes sha256 hash from B's ``RequestKey`` and takes 
+     first 16 bytes from result, this is IV.
+
+  3. A encrypts her ``MainKey`` with shared secret and IV. Let's call
+     result as *eMainKey*. After this she constructs ``ShareKey`` as 
+     follows: ``ShareKey(e_mainkey + a_pubkey)``. We don't concat
+     IV to the ``ShareKey`` because Bob can extract it from ``RequestKey``.
+
+- **5. B makes ImportKey with A's ShareKey, decrypts EncryptedRemoteBox and clones it.**
+  
+  Bob repeats second step, extracts IV and receives b_privkey. After,
+  makes shared secret as 4.1 and decrypts ``eMainKey``. This can be
+  done with ``keys.make_importkey`` function. Transfer complete.
 
 
 Tgbox File
