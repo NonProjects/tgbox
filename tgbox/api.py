@@ -1,4 +1,4 @@
-"""Module with all Application functions and classes."""
+"""Module with all API functions and classes."""
 try:
     from regex import search as re_search
 except ImportError:
@@ -28,7 +28,7 @@ from .fastelethon import upload_file, download_file
 
 from .crypto import (
     aes_decrypt, aes_encrypt, 
-    AESwState, make_box_salt
+    AESwState, get_rnd_bytes
 )
 from .keys import (
     make_filekey, make_requestkey,
@@ -67,7 +67,6 @@ from dataclasses import dataclass
 from os.path import getsize
 from pathlib import Path
 
-from os import urandom
 from io import BytesIO
 from time import time
 
@@ -228,7 +227,7 @@ async def make_remote_box(
 
         box_salt (``bytes``, optional):
             Random 32 bytes. Will be used in ``MainKey``
-            creation. Default is ``crypto.make_box_salt()``.
+            creation. Default is ``crypto.get_rnd_bytes()``.
     """
     if box_salt and len(box_salt) != 32:
         raise ValueError('Box salt len != 32')
@@ -238,7 +237,7 @@ async def make_remote_box(
         raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
 
     channel_name = 'tgbox: ' + tgbox_db.name
-    box_salt = urlsafe_b64encode(box_salt if box_salt else make_box_salt())
+    box_salt = urlsafe_b64encode(box_salt if box_salt else get_rnd_bytes())
 
     channel = (await ta.TelegramClient(
         CreateChannelRequest(channel_name,'',megagroup=False))).chats[0]
@@ -2132,7 +2131,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         if len(comment) > COMMENT_MAX:
             raise ValueError(f'Comment length must be <= {COMMENT_MAX} bytes.')
                 
-        file_salt, file_iv = urandom(32), urandom(16)
+        file_salt, file_iv = get_rnd_bytes(), get_rnd_bytes(16)
         filekey = make_filekey(self._mainkey, file_salt)
         
         if hasattr(file, 'name'):
