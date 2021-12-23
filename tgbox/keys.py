@@ -331,7 +331,8 @@ def make_filekey(mainkey: MainKey, file_salt: bytes) -> FileKey:
     return FileKey(sha256(mainkey + file_salt).digest())
 
 def make_requestkey(
-        mainkey: MainKey, *, file_salt: Optional[bytes] = None, 
+        key: Union[MainKey, BaseKey], *, 
+        file_salt: Optional[bytes] = None, 
         box_salt: Optional[bytes] = None) -> RequestKey:
     """
     Function to retrieve requestkeys.
@@ -357,7 +358,7 @@ def make_requestkey(
     No one except Alice and Bob will have filekey. If Alice want
     to share entire Box (mainkey) with Bob, then Bob creates
     slightly different ``RequestKey`` with same function:
-    ``make_requestkey(mainkey=mainkey, box_salt=box_salt)``.
+    ``make_requestkey(basekey=basekey, box_salt=box_salt)``.
     
     To get BoxSalt Alice should only add Bob to her Box(``Channel``).
     
@@ -367,12 +368,15 @@ def make_requestkey(
         method on ``EncryptedRemoteBoxFile``.
 
     Arguments:
-        mainkey (``MainKey``):
-            Bob's ``MainKey``. 
+        key (``MainKey``, ``BaseKey``):
+            Bob's *Key*. If you want to import other's 
+            *file*, then you need to specify here 
+            ``MainKey`` of your *LocalBox*, otherwise 
+            specify ``BaseKey`` (for *RemoteBox* sharing)
         
         file_salt (``bytes``, optional):
-            Alice's FileSalt. 
-            Should be specified if ``box_salt`` is ``None``.
+            Alice's FileSalt. Should be 
+            specified if ``box_salt`` is ``None``.
         
         box_salt (``bytes``, optional):
             Alice's BoxSalt. 
@@ -385,7 +389,7 @@ def make_requestkey(
     salt = file_salt if file_salt else box_salt
     
     skey = SigningKey.from_string(
-        sha256(mainkey + salt).digest(),
+        sha256(key + salt).digest(),
         curve=SECP256k1, hashfunc=sha256
     )
     vkey = skey.get_verifying_key()._compressed_encode()
@@ -490,7 +494,8 @@ def make_sharekey(
         skey.get_verifying_key()._compressed_encode()
     )
 def make_importkey(
-        mainkey: MainKey, sharekey: ShareKey, *,
+        key: Union[MainKey, BaseKey], 
+        sharekey: ShareKey, *,
         box_salt: Optional[bytes] = None, 
         file_salt: Optional[bytes] = None) -> ImportKey:
     """
@@ -502,14 +507,14 @@ def make_importkey(
     ``ShareKey`` is a combination of encrypted by Alice
     (File/Main)Key and her pubkey. As Bob can create
     again ``RequestKey``, which is PubKey of ECDH from
-    ``sha256(mainkey + salt)`` PrivKey, and already have
+    ``sha256(key + salt)`` PrivKey, and already have
     PubKey of A, -- B can create a shared secret, and
     decrypt A ``ShareKey`` to make an ``ImportKey``.
     
     Arguments:
-        mainkey (``MainKey``):
-            ``MainKey`` that was used 
-            in ``RequestKey`` creation.
+        key (``MainKey``):
+            ``MainKey`` or ``BaseKey`` that 
+            was used in ``RequestKey`` creation.
 
         sharekey (``ShareKey``):
             Alice's ``ShareKey``.
@@ -537,10 +542,10 @@ def make_importkey(
             salt = box_salt if box_salt else file_salt
 
             requestkey = make_requestkey(
-                mainkey, box_salt=box_salt, file_salt=file_salt
+                key, box_salt=box_salt, file_salt=file_salt
             )
             skey = SigningKey.from_string(
-                sha256(mainkey + salt).digest(),
+                sha256(key + salt).digest(),
                 curve=SECP256k1, hashfunc=sha256
             )
             a_point = VerifyingKey._from_compressed(

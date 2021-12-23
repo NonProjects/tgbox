@@ -1000,20 +1000,20 @@ class EncryptedRemoteBox:
             file_message, self._ta).init()
         return await erbf.decrypt(ff.dlb._mainkey)
 
-    async def get_requestkey(self, mainkey: MainKey) -> RequestKey:
+    async def get_requestkey(self, basekey: BaseKey) -> RequestKey:
         """
-        Returns ``RequestKey`` for this Box.
+        Returns ``RequestKey`` for this *RemoteBox*.
         You should use this method if you want
         to decrypt other's ``RemoteBox``.
         
         Arguments:
-            mainkey (``MainKey``, optional):
+            basekey (``BaseKey``):
                 To make a ``RequestKey`` for other's ``RemoteBox``
-                you should have your own LocalBox. Take key from
-                your ``DecryptedLocalBoxFile`` and specify it here.
+                you need to create new ``BaseKey`` for it. Later
+                this key will be used for *Box* decryption.
         """
         box_salt = await self.get_box_salt()
-        return make_requestkey(mainkey, box_salt=box_salt)
+        return make_requestkey(basekey, box_salt=box_salt)
     
     async def decrypt(
             self, *, key: Optional[Union[MainKey, ImportKey, BaseKey]] = None, 
@@ -1397,9 +1397,9 @@ class EncryptedRemoteBoxFile:
         
         Arguments:
             mainkey (``MainKey``):
-                To make a ``RequestKey`` of other's RemoteBoxFile
-                you need to have your own LocalBox & ``RemoteBox``. 
-                Take key from your ``DecryptedLocalBox`` and specify here.
+                To make a ``RequestKey`` for other's *RemoteBoxFile*
+                you need to have your *Box*. Take key from your 
+                ``DecryptedLocalBox`` and specify it here.
         """
         self.__raise_initialized()
         return make_requestkey(mainkey, file_salt=self._file_salt)
@@ -1958,20 +1958,20 @@ class EncryptedLocalBox:
         async for file_id in cursor:
             yield await self.get_file(file_id[0], cache_preview=cache_preview)
 
-    def get_requestkey(self, mainkey: MainKey) -> RequestKey:
+    def get_requestkey(self, basekey: BaseKey) -> RequestKey:
         """
-        Returns ``RequestKey`` for this LocalBox. You
-        should use this method if you want to decrypt
-        other's ``EncryptedLocalBox``.
+        Returns ``RequestKey`` for this *LocalBox*.
+        You should use this method if you want
+        to decrypt other's ``RemoteBox``.
         
         Arguments:
-            mainkey (``MainKey``):
-                To make a ``RequestKey`` for other's
-                ``EncryptedLocalBox`` you need to have
-                your own. Take key from it and specify here.
+            basekey (``BaseKey``):
+                To make a ``RequestKey`` for other's ``RemoteBox``
+                you need to create new ``BaseKey`` for it. Later
+                this key will be used for *Box* decryption.
         """
         self.__raise_initialized()
-        return make_requestkey(mainkey, box_salt=self._box_salt)
+        return make_requestkey(basekey, box_salt=self._box_salt)
 
     async def decrypt(self, basekey: BaseKey) -> 'DecryptedLocalBox':
         if not self.initialized:
