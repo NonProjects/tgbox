@@ -17,7 +17,7 @@ try:
 except ModuleNotFoundError: 
     # We can use PyAES if there is no pycryptodome.
     # PyAES is about 30x slower in CPython than pycryptodome.
-    # This is too, TOO slow and not so usable, but anyway.
+    # This is TOO slow and not so usable, but anyway.
     from pyaes.util import ( 
         append_PKCS7_padding as pad_, 
         strip_PKCS7_padding as unpad_
@@ -33,14 +33,13 @@ except ModuleNotFoundError:
 
 __all__ = [
     'AES', 
-    'urandom',
-    'FAST_ENCRYPTION', 
-    'FAST_TELETHON', 
     'Padding', 
     'AESwState', 
     'aes_encrypt', 
     'aes_decrypt', 
-    'make_box_salt'
+    'get_rnd_bytes',
+    'FAST_TELETHON',
+    'FAST_ENCRYPTION'
 ]
 class Padding:
     """
@@ -390,6 +389,6 @@ def aes_decrypt(
         except Exception as e:
             raise AESError(f'Invalid configuration. {e}')
 
-def make_box_salt() -> bytes:
-    """Generates box salt."""
-    return urandom(32)
+def get_rnd_bytes(length: int=32) -> bytes:
+    """Returns ``os.urandom(length)``."""
+    return urandom(length)
