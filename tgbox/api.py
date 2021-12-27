@@ -67,6 +67,7 @@ from dataclasses import dataclass
 from os.path import getsize
 from pathlib import Path
 
+from os import PathLike
 from io import BytesIO
 from time import time
 
@@ -207,7 +208,7 @@ async def _search_func(
 async def make_remote_box(
         ta: 'TelegramAccount', 
         tgbox_db_name: str=DEF_TGBOX_NAME, 
-        box_image_path: Union[Path, str] = BOX_IMAGE_PATH,
+        box_image_path: Union[PathLike, str] = BOX_IMAGE_PATH,
         box_salt: Optional[bytes] = None) -> 'EncryptedRemoteBox':
     """
     Function used for making ``RemoteBox``. 
@@ -221,8 +222,8 @@ async def make_remote_box(
             Name of your Local and Remote boxes.
             ``constants.DEF_TGBOX_NAME`` by default.
 
-        box_image_path (``Path``, optional):
-            ``Path`` to image that will be used as
+        box_image_path (``PathLike``, optional):
+            ``PathLike`` to image that will be used as
             ``Channel`` photo of your ``RemoteBox``.
 
         box_salt (``bytes``, optional):
@@ -331,7 +332,7 @@ async def make_local_box(
 
 async def get_local_box(
         basekey: Optional[BaseKey] = None,
-        tgbox_db_path: Optional[Union[Path, str]] = DEF_TGBOX_NAME,
+        tgbox_db_path: Optional[Union[PathLike, str]] = DEF_TGBOX_NAME,
         ) -> Union['EncryptedLocalBox', 'DecryptedLocalBox']:
     """
     Returns LocalBox.
@@ -341,11 +342,11 @@ async def get_local_box(
             Returns ``DecryptedLocalBox`` if specified,
             ``EncryptedLocalBox`` otherwise (default).
             
-        tgbox_db_path (``Path``, ``str``, optional):
-            ``Path`` to your TgboxDB (LocalBox). Default
+        tgbox_db_path (``PathLike``, ``str``, optional):
+            ``PathLike`` to your TgboxDB (LocalBox). Default
             is ``constants.DEF_TGBOX_NAME``.
     """
-    if not isinstance(tgbox_db_path, Path):
+    if not isinstance(tgbox_db_path, PathLike):
         tgbox_db_path = Path(tgbox_db_path)
 
     if not tgbox_db_path.exists():
@@ -1096,7 +1097,7 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
     
     async def clone(
             self, basekey: BaseKey, 
-            box_path: Optional[Union[Path, str]] = None) -> 'DecryptedLocalBox':
+            box_path: Optional[Union[PathLike, str]] = None) -> 'DecryptedLocalBox':
         """
         This method makes ``LocalBox`` from ``RemoteBox`` and
         imports all RemoteBoxFiles to it.
@@ -1107,7 +1108,7 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
                 cloned ``EncryptedLocalBox``. ``BaseKey`` encrypts
                 Session and ``MainKey`` of original LocalBox.
 
-            box_path (``Path``, ``str``, optional):
+            box_path (``PathLike``, ``str``, optional):
                 Direct path with filename included. If
                 not specified, then ``RemoteBox`` name used.
         """
@@ -1633,9 +1634,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         Downloads and saves remote box file to the ``outfile``.
         
         Arguments:
-            oufile (``str``, ``BinaryIO``, ``Path``, optional):
-                Path or File-like object to which file will be downloaded.
-                ``.constants.DOWNLOAD_PATH`` by default.
+            oufile (``str``, ``BinaryIO``, ``PathLike``, optional):
+                Path-like or File-like object to which file 
+                will be downloaded. ``.constants.DOWNLOAD_PATH`` by default.
                 
                 If ``outfile`` has ``.write()`` method then we will use it.
             
@@ -1673,9 +1674,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         if decrypt:
             aws = AESwState(self._filekey, self._file_iv)
         
-        if isinstance(outfile, (str, Path)):
+        if isinstance(outfile, (str, PathLike)):
             Path('BoxDownloads').mkdir(exist_ok=True)
-            outfile = Path(outfile) if not isinstance(outfile, Path) else outfile
+            outfile = Path(outfile) if not isinstance(outfile, PathLike) else outfile
 
             folder = DEF_UNK_FOLDER if hide_folder else self._foldername
             folder = DEF_NO_FOLDER if not folder else folder
@@ -1688,7 +1689,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         elif isinstance(outfile, BinaryIO) or hasattr(outfile, 'write'):
             pass # We already can write 
         else:
-            raise TypeError('outfile not Union[BinaryIO, str, Path].')
+            raise TypeError('outfile not Union[BinaryIO, str, PathLike].')
         
         iter_down = download_file(
             client=self._ta.TelegramClient,

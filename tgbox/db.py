@@ -2,6 +2,7 @@
 
 import aiosqlite
 
+from os import PathLike
 from pathlib import Path
 from typing import Optional, Union, AsyncGenerator
 
@@ -77,13 +78,13 @@ class SqlTableWrapper:
         await self._aiosql_conn.commit()
 
 class TgboxDB:
-    def __init__(self, db_path: Union[Path, str]):
+    def __init__(self, db_path: Union[PathLike, str]):
         """
         Arguments:
-            db_path (````Path````, ````str````):
+            db_path (``PathLike``, ``str``):
                 Path to the Tgbox DB.
         """
-        if isinstance(db_path, Path):
+        if isinstance(db_path, PathLike):
             self._db_path = db_path
         else:
             self._db_path = Path(db_path)
@@ -112,7 +113,7 @@ class TgboxDB:
         return self._aiosql_db_is_closed
     
     @staticmethod
-    async def create(db_path: Union[str, Path]) -> 'TgboxDB':
+    async def create(db_path: Union[str, PathLike]) -> 'TgboxDB':
         return await TgboxDB(db_path).init()
 
     async def close(self) -> None:

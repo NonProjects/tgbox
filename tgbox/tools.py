@@ -16,6 +16,7 @@ from struct import (
     unpack as struct_unpack
 )
 from io import BytesIO
+from os import PathLike
 from pathlib import Path
 from functools import partial
 from dataclasses import dataclass
@@ -509,16 +510,16 @@ async def get_media_duration(file_path: str) -> float:
         raise DurationImpossible('Can\'t get media duration') from None 
 
 async def make_media_preview(
-        file_path: str, 
-        output_path: str='', 
-        x: int=128, 
-        y: int=-1) -> BinaryIO:
+        file_path: PathLike, 
+        temp_path: Optional[PathLike] = None,
+        x: int=128, y: int=-1) -> BinaryIO:
     """
     Makes x:y sized thumbnail of the 
     video/audio with ffmpeg. "-1"
     preserves one of side size.
     """
-    thumbnail_path = Path(output_path, prbg(8).hex()+'.jpg')
+    temp_path = Path() if not temp_path else temp_path
+    thumbnail_path = Path(temp_path, prbg(4).hex()+'.jpg')
     
     func = partial(subprocess_run,
         args=[
