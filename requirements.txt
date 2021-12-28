@@ -1,6 +1,6 @@
-sphinx-rtd-theme
+sphinx-rtd-theme==1.0.0
 
-regex
+regex==2021.11.10
 
 aiosqlite==0.17.0
 telethon==1.24.0
@@ -8,5 +8,5 @@ ecdsa==0.16.1
 filetype==1.0.8
 
 cryptg==0.2.post2
-pycryptodome==3.10.1
-
+pycryptodome==3.12.0
+uvloop==0.16.0
