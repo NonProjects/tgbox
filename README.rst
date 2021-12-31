@@ -66,7 +66,7 @@ You can also build docs from the source
 
 .. code-block:: console
 
-   git clone https://github.com/NonProject/tgbox --branch=indev
+   git clone https://github.com/NonProject/tgbox --branch=main
    cd tgbox; python3 -m pip install -r requirements.txt
    cd docs; make html; <your-browser> _build/html/index.html
 
