@@ -43,8 +43,8 @@ class Padding:
     PyCryptodome module isn't available, will
     be used padding function from PyAES.
     """
-    pad_ = pad_ if not FAST_ENCRYPTION else lambda b: pad_(b,16)
-    unpad_ = unpad_ if not FAST_ENCRYPTION else lambda b: unpad_(b,16)
+    _pad = pad_ if not FAST_ENCRYPTION else lambda b: pad_(b,16)
+    _unpad = unpad_ if not FAST_ENCRYPTION else lambda b: unpad_(b,16)
     
     @classmethod
     def pad(
@@ -64,7 +64,7 @@ class Padding:
         if pad_func:
             pad_, custom = pad_func, True
         else:
-            pad_, custom = cls.pad_, False
+            pad_, custom = cls._pad, False
         
         return pad_(bytedata)
     
@@ -86,7 +86,7 @@ class Padding:
         if unpad_func:
             unpad_, custom = unpad_func, True
         else:
-            unpad_, custom = cls.unpad_, False
+            unpad_, custom = cls._unpad, False
         
         while True:
             try:
@@ -108,7 +108,7 @@ class Padding:
         if pad_func:
             pad_, custom = pad_func, True
         else:
-            pad_, custom = cls.pad_, False
+            pad_, custom = cls._pad, False
         
         bytedata = pad_(bytedata)
         while len(bytedata) != to_len:
