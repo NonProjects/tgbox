@@ -85,6 +85,3 @@ SCRYPT_P:     int=1
 
 # Path that will be used to save downloaded files.
 DOWNLOAD_PATH: Path=Path('BoxDownloads')
-
-# Must be divisible by 16.
-assert not AES_RETURN_SIZE % 16 and AES_RETURN_SIZE > 16 
