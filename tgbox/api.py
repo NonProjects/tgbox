@@ -2793,7 +2793,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         self._comment = AES(self._filekey).decrypt(elbfi._comment)
         self._size = AES(self._filekey).decrypt(elbfi._size)
         self._duration = AES(self._filekey).decrypt(elbfi._duration)
-        self._duration = AES(self._filekey).decrypt(elbfi._upload_time)
+        self._upload_time = AES(self._filekey).decrypt(elbfi._upload_time)
         
         if not self._cache_preview:
             self._preview = None
