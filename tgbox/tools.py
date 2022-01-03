@@ -316,12 +316,13 @@ class SearchFilter:
             verbyte = self.verbyte + other.verbyte,
             exported = other.exported, re = self.re
         )
-class OpenPretender: 
+class OpenPretender:
+    """
+    Class to wrap Tgbox AES Generators and make it look
+    like opened to "rb"-read file. Designed to work with Telethon.
+    """
     def __init__(self, flo: BinaryIO, aes_state: AES, mode: int):
         """
-        Class to wrap Tgbox AES Generators and make it look
-        like opened to "rb"-read file. Designed to work with Telethon.
-        
         Arguments:
             flo (``BinaryIO``):
                 File-like object. Like ``open('file','rb')``.
