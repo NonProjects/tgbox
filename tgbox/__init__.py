@@ -2,6 +2,18 @@ from asyncio import (
     new_event_loop, 
     set_event_loop
 )
+# Define and set global event loop
+loop = new_event_loop()
+set_event_loop(loop)
+
+from . import api
+from . import constants
+from . import crypto
+from . import db
+from . import errors
+from . import keys
+from . import tools
+
 from typing import Coroutine
 
 try:
@@ -24,9 +36,6 @@ __all__ = [
     'loop',
     'FAST_EVENT_LOOP'
 ]
-# Define and set global event loop
-loop = new_event_loop()
-set_event_loop(loop)
 
 
 def sync(coroutine: Coroutine):
