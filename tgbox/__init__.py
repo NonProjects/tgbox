@@ -2,6 +2,15 @@ from asyncio import (
     new_event_loop, 
     set_event_loop
 )
+try:
+    # We can use uvloop as event loop
+    # on Linux systems, it's around 2x
+    # faster than Python's default.
+    from uvloop import new_event_loop
+    FAST_EVENT_LOOP = True
+except RuntimeError:
+    FAST_EVENT_LOOP = False
+
 # Define and set global event loop
 loop = new_event_loop()
 set_event_loop(loop)
@@ -16,15 +25,6 @@ from . import tools
 
 from typing import Coroutine
 
-try:
-    # We can use uvloop as event loop
-    # on Linux systems, it's around 2x
-    # faster than Python's
-    import uvloop; FAST_EVENT_LOOP = True
-    new_event_loop = uvloop.new_event_loop
-except RuntimeError:
-    FAST_EVENT_LOOP = False    
-
 __all__ = [
     'api',
     'constants',
@@ -34,9 +34,10 @@ __all__ = [
     'keys',
     'tools',
     'loop',
+    'sync',
+    'new_event_loop',
     'FAST_EVENT_LOOP'
 ]
-
 
 def sync(coroutine: Coroutine):
     """
