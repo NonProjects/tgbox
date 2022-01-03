@@ -26,10 +26,9 @@ from telethon import events
 from telethon.tl.types.auth import SentCode
 from .fastelethon import upload_file, download_file
 
-from .crypto import (
-    aes_decrypt, aes_encrypt, 
-    AESwState, get_rnd_bytes
-)
+from .crypto import get_rnd_bytes
+from .crypto import AESwState as AES
+
 from .keys import (
     make_filekey, make_requestkey,
     make_sharekey, MainKey, RequestKey, 
@@ -321,12 +320,12 @@ async def make_local_box(
     mainkey = make_mainkey(basekey, box_salt)
     
     await tgbox_db.BoxData.insert(
-        next(aes_encrypt(int_to_bytes(0), mainkey, yield_all=True)),
-        next(aes_encrypt(int_to_bytes(erb._box_channel_id), mainkey, yield_all=True)),
-        next(aes_encrypt(int_to_bytes(int(time())), mainkey, yield_all=True)),
+        AES(mainkey).encrypt(int_to_bytes(0)),
+        AES(mainkey).encrypt(int_to_bytes(erb._box_channel_id)),
+        AES(mainkey).encrypt(int_to_bytes(int(time()))),
         box_salt,
         None, # We aren't cloned box, so Mainkey is empty
-        next(aes_encrypt(ta.get_session().encode(), basekey, yield_all=True))
+        AES(basekey).encrypt(ta.get_session().encode()),
     )
     return await EncryptedLocalBox(tgbox_db).decrypt(basekey)
 
@@ -980,7 +979,7 @@ class EncryptedRemoteBox:
                 A callback function accepting two parameters: 
                 (downloaded_bytes, total). 
         """
-        state = AESwState(ff.filekey, ff.file_iv)
+        state = AES(ff.filekey, ff.file_iv)
         oe = OpenPretender(ff.file, state, mode=1)
         oe.concat_metadata(ff.metadata)
             
@@ -1124,12 +1123,12 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
             last_file_id = erbf.id; break
 
         await tgbox_db.BoxData.insert(
-            next(aes_encrypt(int_to_bytes(last_file_id), self._mainkey, yield_all=True)),
-            next(aes_encrypt(int_to_bytes(self._box_channel_id), self._mainkey, yield_all=True)),
-            next(aes_encrypt(int_to_bytes(int(time())), self._mainkey, yield_all=True)),
+            AES(self._mainkey).encrypt(int_to_bytes(last_file_id)),
+            AES(self._mainkey).encrypt(int_to_bytes(self._box_channel_id)),
+            AES(self._mainkey).encrypt(int_to_bytes(int(time()))),
             await self.get_box_salt(),
-            next(aes_encrypt(self._mainkey.key, basekey, yield_all=True)),
-            next(aes_encrypt(self._ta.get_session().encode(), basekey, yield_all=True))
+            AES(basekey).encrypt(self._mainkey.key),
+            AES(basekey).encrypt(self._ta.get_session().encode())
         )
         dlb = await EncryptedLocalBox(tgbox_db).decrypt(basekey)
 
@@ -1542,9 +1541,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         enabled. Max request per file is ~1064639 bytes. Usually
         it not exceed 20KB per one file.
         """
-        dec_navbytes = next(aes_decrypt(
-            self._erbf._navbytes, self._filekey, yield_all=True)
-        )
+        dec_navbytes = AES(self._filekey).decrypt(self._erbf._navbytes)
+
         # This should be True when LocalBox hasn't Key for imported file.
         if len(dec_navbytes) == NAVBYTES_SIZE-16:
             raise AESError('Navbytes wasn\'t decrypted correctly. Incorrect key?')
@@ -1557,10 +1555,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             self._message.document, offset=103, request_size=request_size):
                 
                 filedata = filedata[:filedata_len]
+                dec_filedata = AES(self._filekey).decrypt(filedata)
 
-                dec_filedata = next(aes_decrypt(
-                    filedata, self._filekey, yield_all=True)
-                )
                 self._size = bytes_to_int(dec_filedata[:4],signed=False)
                 self._duration = bytes_to_float(dec_filedata[4:8])
                 folder_len = bytes_to_int(dec_filedata[8:10],signed=False)
@@ -1568,9 +1564,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 self._foldername = dec_filedata[10:10+folder_len] 
 
                 if self._mainkey:
-                    self._foldername = next(aes_decrypt(
-                        self._foldername, self._mainkey, yield_all=True)
-                    )
+                    self._foldername = AES(self._mainkey).decrypt(self._foldername)
                 else:
                     self._foldername = DEF_NO_FOLDER
 
@@ -1618,7 +1612,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             async for preview in self._ta.TelegramClient.iter_download(
                 self._message.document, offset=offset, request_size=request_size):
                     preview = preview[:self._preview_pos[1]]
-                    preview = next(aes_decrypt(preview, self._filekey, yield_all=True))
+                    preview = AES(self._filekey).decrypt(preview)
                     break
 
         if self._cache_preview:
@@ -1672,7 +1666,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self.__raise_initialized()
         
         if decrypt:
-            aws = AESwState(self._filekey, self._file_iv)
+            aws = AES(self._filekey, self._file_iv)
         
         if isinstance(outfile, (str, PathLike)):
             Path('BoxDownloads').mkdir(exist_ok=True)
@@ -1706,7 +1700,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 buffered += chunk[offset:]
                 offset = None; continue
             
-            chunk = aws.decrypt(chunk) if decrypt else chunk
+            chunk = aws.decrypt(chunk, unpad=False) if decrypt else chunk
             outfile.write(chunk)
 
             if progress_callback:
@@ -1885,9 +1879,8 @@ class EncryptedLocalBox:
             sql_tuple = ('SELECT LAST_FILE_ID FROM BOX_DATA', ())
         )
         if not self._enc_class:
-            lfi = bytes_to_int(next(aes_decrypt(
-                lfi[0], self._mainkey, yield_all=True))
-            )
+            lfi = AES(self._mainkey).decrypt(lfi[0])
+
         return lfi[0] if self._enc_class else lfi
     
     async def init(self) -> 'EncryptedLocalBox':
@@ -2024,7 +2017,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         
         if isinstance(basekey, BaseKey):
             if isinstance(elb._mainkey, EncryptedMainkey):
-                mainkey = next(aes_decrypt(elb._mainkey.key, basekey, yield_all=True))
+                mainkey = AES(basekey).decrypt(elb._mainkey.key)
                 self._mainkey = MainKey(mainkey)
             else:
                 self._mainkey = make_mainkey(basekey, self._elb._box_salt)
@@ -2032,18 +2025,17 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 # We encrypt Session with Basekey to prevent stealing 
                 # Session information by people who also have mainkey 
                 # of the same box. So there is decryption with ``basekey``.
-                self._session = next(aes_decrypt(
-                    elb._session, basekey, yield_all=True)).decode()
+                self._session = AES(basekey).decrypt(elb._session).decode()
             except UnicodeDecodeError:
                 raise IncorrectKey('Can\'t decrypt Session. Invalid Basekey?') 
         else:
             raise IncorrectKey('basekey is not BaseKey')
 
-        self._box_channel_id = bytes_to_int(next(
-            aes_decrypt(elb._box_channel_id, self._mainkey, yield_all=True))
+        self._box_channel_id = bytes_to_int(
+            AES(self._mainkey).decrypt(elb._box_channel_id)
         )
-        self._box_cr_time = bytes_to_int(next(
-            aes_decrypt(elb._box_cr_time, self._mainkey, yield_all=True))
+        self._box_cr_time = bytes_to_int(
+            AES(self._mainkey).decrypt(elb._box_cr_time)
         )
         self._box_salt = elb._box_salt 
 
@@ -2317,10 +2309,9 @@ class LocalBoxFolder:
         self._folder_iv = folder_iv
         self._folder_id = folder_id
 
-        self._dec_foldername = next(aes_decrypt(
-            self._enc_foldername, mainkey, 
-            iv=self._folder_iv, yield_all=True
-        ))
+        self._dec_foldername = AES(mainkey, self._folder_iv).decrypt(
+            self._enc_foldername
+        )
         self._mainkey = mainkey
 
     def __hash__(self) -> int:
@@ -2762,8 +2753,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         if isinstance(key, (FileKey, ImportKey)):
             self._filekey = FileKey(key.key)
         elif isinstance(key, MainKey) and self._filekey:
-            self._filekey = FileKey(next(aes_decrypt(
-                self._filekey, self._key, yield_all=True)))
+            self._filekey = FileKey(
+                AES(self._key).decrypt(self._filekey)
+            )
         else:
             self._filekey = make_filekey(self._key, self._file_salt)
         
@@ -2781,9 +2773,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         self._exported = True if elbfi._filekey else False
 
         if elbfi._file_path: 
-            self._file_path = next(aes_decrypt(
-                elbfi._file_path, self._filekey, yield_all=True)
-            ).decode()
+            self._file_path = AES(self._filekey).decrypt(
+                elbfi._file_path).decode()
             try:
                 self._file = open(self._file_path,'rb')
             except:
@@ -2791,35 +2782,24 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         else:
             self._file_path, self._file = None, None
 
-        self._file_name = next(aes_decrypt(
-            elbfi._file_name, self._filekey, yield_all=True)
-        )
+        self._file_name = AES(self._filekey).decrypt(elbfi._file_name)
+
         if self._mainkey:
-            self._foldername = next(aes_decrypt(
-                elbfi._foldername, self._mainkey, 
-                iv=self._folder_iv, yield_all=True)
-            )
+            self._foldername = AES(self._mainkey, self._folder_iv).decrypt(
+                elbfi._foldername)
         else:
             self._foldername = DEF_NO_FOLDER
 
-        self._comment = next(aes_decrypt(
-            elbfi._comment, self._filekey, yield_all=True)
-        )
-        self._size = bytes_to_int(next(aes_decrypt(
-            elbfi._size, self._filekey, yield_all=True)
-        ))
-        self._duration = bytes_to_float(next(aes_decrypt(
-            elbfi._duration, self._filekey, yield_all=True)
-        ))
-        self._upload_time = bytes_to_int(next(aes_decrypt( 
-            elbfi._upload_time, self._filekey, yield_all=True)
-        )) 
+        self._comment = AES(self._filekey).decrypt(elbfi._comment)
+        self._size = AES(self._filekey).decrypt(elbfi._size)
+        self._duration = AES(self._filekey).decrypt(elbfi._duration)
+        self._duration = AES(self._filekey).decrypt(elbfi._upload_time)
+        
         if not self._cache_preview:
             self._preview = None
         
         if elbfi._preview and self._cache_preview:
-            self._preview = next(aes_decrypt(
-                elbfi._preview, self._filekey, yield_all=True))
+            self._preview = AES(self._filekey).decrypt(elbfi._preview)
         else:
             self._preview = b''
         
@@ -2856,9 +2836,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 ('SELECT PREVIEW FROM FILES WHERE ID=?',(self._id,))
             )
             preview = (await cursor.fetchone())[0]
-            preview = next(aes_decrypt(
-                preview, self._filekey, yield_all=True)
-            )
+            preview = AES(self._filekey).decrypt(preview)
+            
             if self._cache_preview:
                 self._preview = preview
             return preview
@@ -2931,9 +2910,8 @@ class FutureFile:
     def metadata(self) -> RemoteBoxFileMetadata:
         """Returns Metadata compiled from class data."""
         if not hasattr(self, '_metadata'):
-            enc_foldername = next(aes_encrypt(
-                self.foldername, self.dlb._mainkey,
-                yield_all=True)
+            enc_foldername = AES(self.dlb._mainkey).encrypt(
+                self.foldername
             )
             self._metadata = RemoteBoxFileMetadata(
                 file_name = self.file_name,
@@ -2978,11 +2956,7 @@ class FutureFile:
             raise AlreadyImported('There is already file with same ID') from None
 
         if self.imported:
-            filekey = next(aes_encrypt(
-                self.filekey.key, 
-                self.dlb._mainkey, 
-                yield_all=True)
-            )
+            filekey = AES(self.dlb._mainkey).encrypt(self.filekey.key)
         else:
             filekey = None
 
@@ -2992,9 +2966,8 @@ class FutureFile:
             file_name = self.file_name.encode()
 
         if hasattr(self.file, 'name'):
-            file_path = next(aes_encrypt(
-                self.file.name.encode(), 
-                self.filekey, yield_all=True))
+            file_path = AES(self.filekey).encrypt(
+                self.file.name.encode())
         else:
             file_path = None
         
@@ -3006,34 +2979,29 @@ class FutureFile:
         )
         # And if not, we're add it (2)
         if not await cursor.fetchone(): 
-            folder = next(aes_encrypt(
-                self.foldername, 
-                self.dlb._mainkey, # We're use MainKey for folder encryption 
-                yield_all=True)
-            )
+            # We're use MainKey for folder encryption 
+            folder = AES(self.dlb._mainkey).encrypt(self.foldername)
+
             await self.dlb._tgbox_db.Folders.insert(
                 folder[16:], folder[:16], folder_id)
         
         await self.dlb._tgbox_db.Files.insert(
             id, 
-            folder_id,            
-            next(aes_encrypt(self.comment, self.filekey, yield_all=True)),
-            next(aes_encrypt(duration, self.filekey, yield_all=True)),
+            folder_id,
+            AES(self.filekey).encrypt(self.comment),
+            AES(self.filekey).encrypt(duration),
             self.file_iv, 
             filekey,
-            next(aes_encrypt(file_name, self.filekey, yield_all=True)),
+            AES(self.filekey).encrypt(file_name),
             self.file_salt,
-            next(aes_encrypt(self.preview, self.filekey, yield_all=True)),
-            next(aes_encrypt(size, self.filekey, yield_all=True)),
-            next(aes_encrypt(upload_time, self.filekey, yield_all=True)),
+            AES(self.filekey).encrypt(self.preview),
+            AES(self.filekey).encrypt(size),
+            AES(self.filekey).encrypt(upload_time),
             self.verbyte,
             file_path
         )
-        enc_id = next(aes_encrypt(
-            int_to_bytes(id), 
-            self.dlb._mainkey, 
-            yield_all=True)
-        )
+        enc_id = AES(self.dlb._mainkey).encrypt(int_to_bytes(id))
+        
         sql_tuple = ('UPDATE BOX_DATA SET LAST_FILE_ID = ?',(enc_id,))
         await self.dlb._tgbox_db.BoxData.execute(sql_tuple) 
 

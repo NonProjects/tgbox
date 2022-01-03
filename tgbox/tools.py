@@ -35,7 +35,7 @@ from .errors import (
 )
 from . import loop
 from .keys import FileKey, MainKey
-from .crypto import AESwState, aes_encrypt
+from .crypto import AESwState as AES
 
 
 __all__ = [
@@ -187,24 +187,19 @@ class RemoteBoxFileMetadata:
           + self.comment + int_to_bytes(len(self.file_name),2,signed=False) \
           + self.file_name.encode()
         )
-        filedata = next(aes_encrypt(
-            filedata, self.filekey, yield_all=True
-        ))
+        filedata = AES(self.filekey).encrypt(filedata)
         assert len(filedata) <= FILEDATA_MAX
 
         if self.preview:
-            preview = next(aes_encrypt(
-                self.preview, self.filekey, yield_all=True
-            ))
+            preview = AES(self.filekey).encrypt(preview)
             assert len(preview) <= PREVIEW_MAX+16 
         else:
             preview = b''
 
         navbytes = int_to_bytes(len(filedata),3,signed=False) \
             + int_to_bytes(len(preview),3,signed=False)
-        navbytes = next(aes_encrypt(
-            navbytes, self.filekey, yield_all=True
-        ))
+
+        navbytes = AES(self.filekey).encrypt(navbytes)
         assert len(navbytes) == NAVBYTES_SIZE
 
         metadata += navbytes + filedata + preview
@@ -322,7 +317,7 @@ class SearchFilter:
             exported = other.exported, re = self.re
         )
 class OpenPretender: 
-    def __init__(self, flo: BinaryIO, aes_state: AESwState, mode: int):
+    def __init__(self, flo: BinaryIO, aes_state: AES, mode: int):
         """
         Class to wrap Tgbox AES Generators and make it look
         like opened to "rb"-read file. Designed to work with Telethon.
