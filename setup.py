@@ -1,3 +1,4 @@
+from sys import version_info, platform
 from setuptools import setup
 
 requirements = [
@@ -10,7 +11,7 @@ requirements = [
     'sphinx-rtd-theme==1.0.0', 
     'regex==2021.11.10'
 ]
-if sys.version_info > (3, 7) and sys.platform not in ('win32', 'cygwin', 'cli'):
+if version_info > (3, 7) and platform not in ('win32', 'cygwin', 'cli'):
     requirements.append('uvloop==0.16.0')
 
 setup(
