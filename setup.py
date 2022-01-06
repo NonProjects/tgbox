@@ -3,12 +3,12 @@ from setuptools import setup
 setup(
     name             = 'tgbox',
     packages         = ['tgbox'],
-    version          = '0.2',
+    version          = '0.3',
     license          = 'LGPL-2.1',
     description      = 'Encrypted cloud storage based on Telegram API',
     author           = 'NonProjects',
     url              = 'https://github.com/NonProjects/tgbox',
-    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/indev%230.2.tar.gz',
+    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/main%230.3.tar.gz',
 
     package_data = {
         'tgbox': ['tgbox/other'],
@@ -22,7 +22,9 @@ setup(
         'filetype==1.0.8',
         'cryptg==0.2.post2',
         'pycryptodome==3.10.1',
-        'sphinx-rtd-theme', 'regex'
+        'sphinx-rtd-theme==1.0.0', 
+        'regex==2021.11.10',
+        'uvloop==0.16.0'
     ],
     keywords = [
         'Telegram', 'Cloud-Storage', 
