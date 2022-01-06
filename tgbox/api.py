@@ -2138,7 +2138,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         if not file_size:
             try:
                 file_size = getsize(file.name)
-            except FileNotFoundError:
+            except (FileNotFoundError, AttributeError):
                 if isinstance(file, bytes):
                     file_size = len(file)
                     file = BytesIO(file)
