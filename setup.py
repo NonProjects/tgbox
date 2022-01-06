@@ -8,7 +8,7 @@ setup(
     description      = 'Encrypted cloud storage based on Telegram API',
     author           = 'NonProjects',
     url              = 'https://github.com/NonProjects/tgbox',
-    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/main%230.3.tar.gz',
+    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/indev%230.3.tar.gz',
 
     package_data = {
         'tgbox': ['tgbox/other'],
