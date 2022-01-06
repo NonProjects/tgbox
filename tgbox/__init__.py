@@ -8,7 +8,7 @@ try:
     # faster than Python's default.
     from uvloop import new_event_loop
     FAST_EVENT_LOOP = True
-except RuntimeError:
+except ModuleNotFoundError:
     FAST_EVENT_LOOP = False
 
 # Define and set global event loop
