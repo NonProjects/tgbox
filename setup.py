@@ -1,31 +1,34 @@
 from setuptools import setup
 
+requirements = [
+    'aiosqlite==0.17.0',
+    'telethon==1.24.0',
+    'ecdsa==0.16.1',
+    'filetype==1.0.8',
+    'cryptg==0.2.post2',
+    'pycryptodome==3.10.1',
+    'sphinx-rtd-theme==1.0.0', 
+    'regex==2021.11.10'
+]
+if sys.version_info > (3, 7) and sys.platform not in ('win32', 'cygwin', 'cli'):
+    requirements.append('uvloop==0.16.0')
+
 setup(
     name             = 'tgbox',
     packages         = ['tgbox'],
-    version          = '0.3',
+    version          = '0.3.1',
     license          = 'LGPL-2.1',
     description      = 'Encrypted cloud storage based on Telegram API',
     author           = 'NonProjects',
     url              = 'https://github.com/NonProjects/tgbox',
-    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/indev%230.3.tar.gz',
+    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/indev%230.3.1.tar.gz',
 
     package_data = {
         'tgbox': ['tgbox/other'],
     },
     include_package_data = True,
+    install_requires = requirements,
 
-    install_requires = [
-        'aiosqlite==0.17.0',
-        'telethon==1.24.0',
-        'ecdsa==0.16.1',
-        'filetype==1.0.8',
-        'cryptg==0.2.post2',
-        'pycryptodome==3.10.1',
-        'sphinx-rtd-theme==1.0.0', 
-        'regex==2021.11.10',
-        'uvloop==0.16.0'
-    ],
     keywords = [
         'Telegram', 'Cloud-Storage', 
         'API', 'Asyncio', 'Non-official'
