@@ -101,7 +101,7 @@ class TgboxDB:
         return self._name
 
     @property
-    def db_path(self) -> bool:
+    def db_path(self) -> PathLike:
         return self._db_path
     
     @property
