@@ -26,7 +26,7 @@ from .constants import (
     SCRYPT_N, SCRYPT_R, SCRYPT_P, SCRYPT_SALT,
     SCRYPT_DKLEN, WORDS_PATH
 )
-from .crypto import aes_encrypt, aes_decrypt
+from .crypto import AESwState as AES
 
 
 __all__ = [
@@ -486,10 +486,9 @@ def make_sharekey(
     enc_key = ecdh.generate_sharedsecret_bytes()
     iv = sha256(requestkey.key).digest()[:16]
 
-    encrypted_key = b''.join(aes_encrypt(
-        key.key, key=enc_key, iv=iv, 
-        add_padding=False, concat_iv=False
-    ))
+    encrypted_key = AES(enc_key, iv).encrypt(
+        key.key, pad=False, concat_iv=False
+    )
     return ShareKey(encrypted_key +\
         skey.get_verifying_key()._compressed_encode()
     )
@@ -562,8 +561,7 @@ def make_importkey(
             dec_key = ecdh.generate_sharedsecret_bytes()
             iv = sha256(requestkey.key).digest()[:16]
 
-            decrypted_key = b''.join(aes_decrypt(
-                sharekey[:32], key=dec_key, 
-                iv=iv, strip_padding=False
-            ))
+            decrypted_key = AES(dec_key, iv).decrypt(
+                sharekey[:32], unpad=False
+            )
             return ImportKey(decrypted_key)

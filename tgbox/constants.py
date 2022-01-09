@@ -30,13 +30,12 @@ __all__ = [
     'SCRYPT_R', 
     'SCRYPT_P', 
     'DOWNLOAD_PATH', 
-    'AES_RETURN_SIZE'
 ]
 # Please DO NOT use this parameters in your projects. Thanks.
 # You can get your own at my.telegram.org. Use it, instead of default.
 API_ID: int=2210681; API_HASH: str='33755adb5ba3c296ccf0dd5220143841'
 
-VERSION: str='0.1'
+VERSION: str='0.3.2'
 VERBYTE: bytes=b'\x00'
 
 DEF_TGBOX_NAME: str='TGBOX'
@@ -86,12 +85,3 @@ SCRYPT_P:     int=1
 
 # Path that will be used to save downloaded files.
 DOWNLOAD_PATH: Path=Path('BoxDownloads')
-
-# How much AES will read for one encryption/decryption
-# cycle. This amount of bytes will be yielded from
-# aes_decrypt or aes_encrypt function. You can increase this
-# constant if you have big amount of RAM. Default is 200 megabytes.
-AES_RETURN_SIZE: int=200000000
-
-# Must be divisible by 16.
-assert not AES_RETURN_SIZE % 16 and AES_RETURN_SIZE > 16 

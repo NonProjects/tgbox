@@ -6,7 +6,6 @@ from typing import (
     BinaryIO, AsyncGenerator, 
     Union, Optional, Callable
 )
-from .constants import AES_RETURN_SIZE
 from .errors import ModeInvalid, AESError
 try:
     from Crypto.Cipher import AES
@@ -32,11 +31,8 @@ except ModuleNotFoundError:
 
 
 __all__ = [
-    'AES', 
     'Padding', 
     'AESwState', 
-    'aes_encrypt', 
-    'aes_decrypt', 
     'get_rnd_bytes',
     'FAST_TELETHON',
     'FAST_ENCRYPTION'
@@ -47,8 +43,8 @@ class Padding:
     PyCryptodome module isn't available, will
     be used padding function from PyAES.
     """
-    pad_ = pad_ if not FAST_ENCRYPTION else lambda b: pad_(b,16)
-    unpad_ = unpad_ if not FAST_ENCRYPTION else lambda b: unpad_(b,16)
+    _pad = pad_ if not FAST_ENCRYPTION else lambda b: pad_(b,16)
+    _unpad = unpad_ if not FAST_ENCRYPTION else lambda b: unpad_(b,16)
     
     @classmethod
     def pad(
@@ -68,7 +64,7 @@ class Padding:
         if pad_func:
             pad_, custom = pad_func, True
         else:
-            pad_, custom = cls.pad_, False
+            pad_, custom = cls._pad, False
         
         return pad_(bytedata)
     
@@ -90,7 +86,7 @@ class Padding:
         if unpad_func:
             unpad_, custom = unpad_func, True
         else:
-            unpad_, custom = cls.unpad_, False
+            unpad_, custom = cls._unpad, False
         
         while True:
             try:
@@ -112,7 +108,7 @@ class Padding:
         if pad_func:
             pad_, custom = pad_func, True
         else:
-            pad_, custom = cls.pad_, False
+            pad_, custom = cls._pad, False
         
         bytedata = pad_(bytedata)
         while len(bytedata) != to_len:
@@ -185,7 +181,10 @@ class _PyaesState:
         return total
 
 class AESwState:
-    def __init__(self, key: Union[bytes, 'Key'], iv: bytes):
+    def __init__(
+            self, key: Union[bytes, 'Key'], 
+            iv: Optional[bytes] = None
+        ):
         """
         Wrap around AES CBC which saves state.
         
@@ -197,17 +196,26 @@ class AESwState:
             key (``bytes``, ``Key``):
                 AES encryption/decryption Key.
             
-            iv (``bytes``):
-                AES Initialization Vector.
+            iv (``bytes``, optional):
+                AES Initialization Vector. 
+
+                If mode is *Encryption*, and
+                isn't specified, will be used
+                bytes from `urandom(16)`.
+
+                If mode is *Decryption*, and
+                isn't specified, will be used
+                first 16 bytes of ciphertext.
         """
         self.key = key.key if hasattr(key, 'key') else key
-        self.iv, self.__mode = iv, None
-
+        self.iv, self.__mode, self._aes_cbc = iv, None, None
+        
+    def __init_aes_state(self) -> None:
         if FAST_ENCRYPTION:
             self._aes_cbc = AES.new(self.key, AES.MODE_CBC, iv=self.iv)
         else:
             self._aes_cbc = _PyaesState(self.key, self.iv)
-    
+
     @property
     def mode(self) -> int:
         """
@@ -216,22 +224,40 @@ class AESwState:
         """
         return self.__mode
     
-    def encrypt(self, data: bytes, pad: bool=False) -> bytes:
-        """Encrypts bytes. ``data`` length must equals to 16."""
+    def encrypt(self, data: bytes, pad: bool=True, concat_iv: bool=True) -> bytes:
+        """
+        Encrypts ``data`` with AES CBC. 
+
+        If ``concat_iv`` is ``True``, then
+        first 16 bytes of result will be IV.
+        """
         if not self.__mode:
             self.__mode = 1
+            
+            if not self.iv: self.iv = urandom(16)
+            self.__init_aes_state()
         else:
             if self.__mode != 1:
                 raise ModeInvalid('You should use only decrypt function.')
         
         if pad: data = Padding.pad(data)
         data = self._aes_cbc.encrypt(data)
-        return data
+
+        return self.iv + data if concat_iv else data
     
-    def decrypt(self, data: bytes, unpad: bool=False) -> bytes:
-        """Decrypts bytes. ``data`` length must equals to 16."""
+    def decrypt(self, data: bytes, unpad: bool=True) -> bytes:
+        """
+        Decrypts ``data`` with AES CBC. 
+        
+        ``data`` length must must 
+        be evenly divisible by 16.
+        """
         if not self.__mode:
             self.__mode = 2
+            
+            if not self.iv:
+                self.iv, data = data[:16], data[16:]
+            self.__init_aes_state()
         else:
             if self.__mode != 2:
                 raise ModeInvalid('You should use only encrypt function.')
@@ -239,155 +265,6 @@ class AESwState:
         data = self._aes_cbc.decrypt(data)
         if unpad: data = Padding.unpad(data)
         return data
-    
-def aes_encrypt(
-        plain_data: Union[BinaryIO, bytes], 
-        key: Union[bytes, 'Key'], iv: Optional[bytes] = None, 
-        concat_iv: bool=True, yield_all: bool=False, 
-        yield_size: int=2*10**8, add_padding: bool=True
-        )-> AsyncGenerator[bytes, None]:
-    """
-    Yields encrypted ``plain_data`` by ``yield_size`` amount of bytes.
-    
-    Arguments:
-        plain_data (``BinaryIO``, ``bytes``):
-            Bytes to encrypt. Can be file-like object or bytes.
-        
-        key (``bytes``, ``Key``):
-            Encryption key. Must be type of ``bytes`` or ``Key``.
-            Can be 128, 192 and 256 bits length.
-        
-        iv (``bytes``, optional):
-            Initialization Vector for AES CBC.
-            ``urandom(16)`` if not specified.
-        
-        concat_iv (``bool``, optional):
-            Yields IV as first chunk if ``True`` (by default).
-        
-        yield_all (``bool``, optional):
-            Encrypts and yields all ``plain_data`` in one cycle.
-            Returns ``plain_data`` by ``yield_size`` length chunks if 
-            ``False`` (by default).
-        
-        yield_size (``int``, optional):
-            Size of encrypted chunks to yield. Must be
-            divisible by 16. By default ``.constants.AES_RETURN_SIZE``.
-        
-        add_padding (``bool``, optional):
-            Adds padding (even if length is divisible by 16) if
-            True (by default). False is otherwise.
-    """
-    if yield_size % 16:
-        raise AESError('yield_size must be divisible by 16.')
-
-    iv = iv if iv else urandom(16)
-    key = key.key if hasattr(key, 'key') else key
-    try:
-        if FAST_ENCRYPTION:
-            aes_cbc = AES.new(key, AES.MODE_CBC, iv=iv)
-        else:
-            aes_cbc = _PyaesState(key, iv)
-    except Exception as e:
-        raise AESError(f'Invalid configuration. {e}')
-    
-    if concat_iv and not yield_all: 
-        yield iv
-    
-    while True:
-        if isinstance(plain_data, BinaryIO) or hasattr(plain_data, 'read'):
-            chunk = plain_data.read() if yield_all else plain_data.read(yield_size)
-            
-        elif isinstance(plain_data, bytes):
-            if not yield_all:
-                chunk = plain_data[:yield_size]
-                plain_data = plain_data[yield_size:]
-            else:
-                chunk, plain_data = plain_data, b''
-        else:
-            raise TypeError('plain_data not Union[BinaryIO, bytes].')
-
-        if len(chunk) % 16 or not chunk or yield_all:
-            if not chunk and not add_padding:
-                return
-            else:
-                iv_ = iv if (concat_iv and yield_all) else b''
-                yield iv_ + aes_cbc.encrypt(Padding.pad(chunk))
-                return
-        else:
-            yield aes_cbc.encrypt(chunk)
-
-def aes_decrypt(
-        cipher_data: Union[BinaryIO, bytes], key: Union[bytes, 'Key'], 
-        iv: Optional[bytes] = None, yield_all: bool=False, 
-        yield_size: int=AES_RETURN_SIZE, strip_padding: bool=True
-        ) -> AsyncGenerator[bytes, None]:
-    """
-    Yields decrypted ``cipher_data`` by ``yield_size`` amount of bytes.
-    
-    Arguments:
-        cipher_data (``BinaryIO``, ``bytes``):
-            Bytes to decrypt. Can be file-like object or bytes.
-        
-        key (``bytes``, ``Key``):
-            Decryption key. Must be type of ``bytes`` or ``Key``.
-            Can be 128, 192 and 256 bits length.
-        
-        iv (``bytes``, optional):
-            Initialization Vector for AES CBC.
-            first 16 bytes of ``cipher_data`` if not specified.
-
-        yield_all (``bool``, optional):
-            Decrypts and yields all ``cipher_data`` in one cycle.
-            Returns ``cipher_data`` by ``yield_size`` length chunks if 
-            ``False`` (by default).
-        
-        yield_size (``int``, optional):
-            Size of decrypted chunks to yield. Must be
-            divisible by 16. By default ``.constants.AES_RETURN_SIZE``.
-        
-        strip_padding (``bool``, optional):
-            Removes padding if ``True``.
-    """    
-    aes_cbc = None
-    if yield_size % 16:
-        raise AESError('yield_size must be divisible by 16.')
-
-    key = key.key if hasattr(key, 'key') else key
-    
-    while True:
-        if isinstance(cipher_data, BinaryIO) or hasattr(cipher_data, 'read'):
-            iv = iv if iv else cipher_data.read(16)
-            chunk = cipher_data.read() if yield_all else cipher_data.read(yield_size)
-            l_strip_padding = False if (not strip_padding or cipher_data.peek(1)) else True
-            
-        elif isinstance(cipher_data, (bytes, memoryview)):
-            if not iv:
-                iv = cipher_data[:16]
-                cipher_data = cipher_data[16:]
-            
-            chunk = cipher_data if yield_all else cipher_data[:yield_size]
-            cipher_data = b'' if yield_all else cipher_data[yield_size:]
-            l_strip_padding = False if (not strip_padding or cipher_data) else True         
-        else:
-            raise TypeError('cipher_data not Union[BinaryIO, bytes].')
-        
-        try:
-            if not aes_cbc:
-                if FAST_ENCRYPTION:
-                    aes_cbc = AES.new(key, AES.MODE_CBC, iv=iv)
-                else:
-                    aes_cbc = _PyaesState(key, iv)
-            
-            if l_strip_padding:
-                yield Padding.unpad(aes_cbc.decrypt(chunk)); return
-            else:
-                if not chunk and not strip_padding:
-                    return
-                else:
-                    yield aes_cbc.decrypt(chunk)
-
-        except Exception as e:
-            raise AESError(f'Invalid configuration. {e}')
 
 def get_rnd_bytes(length: int=32) -> bytes:
     """Returns ``os.urandom(length)``."""
