@@ -225,6 +225,9 @@ async def make_remote_box(
             ``PathLike`` to image that will be used as
             ``Channel`` photo of your ``RemoteBox``.
 
+            Can be setted to ``None`` if you don't
+            want to set ``Channel`` photo.
+
         box_salt (``bytes``, optional):
             Random 32 bytes. Will be used in ``MainKey``
             creation. Default is ``crypto.get_rnd_bytes()``.
@@ -242,10 +245,11 @@ async def make_remote_box(
     channel = (await ta.TelegramClient(
         CreateChannelRequest(channel_name,'',megagroup=False))).chats[0]
     
-    box_image = await ta.TelegramClient.upload_file(open(box_image_path,'rb'))
-    await ta.TelegramClient(EditPhotoRequest(channel, box_image)) 
+    if box_image_path:
+        box_image = await ta.TelegramClient.upload_file(open(box_image_path,'rb'))
+        await ta.TelegramClient(EditPhotoRequest(channel, box_image)) 
+
     await ta.TelegramClient(EditChatAboutRequest(channel, box_salt.decode()))
-    
     return EncryptedRemoteBox(channel, ta)
 
 async def get_remote_box(
