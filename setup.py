@@ -17,7 +17,7 @@ if version_info > (3, 7) and platform not in ('win32', 'cygwin', 'cli'):
 setup(
     name             = 'tgbox',
     packages         = ['tgbox'],
-    version          = '0.3.2',
+    version          = '0.3.3',
     license          = 'LGPL-2.1',
     description      = 'Encrypted cloud storage based on Telegram API',
     author           = 'NonProjects',
