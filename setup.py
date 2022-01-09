@@ -1,5 +1,7 @@
 from sys import version_info, platform
 from setuptools import setup
+from tgbox.constants import VERSION
+
 
 requirements = [
     'aiosqlite==0.17.0',
@@ -17,12 +19,13 @@ if version_info > (3, 7) and platform not in ('win32', 'cygwin', 'cli'):
 setup(
     name             = 'tgbox',
     packages         = ['tgbox'],
-    version          = '0.3.3',
+    version          = VERSION,
     license          = 'LGPL-2.1',
     description      = 'Encrypted cloud storage based on Telegram API',
     author           = 'NonProjects',
+    author_email     = 'thenonproton@pm.me',
     url              = 'https://github.com/NonProjects/tgbox',
-    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/indev%230.3.2.tar.gz',
+    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/main%23{VERSION}.tar.gz',
 
     package_data = {
         'tgbox': ['tgbox/other'],
