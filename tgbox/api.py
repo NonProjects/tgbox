@@ -1018,7 +1018,7 @@ class EncryptedRemoteBox:
     async def left(self) -> None:
         """
         With calling this method you will left
-        this *RemoteBox* ``Channel``.
+        *RemoteBox* ``Channel``.
         """
         await self._ta.TelegramClient.delete_dialog(
             self._box_channel)
@@ -1027,8 +1027,8 @@ class EncryptedRemoteBox:
         """
         This method **WILL DELETE** *RemoteBox*.
 
-        If you just want to leave from ``Channel``,
-        then use ``left()`` method.
+        Use ``left()`` if you only want to left
+        from ``Channel``, not delete it.
 
         You need to have rights for this.
         """
@@ -2114,7 +2114,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
     async def make_file( 
             self, file: Union[BinaryIO, BytesIO, bytes],
             file_size: Optional[int] = None,
-            foldername: bytes=DEF_NO_FOLDER, 
+            foldername: bytes=DEF_NO_FOLDER,
+            file_name: Optional[bytes] = None,
             comment: bytes=b'',
             make_preview: bool=True) -> 'FutureFile':
         """
@@ -2145,6 +2146,16 @@ class DecryptedLocalBox(EncryptedLocalBox):
             foldername (``bytes``, optional):
                 Folder to add this file to.
                 Must be <= ``constants.FOLDERNAME_MAX``.
+
+            file_name (``bytes``, optional):
+                Your custom file name. This will
+                be used instead of ``file.name``.
+               
+                Max length is ``constants.FILESIZE_MAX``.
+
+                Note that ``file.name`` will be used
+                for determining file size. Look above 
+                at ``file`` arg docstring for more details.
             
             comment (``bytes``, optional):
                 File comment. Must be <= ``constants.COMMENT_MAX``.
@@ -2161,9 +2172,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
         
         if hasattr(file, 'name'):
             file_path = Path(file.name)
-            file_name = file_path.name
+            file_name = file_path.name if not file_name else file_name
             if len(file_name) > FILE_NAME_MAX: 
-                raise ValueError(f'File name must be <= {FILE_NAME_MAX} symbols.')
+                raise ValueError(f'File name must be <= {FILE_NAME_MAX} bytes.')
         else:
             file_name, file_path = prbg(8).hex(), ''
         
