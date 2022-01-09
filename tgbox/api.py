@@ -17,14 +17,13 @@ from telethon.tl.functions.messages import (
 )
 from telethon.tl.functions.channels import (
     CreateChannelRequest, EditPhotoRequest,
-    GetFullChannelRequest
+    GetFullChannelRequest, DeleteChannelRequest
 )
 from telethon.tl.types import (
     Channel, Message, PeerChannel
 )
 from telethon import events
 from telethon.tl.types.auth import SentCode
-from .fastelethon import upload_file, download_file
 
 from .crypto import get_rnd_bytes
 from .crypto import AESwState as AES
@@ -41,6 +40,7 @@ from .constants import (
     FILE_NAME_MAX, FOLDERNAME_MAX, COMMENT_MAX,
     PREVIEW_MAX, DURATION_MAX, DEF_NO_FOLDER, NAVBYTES_SIZE
 )
+from .fastelethon import upload_file, download_file
 from .db import TgboxDB
 from . import loop
 
@@ -1014,7 +1014,27 @@ class EncryptedRemoteBox:
         """
         box_salt = await self.get_box_salt()
         return make_requestkey(basekey, box_salt=box_salt)
-    
+
+    async def left(self) -> None:
+        """
+        With calling this method you will left
+        this *RemoteBox* ``Channel``.
+        """
+        await self._ta.TelegramClient.delete_dialog(
+            self._box_channel)
+
+    async def delete(self) -> None:
+        """
+        This method **WILL DELETE** *RemoteBox*.
+
+        If you just want to leave from ``Channel``,
+        then use ``left()`` method.
+
+        You need to have rights for this.
+        """
+        await self._ta.TelegramClient(
+            DeleteChannelRequest(self._box_channel)
+        ) 
     async def decrypt(
             self, *, key: Optional[Union[MainKey, ImportKey, BaseKey]] = None, 
             dlb: Optional['DecryptedLocalBox'] = None) -> 'DecryptedRemoteBox':
@@ -1966,6 +1986,18 @@ class EncryptedLocalBox:
         """
         self.__raise_initialized()
         return make_requestkey(basekey, box_salt=self._box_salt)
+    
+    def delete(self) -> None:
+        """
+        This method **WILL DELETE** your *LocalBox* 
+        database. It doesn't affect *RemoteBox*,
+        so you can make new *LocalBox* from the
+        *Remote* version if you have *MainKey*.
+
+        Will raise ``FileNotFoundError`` if
+        something goes wrong (i.e DB was moved).
+        """
+        self._tgbox_db.db_path.unlink()
 
     async def decrypt(self, basekey: BaseKey) -> 'DecryptedLocalBox':
         if not self.initialized:
