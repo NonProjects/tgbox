@@ -2,6 +2,8 @@ from asyncio import (
     new_event_loop, 
     set_event_loop
 )
+from typing import Coroutine
+
 try:
     # We can use uvloop as event loop
     # on Linux systems, it's around 2x
@@ -15,6 +17,7 @@ except ModuleNotFoundError:
 loop = new_event_loop()
 set_event_loop(loop)
 
+
 from . import api
 from . import constants
 from . import crypto
@@ -23,7 +26,6 @@ from . import errors
 from . import keys
 from . import tools
 
-from typing import Coroutine
 
 __all__ = [
     'api',
@@ -39,7 +41,7 @@ __all__ = [
     'FAST_EVENT_LOOP'
 ]
 
-def sync(coroutine: Coroutine):
+def sync(coro_or_func: Coroutine):
     """
     Will call asynchronous function
     in ``tgbox.loop`` and return result.
