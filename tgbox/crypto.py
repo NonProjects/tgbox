@@ -209,6 +209,7 @@ class AESwState:
         """
         self.key = key.key if hasattr(key, 'key') else key
         self.iv, self.__mode, self._aes_cbc = iv, None, None
+        self.__iv_concated = False
         
     def __init_aes_state(self) -> None:
         if FAST_ENCRYPTION:
@@ -242,8 +243,12 @@ class AESwState:
         
         if pad: data = Padding.pad(data)
         data = self._aes_cbc.encrypt(data)
-
-        return self.iv + data if concat_iv else data
+        
+        if concat_iv and not self.__iv_concated:
+            self.__iv_concated = True
+            return self.iv + data
+        else:
+            return data
     
     def decrypt(self, data: bytes, unpad: bool=True) -> bytes:
         """
