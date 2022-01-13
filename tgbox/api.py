@@ -2201,11 +2201,18 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     if not self._client_initialized:
                         self.ta = await self.ta
                         self._client_initialized = True
+                
+                    if hasattr(self.doc_pic,'sizes')\
+                        and not self.doc_pic.sizes:
+                            return b''
+
+                    if hasattr(self.doc_pic,'thumbs')\
+                        and not self.doc_pic.thumbs:
+                            return b''
 
                     return await self.ta.TelegramClient.download_media(
                         message = self.doc_pic, 
-                        thumb = quality,
-                        file = bytes
+                        thumb = quality, file = bytes
                     )
                 async def read(self, size: int) -> bytes:
                     if not self._client_initialized:
@@ -2218,7 +2225,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                         )
                     chunk = await anext(self.downloader)
                     return chunk
-            
+                    
             file = TelegramVirtualFile(file, self._session)
             make_preview = False # We will call get_preview
 
@@ -2265,11 +2272,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
             file_type = None
 
         preview, duration = b'', 0
-
+        
         if hasattr(file, 'telegram_vf'):
             preview = await file.get_preview()
             duration = file.duration
-
+        
         if file_type in ('audio','video','image'):
             try:
                 preview = (await make_media_preview(file.name)).read()
