@@ -311,8 +311,7 @@ parallel_transfer_locks: DefaultDict[int, asyncio.Lock] = defaultdict(lambda: as
 
 async def stream_file(
         file_to_stream: BinaryIO, 
-        chunk_size = 524288, 
-        file_size: Optional[int] = None
+        chunk_size = 524288
     ):
     """``file_to_stream.read`` can be coroutine."""
     while True:
@@ -333,7 +332,7 @@ async def _internal_transfer_to_telegram(
         file_size: int = None,
         file_name: str = 'document',
         part_size_kb: int = 512,
-        ) -> Tuple[TypeInputFile, int]:
+    ) -> Tuple[TypeInputFile, int]:
 
     file_id = helpers.generate_random_long()
     
