@@ -12,15 +12,15 @@ from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError
 
 from telethon.tl.custom.file import File
-from telethon.tl.functions.messages import (
-    EditChatAboutRequest
-)
+from telethon.tl.functions.messages import EditChatAboutRequest
+
 from telethon.tl.functions.channels import (
     CreateChannelRequest, EditPhotoRequest,
     GetFullChannelRequest, DeleteChannelRequest
 )
 from telethon.tl.types import (
-    Channel, Message, PeerChannel
+    Channel, Message, Photo, 
+    PeerChannel, Document
 )
 from telethon import events
 from telethon.tl.types.auth import SentCode
@@ -427,13 +427,14 @@ class TelegramAccount:
         """Returns ``True`` if you logged in account"""
         return await self.TelegramClient.is_user_authorized()
 
-    async def connect(self) -> None:
+    async def connect(self) -> 'TelegramAccount':
         """
         Connects to Telegram. Typically
         you will use this method if you have
         ``StringSession`` (``session`` specified).
         """
         await self.TelegramClient.connect()
+        return self
 
     async def send_code_request(self, force_sms: bool=False) -> SentCode:
         """
@@ -761,7 +762,7 @@ class EncryptedRemoteBox:
         .. note::
             - The default order is from newest to oldest, but this\
             behaviour can be changed with the ``reverse`` parameter.
-            - You may ignore ``key` and ``dlb`` if you call\
+            - You may ignore ``key`` and ``dlb`` if you call\
             this method on ``DecryptedRemoteBox``.
 
         Arguments:
@@ -984,7 +985,8 @@ class EncryptedRemoteBox:
                 (downloaded_bytes, total). 
         """
         state = AES(ff.filekey, ff.file_iv)
-        oe = OpenPretender(ff.file, state, mode=1)
+
+        oe = OpenPretender(ff.file, state, ff.size)
         oe.concat_metadata(ff.metadata)
             
         ifile = await upload_file(
@@ -994,7 +996,8 @@ class EncryptedRemoteBox:
             progress_callback = progress_callback
         )
         file_message = await self._ta.TelegramClient.send_file(
-            self._box_channel, file=ifile, silent=True,
+            self._box_channel, 
+            file=ifile, silent=True,
             force_document=True
         )        
         await ff.make_local(file_message.id, 
@@ -1710,9 +1713,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             raise TypeError('outfile not Union[BinaryIO, str, PathLike].')
         
         iter_down = download_file(
-            client=self._ta.TelegramClient,
-            location=self._message.document,
-            request_size=request_size,
+            client = self._ta.TelegramClient,
+            location = self._message.document,
+            request_size = request_size,
         )
         buffered, offset, total = b'', self._file_pos, 0
         async for chunk in iter_down:
@@ -2116,12 +2119,12 @@ class DecryptedLocalBox(EncryptedLocalBox):
             yield file
         
     async def make_file( 
-            self, file: Union[BinaryIO, BytesIO, bytes],
+            self, file: Union[BinaryIO, bytes, Document, Photo],
             file_size: Optional[int] = None,
-            foldername: bytes=DEF_NO_FOLDER,
+            foldername: bytes = DEF_NO_FOLDER,
             file_name: Optional[bytes] = None,
-            comment: bytes=b'',
-            make_preview: bool=True) -> 'FutureFile':
+            comment: bytes = b'',
+            make_preview: bool = True) -> 'FutureFile':
         """
         Prepares your file for ``RemoteBox.push_file``
 
@@ -2174,7 +2177,52 @@ class DecryptedLocalBox(EncryptedLocalBox):
         file_salt, file_iv = get_rnd_bytes(), get_rnd_bytes(16)
         filekey = make_filekey(self._mainkey, file_salt)
         
-        if hasattr(file, 'name'):
+        if isinstance(file, (Document, Photo)):
+            class TelegramVirtualFile:
+                def __init__(self, doc_pic, session):
+                    # Will be used for if conditions
+                    self.telegram_vf = None
+
+                    self.downloader = None
+                    self.doc_pic = doc_pic
+
+                    self.ta = TelegramAccount(
+                        session=session).connect()
+                    self._client_initialized = False
+                    
+                    file = File(doc_pic)
+                    self.name = file.name
+                    self.size = file.size
+
+                    self.duration = file.duration\
+                        if file.duration else 0
+                
+                async def get_preview(self, quality: int=1) -> bytes:
+                    if not self._client_initialized:
+                        self.ta = await self.ta
+                        self._client_initialized = True
+
+                    return await self.ta.TelegramClient.download_media(
+                        message = self.doc_pic, 
+                        thumb = quality,
+                        file = bytes
+                    )
+                async def read(self, size: int) -> bytes:
+                    if not self._client_initialized:
+                        self.ta = await self.ta
+                        self._client_initialized = True
+
+                    if not self.downloader:
+                        self.downloader = download_file(
+                            self.ta.TelegramClient, self.doc_pic
+                        )
+                    chunk = await anext(self.downloader)
+                    return chunk
+            
+            file = TelegramVirtualFile(file, self._session)
+            make_preview = False # We will call get_preview
+
+        if hasattr(file, 'name') and file.name:
             file_path = Path(file.name)
             file_name = file_path.name if not file_name else file_name
             if len(file_name) > FILE_NAME_MAX: 
@@ -2183,23 +2231,26 @@ class DecryptedLocalBox(EncryptedLocalBox):
             file_name, file_path = prbg(8).hex(), ''
         
         if not file_size:
-            try:
-                file_size = getsize(file.name)
-            except (FileNotFoundError, AttributeError):
-                if isinstance(file, bytes):
-                    file_size = len(file)
-                    file = BytesIO(file)
+            if hasattr(file, 'telegram_vf'):
+                file_size = file.size 
+            else:
+                try:
+                    file_size = getsize(file.name)
+                except (FileNotFoundError, AttributeError):
+                    if isinstance(file, bytes):
+                        file_size = len(file)
+                        file = BytesIO(file)
 
-                elif hasattr(file, '__len__'):
-                    file_size = len(file)
+                    elif hasattr(file, '__len__'):
+                        file_size = len(file)
 
-                elif hasattr(file,'seek') and file.seekable():
-                    file.seek(0,2)
-                    file_size = file.tell()
-                    file.seek(0,0)
-                else:
-                    rb, file_size = file.read(), len(rb)
-                    file = BytesIO(rb); del(rb)
+                    elif hasattr(file,'seek') and file.seekable():
+                        file.seek(0,2)
+                        file_size = file.tell()
+                        file.seek(0,0)
+                    else:
+                        rb, file_size = file.read(), len(rb)
+                        file = BytesIO(rb); del(rb)
                     
             if file_size <= 0:
                 raise ValueError('File can\'t be empty.')
@@ -2214,6 +2265,10 @@ class DecryptedLocalBox(EncryptedLocalBox):
             file_type = None
 
         preview, duration = b'', 0
+
+        if hasattr(file, 'telegram_vf'):
+            preview = await file.get_preview()
+            duration = file.duration
 
         if file_type in ('audio','video','image'):
             try:
@@ -2235,19 +2290,19 @@ class DecryptedLocalBox(EncryptedLocalBox):
         duration = 0 if duration > DURATION_MAX else duration
 
         return FutureFile(
-            dlb=self, 
-            file_name=file_name,
-            foldername=foldername, 
-            file=file,
-            filekey=filekey, 
-            comment=comment,
-            size=file_size, 
-            preview=preview, 
-            duration=duration,
-            file_salt=file_salt, 
-            file_iv=file_iv, 
-            verbyte=VERBYTE,
-            imported=False
+            dlb = self, 
+            file_name = file_name,
+            foldername = foldername, 
+            file = file,
+            filekey = filekey, 
+            comment = comment,
+            size = file_size, 
+            preview = preview, 
+            duration = duration,
+            file_salt = file_salt, 
+            file_iv = file_iv, 
+            verbyte = VERBYTE,
+            imported = False
         )
     async def import_file( 
             self, drbf: DecryptedRemoteBoxFile,
@@ -2957,9 +3012,8 @@ class FutureFile:
     def metadata(self) -> RemoteBoxFileMetadata:
         """Returns Metadata compiled from class data."""
         if not hasattr(self, '_metadata'):
-            enc_foldername = AES(self.dlb._mainkey).encrypt(
-                self.foldername
-            )
+            enc_foldername = AES(self.dlb._mainkey).encrypt(self.foldername)
+
             self._metadata = RemoteBoxFileMetadata(
                 file_name = self.file_name,
                 enc_foldername = enc_foldername,
@@ -2991,7 +3045,6 @@ class FutureFile:
         duration = float_to_bytes(self.duration)
         size = int_to_bytes(self.size)
         upload_time = int_to_bytes(upload_time)
-        
         try:
             # Verify that there is no file with same ID
             maybe_file = await self.dlb._tgbox_db.Files.select_once(
@@ -3011,12 +3064,11 @@ class FutureFile:
             file_name = self.file_name
         else:
             file_name = self.file_name.encode()
-
-        if hasattr(self.file, 'name'):
-            file_path = AES(self.filekey).encrypt(
-                self.file.name.encode())
-        else:
-            file_path = None
+        
+        file_path = None
+        if hasattr(self.file, 'name') and self.file.name:
+            if Path(self.file.name).exists():
+                file_path = AES(self.filekey).encrypt(self.file.name.encode())
         
         folder_id = make_folder_id(self.dlb._mainkey, self.foldername)
 
