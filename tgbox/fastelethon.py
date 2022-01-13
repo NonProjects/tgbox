@@ -306,12 +306,12 @@ class ParallelTransferrer:
         await self._cleanup()
 
 
-parallel_transfer_locks: DefaultDict[int, asyncio.Lock] = defaultdict(lambda: asyncio.Lock())
-
+parallel_transfer_locks: DefaultDict[int, asyncio.Lock] =\
+    defaultdict(lambda: asyncio.Lock())
 
 async def stream_file(
         file_to_stream: BinaryIO, 
-        chunk_size = 524288
+        chunk_size = 1024
     ):
     """``file_to_stream.read`` can be coroutine."""
     while True:
@@ -353,7 +353,7 @@ async def _internal_transfer_to_telegram(
         part_size = part_size_kb*1024
 
     buffer = bytearray()
-    async for data in stream_file(response, part_size, file_size):
+    async for data in stream_file(response, part_size):
         if progress_callback:
             r = progress_callback(response.tell(), file_size)
             if inspect.isawaitable(r):
