@@ -131,6 +131,7 @@ dmypy.json
 # Vim
 *.swp
 *.swo
+*.swn
 
 # User defined
 *.hidden
