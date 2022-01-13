@@ -2,6 +2,7 @@
 
 from hashlib import sha256
 from random import randrange
+from asyncio import iscoroutine
 
 from subprocess import (
     PIPE, STDOUT, 
@@ -319,9 +320,13 @@ class SearchFilter:
 class OpenPretender:
     """
     Class to wrap Tgbox AES Generators and make it look
-    like opened to "rb"-read file. Designed to work with Telethon.
+    like opened to "rb"-read file. 
     """
-    def __init__(self, flo: BinaryIO, aes_state: AES, mode: int):
+    def __init__(
+            self, flo: BinaryIO, 
+            aes_state: AES, 
+            file_size: Optional[int] = None
+        ):
         """
         Arguments:
             flo (``BinaryIO``):
@@ -329,33 +334,35 @@ class OpenPretender:
 
             aes_state (``AESwState``):
                 ``AESwState`` with Key and IV.
-
-            mode (``int``):
-                Mode of ``AESwState`` (1=Enc, 2=Dec).
         """
         self._aes_state = aes_state
-        self._mode, self._flo = mode, flo
+        self._flo = flo
+
         self._buffered_bytes = b''
-        self._total_size = None
+        self._total_size = file_size
         self._position = 0
 
     def concat_metadata(self, metadata: RemoteBoxFileMetadata) -> None:
         """Concates metadata to the file as (metadata + file)."""
         assert len(metadata) <= METADATA_MAX
 
-        if self._total_size is not None or self._buffered_bytes:
+        if self._position: 
             raise ConcatError('Concat must be before any usage of object.')
         else:
             self._buffered_bytes += metadata.constructed 
     
-    def read(self, size: int=-1) -> bytes: 
+    async def read(self, size: int=-1) -> bytes: 
         """
-        Returns ``size`` bytes from Generator.
+        Returns ``size`` bytes from async Generator.
+
+        This function is async only because of 
+        Telegram ``File`` uploading feature. You
+        can use ``tgbox.sync`` in your code for reading.
         
         Arguments:
             size (``int``):
-                Amount of bytes to return. By default 
-                is negative (return all). 
+                Amount of bytes to return. By 
+                default is negative (return all). 
         """
         if size % 16 and not size == -1:
             raise ValueError('size must be divisible by 16 or -1 (return all)')
@@ -372,15 +379,14 @@ class OpenPretender:
             self._buffered_bytes = b''
 
             if size == -1:
-                if self._mode == 1:
-                    block = buffered + self._aes_state.encrypt(
-                        self._flo.read(), pad=True)
-                else:
-                    block = buffered + self._aes_state.decrypt(
-                        self._flo.read(), unpad=True)
-            
-            elif self._mode == 1:
+                chunk = self._flo.read()
+                chunk = await chunk if iscoroutine(chunk) else chunk
+
+                block = buffered + self._aes_state.encrypt(
+                    chunk, pad=True, concat_iv=False)
+            else:
                 chunk = self._flo.read(size)
+                chunk = await chunk if iscoroutine(chunk) else chunk
 
                 if len(chunk) % 16:
                     shift = int(-(len(chunk) % 16))
@@ -388,9 +394,11 @@ class OpenPretender:
                     shift = None
                 
                 if self._total_size <= 0 or size > self._total_size or shift != None:
-                    chunk = buffered + self._aes_state.encrypt(chunk, pad=True)
+                    chunk = buffered + self._aes_state.encrypt(
+                        chunk, pad=True, concat_iv=False)
                 else:
-                    chunk = buffered + self._aes_state.encrypt(chunk, pad=False)
+                    chunk = buffered + self._aes_state.encrypt(
+                        chunk, pad=False, concat_iv=False)
                 
                 shift = size if len(chunk) > size else None
                 
@@ -399,12 +407,6 @@ class OpenPretender:
 
                 self._total_size -= size
                 block = chunk[:shift]
-            else:
-                self._total_size -= size
-                if self._total_size <= 16:
-                    block = aes_t(self._flo.read(size), unpad=True)
-                else:
-                    block = aes_t(self._flo.read(size), unpad=False)
         
         self._position += len(block)
         return block
@@ -467,7 +469,7 @@ def make_folder_id(mainkey: MainKey, foldername: bytes) -> bytes:
             Folder name.
     """
     return sha256(sha256(mainkey.key).digest() + foldername).digest()[:16]
-        
+
 def prbg(size: int) -> bytes:
     """Will generate ``size`` pseudo-random bytes."""
     return bytes([randrange(256) for _ in range(size)])
