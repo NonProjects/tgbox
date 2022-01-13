@@ -11,38 +11,54 @@ and may not work as you expected in your libraries.
 
 Big thanks to all contributors of this module.
 """
+
+import os
+import math
 import asyncio
 import hashlib
 import inspect
 import logging
-import math
-import os
-from collections import defaultdict
-from typing import Optional, List, AsyncGenerator, Union, Awaitable, DefaultDict, Tuple, BinaryIO
 
+from typing import (
+    Optional, List, AsyncGenerator, 
+    Union, Awaitable, BinaryIO,
+    DefaultDict, Tuple
+)
+from collections import defaultdict
+
+from telethon.tl.functions.auth import (
+    ExportAuthorizationRequest, 
+    ImportAuthorizationRequest
+)
 from telethon import utils, helpers, TelegramClient
+from telethon.tl.custom.file import File
+
 from telethon.crypto import AuthKey
 from telethon.network import MTProtoSender
+
 from telethon.tl.alltlobjects import LAYER
 from telethon.tl.functions import InvokeWithLayerRequest
-from telethon.tl.functions.auth import ExportAuthorizationRequest, ImportAuthorizationRequest
-from telethon.tl.functions.upload import (GetFileRequest, SaveFilePartRequest,
-                                          SaveBigFilePartRequest)
-from telethon.tl.types import (Document, InputFileLocation, InputDocumentFileLocation,
-                               InputPhotoFileLocation, InputPeerPhotoFileLocation, TypeInputFile,
-                               InputFileBig, InputFile)
 
-try:
-    from mautrix.crypto.attachments import async_encrypt_attachment
-except ImportError:
-    async_encrypt_attachment = None
-
+from telethon.tl.types import (
+    Document, InputFileLocation, 
+    InputDocumentFileLocation,
+    InputPhotoFileLocation, 
+    InputPeerPhotoFileLocation, 
+    TypeInputFile, Photo,
+    InputFileBig, InputFile
+)
+from telethon.tl.functions.upload import (
+    GetFileRequest, 
+    SaveFilePartRequest,
+    SaveBigFilePartRequest
+)
 log: logging.Logger = logging.getLogger("telethon")
 
-TypeLocation = Union[Document, InputDocumentFileLocation, InputPeerPhotoFileLocation,
-                     InputFileLocation, InputPhotoFileLocation]
-
-
+TypeLocation = Union[
+    Document, Photo, InputDocumentFileLocation, 
+    InputPeerPhotoFileLocation,
+    InputFileLocation, InputPhotoFileLocation
+]
 class DownloadSender:
     client: TelegramClient
     sender: MTProtoSender
@@ -293,14 +309,22 @@ class ParallelTransferrer:
 parallel_transfer_locks: DefaultDict[int, asyncio.Lock] = defaultdict(lambda: asyncio.Lock())
 
 
-def stream_file(file_to_stream: BinaryIO, chunk_size=1024):
+async def stream_file(
+        file_to_stream: BinaryIO, 
+        chunk_size = 524288, 
+        file_size: Optional[int] = None
+    ):
+    """``file_to_stream.read`` can be coroutine."""
     while True:
         data_read = file_to_stream.read(chunk_size)
-        if not data_read: 
-            break
-        else:
-            yield data_read
 
+        if inspect.iscoroutine(data_read):
+            data_read = await data_read
+
+        if data_read:
+            yield data_read
+        else: 
+            break
 
 async def _internal_transfer_to_telegram(
         client: TelegramClient,
@@ -330,7 +354,7 @@ async def _internal_transfer_to_telegram(
         part_size = part_size_kb*1024
 
     buffer = bytearray()
-    for data in stream_file(response, part_size):
+    async for data in stream_file(response, part_size, file_size):
         if progress_callback:
             r = progress_callback(response.tell(), file_size)
             if inspect.isawaitable(r):
@@ -372,8 +396,12 @@ async def download_file(
         offset: int=None,
         progress_callback: callable = None
         ) -> AsyncGenerator[bytes, None]:
+    
+    if isinstance(location, Photo):
+        size = File(location).size
+    else:
+        size = location.size
 
-    size = location.size
     dc_id, location = utils.get_input_location(location)
 
     # We lock the transfers because telegram has connection count limits
