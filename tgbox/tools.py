@@ -192,8 +192,7 @@ class RemoteBoxFileMetadata:
         assert len(filedata) <= FILEDATA_MAX
 
         if self.preview:
-            preview = AES(self.filekey).encrypt(preview)
-            assert len(preview) <= PREVIEW_MAX+16 
+            preview = AES(self.filekey).encrypt(self.preview)
         else:
             preview = b''
 
