@@ -2140,7 +2140,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 ``file.name``. If it's impossible, then method tries to
                 seek file to EOF, if file isn't seekable, then we try to
                 get size by ``len()`` (as ``__len__`` dunder). If all fails,
-                method tries to get file.read())`` (with load to RAM).
+                method tries to get ``file.read())`` (with load to RAM).
                 
                 File name length must be <= ``constants.FILE_NAME_MAX``;
                 Filesize must be <= ``constants.FILESIZE_MAX``;
