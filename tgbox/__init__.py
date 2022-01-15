@@ -41,7 +41,7 @@ __all__ = [
     'FAST_EVENT_LOOP'
 ]
 
-def sync(coro_or_func: Coroutine):
+def sync(coroutine: Coroutine):
     """
     Will call asynchronous function
     in ``tgbox.loop`` and return result.
