@@ -68,8 +68,8 @@ You can also build docs from the source
 .. code-block:: console
 
    git clone https://github.com/NonProject/tgbox --branch=main
-   cd tgbox; python3 -m pip install -r requirements.txt
-   cd docs; make html; <your-browser> _build/html/index.html
+   cd tgbox & python3 setup.py install
+   cd docs & make html & <your-browser> _build/html/index.html
 
 Third party & thanks to
 -----------------------
