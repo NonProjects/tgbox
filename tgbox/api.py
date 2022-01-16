@@ -9,10 +9,12 @@ from filetype import guess as filetype_guess
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.errors import SessionPasswordNeededError
 
 from telethon.tl.custom.file import File
 from telethon.tl.functions.messages import EditChatAboutRequest
+
+from telethon.errors import SessionPasswordNeededError
+from telethon.errors.rpcerrorlist import AuthKeyUnregisteredError
 
 from telethon.tl.functions.channels import (
     CreateChannelRequest, EditPhotoRequest,
@@ -30,15 +32,15 @@ from .crypto import AESwState as AES
 
 from .keys import (
     make_filekey, make_requestkey,
+    EncryptedMainkey, make_mainkey,
     make_sharekey, MainKey, RequestKey, 
-    ShareKey, ImportKey, FileKey, BaseKey,
-    EncryptedMainkey, make_mainkey
+    ShareKey, ImportKey, FileKey, BaseKey
 )
 from .constants import (
+    PREVIEW_MAX, DURATION_MAX, DEF_NO_FOLDER, NAVBYTES_SIZE,
     VERSION, VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME,
     DOWNLOAD_PATH, API_ID, API_HASH, FILESIZE_MAX,
-    FILE_NAME_MAX, FOLDERNAME_MAX, COMMENT_MAX,
-    PREVIEW_MAX, DURATION_MAX, DEF_NO_FOLDER, NAVBYTES_SIZE
+    FILE_NAME_MAX, FOLDERNAME_MAX, COMMENT_MAX
 )
 from .fastelethon import upload_file, download_file
 from .db import TgboxDB
@@ -46,15 +48,15 @@ from . import loop
 
 from .errors import (
     IncorrectKey, NotInitializedError,
-    InUseException, BrokenDatabase,
     AlreadyImported, RemoteFileNotFound,
+    DurationImpossible, SessionUnregistered,
     NotImported, AESError, PreviewImpossible,
-    DurationImpossible
+    InUseException, BrokenDatabase, RemoteBoxDeleted
 )
 from .tools import (
+    make_folder_id, get_media_duration, float_to_bytes, 
     int_to_bytes, bytes_to_int, RemoteBoxFileMetadata, 
     make_media_preview, SearchFilter, OpenPretender, 
-    make_folder_id, get_media_duration, float_to_bytes, 
     bytes_to_float, prbg, anext, pad_request_size
 )
 from typing import (
@@ -285,11 +287,18 @@ async def get_remote_box(
     elif ta and not entity:
         raise ValueError('entity must be specified with ta')
     else:
-        account = TelegramAccount(session=dlb._session)
-        await account.connect()
-    
-    entity = entity if entity else PeerChannel(dlb._box_channel_id)
-    channel_entity = await account.TelegramClient.get_entity(entity)
+        account = await TelegramAccount(session=dlb._session).connect()
+    try:
+        entity = entity if entity else PeerChannel(dlb._box_channel_id)
+        channel_entity = await account.TelegramClient.get_entity(entity)
+    except AuthKeyUnregisteredError:
+        raise SessionUnregistered(
+            '''Session was disconnected. Change it with '''
+            '''DecryptedLocalBox.replace_session method.'''
+        ) from None
+    except ValueError:
+        # ValueError: Could not find the input entity for PeerChannel
+        raise RemoteBoxDeleted(RemoteBoxDeleted.__doc__) from None
 
     if not dlb:
         return EncryptedRemoteBox(channel_entity, account)
@@ -1056,45 +1065,57 @@ class EncryptedRemoteBox:
             return DecryptedRemoteBox(self, key=key, dlb=dlb) 
 
 class DecryptedRemoteBox(EncryptedRemoteBox):
+    """
+    *RemoteBox* is a remote cloud storage. You can
+    upload files and download them later.
+
+    Locally we only keep info about files (in *LocalBox*).
+    You can fully restore your LocalBox from RemoteBox.
+
+    This class represents decrypted RemoteBox, you can
+    iterate over all decrypted files, clone and upload.
+    
+    .. code-block:: python
+
+        from tgbox.api import get_local_box, get_remote_box
+        from tgbox.keys import make_basekey, Phrase
+    
+        phrase = Phrase('very_bad_phrase')
+        basekey = make_basekey(phrase)
+
+        dlb = await dlb.get_local_box(basekey)
+        drb = await get_remote_box(dlb)
+        
+        # Make a FutureFile
+        ff = await dlb.make_file(open('cats.jpg','rb'))
+
+        # Waiting file for upload, return DecryptedRemoteBoxFile
+        drbf = await drb.push_file(ff)
+
+        # Get some info
+        print(drbf.file_name, drbf.size)
+
+        # Remove file from RemoteBox
+        await drbf.delete()
+        
+        # Check if file exists
+        print(await drb.file_exists(drbf.id)
+    """
     def __init__(
             self, erb: EncryptedRemoteBox, 
             key: Optional[Union[MainKey, ImportKey, BaseKey]] = None,
             dlb: Optional['DecryptedLocalBox'] = None):
         """
-        *RemoteBox* is a remote cloud storage. You can
-        upload files and download them later.
+        Arguments:
+            erb (``EncryptedRemoteBox``):
+                ``EncryptedRemoteBox`` you want to decrypt.
 
-        Locally we only keep info about files (in *LocalBox*).
-        You can fully restore your LocalBox from RemoteBox.
+            key (``MainKey``, ``ImportKey``, ``BaseKey``, optional):
+                Decryption ``Key``. Must be specified if ``dlb`` is ``None``.
 
-        This class represents decrypted RemoteBox, you can
-        iterate over all decrypted files, clone and upload.
-        
-        .. code-block:: python
-
-            from tgbox.api import get_local_box, get_remote_box
-            from tgbox.keys import make_basekey, Phrase
-        
-            phrase = Phrase('very_bad_phrase')
-            basekey = make_basekey(phrase)
-
-            dlb = await dlb.get_local_box(basekey)
-            drb = await get_remote_box(dlb)
-            
-            # Make a FutureFile
-            ff = await dlb.make_file(open('cats.jpg','rb'))
-
-            # Waiting file for upload, return DecryptedRemoteBoxFile
-            drbf = await drb.push_file(ff)
-
-            # Get some info
-            print(drbf.file_name, drbf.size)
-
-            # Remove file from RemoteBox
-            await drbf.delete()
-            
-            # Check if file exists
-            print(await drb.file_exists(drbf.id)
+            dlb (``DecryptedLocalBox``, optional):
+                ``DecryptedLocalBox`` associated with this *RemoteBox*. 
+                Must be specified if ``key`` is ``None``.
         """
         self._ta = erb._ta
         self._enc_class = False
@@ -2063,7 +2084,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             try:
                 # We encrypt Session with Basekey to prevent stealing 
                 # Session information by people who also have mainkey 
-                # of the same box. So there is decryption with ``basekey``.
+                # of the same box. So there is decryption with basekey.
                 self._session = AES(basekey).decrypt(elb._session).decode()
             except UnicodeDecodeError:
                 raise IncorrectKey('Can\'t decrypt Session. Invalid Basekey?') 
@@ -2103,6 +2124,32 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 folder_iv=folder[1],
                 folder_id=folder[2]
             )
+    async def replace_session(
+            self, basekey: BaseKey, ta: TelegramAccount) -> None:
+        """
+        This method will replace LocalBox session to
+        session of specified ``TelegramAccount``.
+
+        Arguments:
+            basekey (``BaseKey``):
+                ``BaseKey`` of this *LocalBox*.
+
+            ta (``TelegramAccount``):
+                ``TelegramAccount`` from which we
+                will extract new session. 
+        """
+        try:
+            AES(basekey).decrypt(self._elb._session).decode()
+        except UnicodeDecodeError:
+            raise IncorrectKey('BaseKey doesn\'t match with BaseKey of LocalBox') 
+        else:
+            self._session = ta.get_session()
+
+            session = AES(basekey).encrypt(self._session.encode())
+            self._elb._session = session
+
+            sql_tuple = ('UPDATE BOX_DATA SET SESSION = ?',(session,))
+            await self._tgbox_db.BoxData.execute(sql_tuple) 
 
     async def search_file(
             self, sf: SearchFilter) -> AsyncGenerator[
