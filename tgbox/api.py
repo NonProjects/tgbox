@@ -2120,9 +2120,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
         async for folder in folders_list:
             yield LocalBoxFolder(
                 self._tgbox_db, self._mainkey,
-                enc_foldername=folder[0],
-                folder_iv=folder[1],
-                folder_id=folder[2]
+                enc_foldername = folder[0],
+                folder_iv = folder[1],
+                folder_id = folder[2]
             )
     async def replace_session(
             self, basekey: BaseKey, ta: TelegramAccount) -> None:
@@ -2141,7 +2141,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
         try:
             AES(basekey).decrypt(self._elb._session).decode()
         except UnicodeDecodeError:
-            raise IncorrectKey('BaseKey doesn\'t match with BaseKey of LocalBox') 
+            raise IncorrectKey(
+                'BaseKey doesn\'t match with BaseKey of LocalBox') from None
         else:
             self._session = ta.get_session()
 
