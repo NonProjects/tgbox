@@ -43,6 +43,12 @@ class BrokenDatabase(Exception):
 class RemoteFileNotFound(Exception):
     """Seems that there is no requested by you file"""
 
+class SessionUnregistered(Exception):
+    """Session you trying to use was disconnected"""
+
+class RemoteBoxDeleted(Exception):
+    """The RemoteBox you try to use was deleted"""
+
 # LocalBox Exceptions
 
 class AlreadyImported(Exception):
