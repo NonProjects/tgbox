@@ -1,5 +1,6 @@
 TGBOX: encrypted cloud storage based on Telegram API
 ====================================================
+.. image:: https://readthedocs.org/projects/tgbox/badge/?version=latest
 
 .. code-block:: python
 
