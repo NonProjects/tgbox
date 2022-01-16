@@ -11,6 +11,7 @@ from telethon import TelegramClient
 from telethon.sessions import StringSession
 
 from telethon.tl.custom.file import File
+from telethon.tl.functions.auth import ResendCodeRequest
 from telethon.tl.functions.messages import EditChatAboutRequest
 
 from telethon.errors import SessionPasswordNeededError
@@ -37,10 +38,10 @@ from .keys import (
     ShareKey, ImportKey, FileKey, BaseKey
 )
 from .constants import (
+    FILE_NAME_MAX, FOLDERNAME_MAX, COMMENT_MAX, DEF_UNK_FOLDER,
     PREVIEW_MAX, DURATION_MAX, DEF_NO_FOLDER, NAVBYTES_SIZE,
     VERSION, VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME,
-    DOWNLOAD_PATH, API_ID, API_HASH, FILESIZE_MAX,
-    FILE_NAME_MAX, FOLDERNAME_MAX, COMMENT_MAX
+    DOWNLOAD_PATH, API_ID, API_HASH, FILESIZE_MAX
 )
 from .fastelethon import upload_file, download_file
 from .db import TgboxDB
@@ -193,13 +194,13 @@ async def _search_func(
             if sf.file_name: continue
 
         for file_salt in sf.file_salt:
-            if in_func(file_salt, rbf.file_salt):
+            if in_func(file_salt, file.file_salt):
                 break
         else:
             if sf.file_salt: continue
 
         for verbyte in sf.verbyte:
-            if verbyte == rbf.verbyte:
+            if verbyte == file.verbyte:
                 break
         else:
             if sf.verbyte: continue
@@ -1103,14 +1104,14 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
     """
     def __init__(
             self, erb: EncryptedRemoteBox, 
-            key: Optional[Union[MainKey, ImportKey, BaseKey]] = None,
+            key: Optional[Union[MainKey, ImportKey]] = None,
             dlb: Optional['DecryptedLocalBox'] = None):
         """
         Arguments:
             erb (``EncryptedRemoteBox``):
                 ``EncryptedRemoteBox`` you want to decrypt.
 
-            key (``MainKey``, ``ImportKey``, ``BaseKey``, optional):
+            key (``MainKey``, ``ImportKey``, optional):
                 Decryption ``Key``. Must be specified if ``dlb`` is ``None``.
 
             dlb (``DecryptedLocalBox``, optional):
@@ -1128,17 +1129,13 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
         self._dlb = dlb
 
         if self._dlb:
-            self._mainkey = dlb._mainkey
+            self._mainkey = self._dlb._mainkey
         else:
             if not key:
                 raise ValueError('Must be specified at least key or dlb')
-
+            
             if isinstance(key, (MainKey, ImportKey)):
                 self._mainkey = MainKey(key.key)
-                
-            elif isinstance(key, BaseKey):
-                if isinstance(elb._mainkey, EncryptedMainkey):
-                    self._mainkey = make_mainkey(key, self._box_salt)
             else:
                 raise IncorrectKey('key is not Union[MainKey, ImportKey, BaseKey]')
     
