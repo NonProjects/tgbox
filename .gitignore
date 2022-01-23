@@ -128,10 +128,8 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# Vim
-*.swp
-*.swo
-*.swn
+# VIM
+*.sw*
 
 # User defined
 *.hidden
