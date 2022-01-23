@@ -165,17 +165,21 @@ async def _search_func(
             if file.upload_time > sf.max_time:
                 continue
 
-        for size in sf.min_size:
-            if file_size >= size:
-                break
-        else: 
-            if sf.min_size: continue
+        if sf.min_size is not None:
+            if file_size < sf.min_size:
+                continue
 
-        for size in sf.max_size:
-            if file_size <= size:
-                break
-        else: 
-            if sf.max_size: continue
+        if sf.max_size is not None:
+            if file_size > sf.max_size:
+                continue
+        
+        if sf.min_id is not None:
+            if file.id < sf.min_id:
+                continue
+
+        if sf.max_id is not None:
+            if file.id > sf.max_id:
+                continue
 
         for comment in sf.comment:
             if file.comment and in_func(comment, file.comment):
