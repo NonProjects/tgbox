@@ -215,17 +215,21 @@ class SearchFilter:
     """
     def __init__(
             self, *, 
-            id:        Optional[Union[int,   List[int]]]   = None, 
             comment:   Optional[Union[bytes, List[bytes]]] = None,
             folder:    Optional[Union[bytes, List[bytes]]] = None,
             file_name: Optional[Union[bytes, List[bytes]]] = None,
-            min_size:  Optional[Union[int,   List[int]]]   = None,
-            max_size:  Optional[Union[int,   List[int]]]   = None,
             file_salt: Optional[Union[bytes, List[bytes]]] = None,
             verbyte:   Optional[Union[bytes, List[bytes]]] = None,
 
-            min_time:  Optional[int ] = None,
-            max_time:  Optional[int ] = None,
+            min_id:    Optional[int] = None,
+            max_id:    Optional[int] = None,
+
+            min_size:  Optional[int] = None,
+            max_size:  Optional[int] = None,
+
+            min_time:  Optional[int] = None,
+            max_time:  Optional[int] = None,
+
             exported:  Optional[bool] = None, 
             re:        Optional[bool] = None
         ):
@@ -233,8 +237,8 @@ class SearchFilter:
         All kwargs will be converted to ``List``.
         If nothing specified, then search will nothing return. 
         
-        You can extend all params via (i.e) ``sf.id.append`` or via
-        concatenation (``+``) of two ``SearchFilter`` classes.
+        You can extend all params via (i.e) ``sf.folder.append`` 
+        or via concatenation of two ``SearchFilter`` classes.
         
         You can make a new ``SearchFilter`` from two other 
         SearchFilters via floordiv (``//``).
@@ -243,11 +247,11 @@ class SearchFilter:
         be also a regular expression.
         
         kwarg ``re`` will tell the ``tgbox.api._search_func`` that
-        *all* bytes that you specify is Regular Expressions. 
-        """
-        self.id = id if isinstance(id, list)\
-            else ([] if not id else [id])
+        *all* bytes that you specify is Regular Expressions.
 
+        ``min_id = 5`` will include file with ``id == 5``, as
+        search_func check ``if file.X < min_X (i.e X=time, id, size)``
+        """
         self.comment = comment if isinstance(comment, list)\
             else ([] if not comment else [comment])
 
@@ -257,18 +261,18 @@ class SearchFilter:
         self.file_name = file_name if isinstance(file_name, list)\
             else ([] if not file_name else [file_name])
 
-        self.min_size = min_size if isinstance(min_size, list)\
-            else ([] if not min_size else [min_size])
-
-        self.max_size = max_size if isinstance(max_size, list)\
-            else ([] if not max_size else [max_size])
-
         self.file_salt = file_salt if isinstance(file_salt, list)\
             else ([] if not file_salt else [file_salt])
 
         self.verbyte = verbyte if isinstance(verbyte, list)\
             else ([] if not verbyte else [verbyte])
         
+        self.min_id = min_id
+        self.max_id = max_id
+
+        self.min_size = min_size
+        self.max_size = max_size
+
         self.min_time = min_time
         self.max_time = max_time
 
@@ -277,8 +281,15 @@ class SearchFilter:
         
     def __hash__(self) -> int:
         return hash((
-            self.id, self.time, self.comment, self.folder, self.exported, self.max_size,
-            self.file_name, self.min_size, self.file_salt, self.verbyte, self.re
+            self.min_id,    self.max_id,
+            self.min_size,  self.max_size,
+            self.min_time,  self.max_time,
+
+            self.comment,   self.folder, 
+            self.exported,  self.file_name,
+            self.file_salt, self.verbyte, 
+
+            self.re # So lonely :(
         ))
     def __eq__(self, other) -> bool:
         return all((
@@ -288,8 +299,16 @@ class SearchFilter:
     def __bool__(self) -> bool:
         """Will return ``True`` if any(kwargs)"""
         return any((
-            self.id, self.time, self.comment, self.folder, self.exported, self.max_size,
-            self.file_name, self.min_size, self.file_salt, self.verbyte, self.re
+            self.min_id,    self.max_id,
+            self.min_size,  self.max_size,
+            self.min_time,  self.max_time,
+
+            self.comment,   self.folder, 
+            self.file_salt, self.verbyte, 
+
+            self.file_name,
+            self.re is not None,
+            self.exported is not None
         ))
     def __add__(self, other: 'SearchFilter') -> None:
         """
@@ -298,12 +317,9 @@ class SearchFilter:
         If ``min_time`` or ``max_time`` is specified
         in ``other``, then it will be ignored.
         """
-        self.id.extend(other.id)
         self.comment.extend(other.comment)
         self.folder.extend(other.folder)
         self.file_name.extend(other.file_name)
-        self.min_size.extend(other.min_size)
-        self.max_size.extend(other.max_size)
         self.file_salt.extend(other.file_salt)
         self.verbyte.extend(other.verbyte)
     
@@ -316,12 +332,9 @@ class SearchFilter:
         in ``other`` or ``self``, then it will be ignored.
         """
         return SearchFilter(
-            id        = self.id + other.id,
             comment   = self.comment + other.comment,
             folder    = self.folder + other.folder,
             file_name = self.file_name + other.file_name,
-            min_size  = self.min_size + other.min_size,
-            max_size  = self.max_size + other.max_size,
             file_salt = self.file_salt + other.file_salt,
             verbyte   = self.verbyte + other.verbyte,
 
