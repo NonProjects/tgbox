@@ -157,6 +157,14 @@ async def _search_func(
             if file.exported != sf.exported: 
                 continue
 
+        if sf.min_time is not None:
+            if file.upload_time < sf.min_time:
+                continue
+
+        if sf.max_time is not None:
+            if file.upload_time > sf.max_time:
+                continue
+
         for size in sf.min_size:
             if file_size >= size:
                 break
@@ -168,12 +176,6 @@ async def _search_func(
                 break
         else: 
             if sf.max_size: continue
-
-        for time in sf.time:
-            if all((file.upload_time - time > 0, file.upload_time - time <= 86400)):
-                break
-        else: 
-            if sf.time: continue
 
         for comment in sf.comment:
             if file.comment and in_func(comment, file.comment):
@@ -2945,9 +2947,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             self._foldername = DEF_NO_FOLDER
 
         self._comment = AES(self._filekey).decrypt(elbfi._comment)
-        self._size = AES(self._filekey).decrypt(elbfi._size)
-        self._duration = AES(self._filekey).decrypt(elbfi._duration)
-        self._upload_time = AES(self._filekey).decrypt(elbfi._upload_time)
+        self._size = bytes_to_int(AES(self._filekey).decrypt(elbfi._size))
+        self._duration = bytes_to_int(AES(self._filekey).decrypt(elbfi._duration))
+        self._upload_time = bytes_to_int(AES(self._filekey).decrypt(elbfi._upload_time))
         
         if not self._cache_preview:
             self._preview = None
