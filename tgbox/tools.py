@@ -214,16 +214,20 @@ class SearchFilter:
     in ``RemoteBox`` or ``DecryptedLocalBox``. 
     """
     def __init__(
-            self, *, id: Optional[Union[int, List[int]]] = None, 
-            time: Optional[Union[int, List[int]]] = None,
-            comment: Optional[Union[bytes, List[bytes]]] = None,
-            folder: Optional[Union[bytes, List[bytes]]] = None,
+            self, *, 
+            id:        Optional[Union[int,   List[int]]]   = None, 
+            comment:   Optional[Union[bytes, List[bytes]]] = None,
+            folder:    Optional[Union[bytes, List[bytes]]] = None,
             file_name: Optional[Union[bytes, List[bytes]]] = None,
-            min_size: Optional[Union[int, List[int]]] = None,
-            max_size: Optional[Union[int, List[int]]] = None,
+            min_size:  Optional[Union[int,   List[int]]]   = None,
+            max_size:  Optional[Union[int,   List[int]]]   = None,
             file_salt: Optional[Union[bytes, List[bytes]]] = None,
-            verbyte: Optional[Union[bytes, List[bytes]]] = None,
-            exported: Optional[bool] = None, re: Optional[bool] = None
+            verbyte:   Optional[Union[bytes, List[bytes]]] = None,
+
+            min_time:  Optional[int ] = None,
+            max_time:  Optional[int ] = None,
+            exported:  Optional[bool] = None, 
+            re:        Optional[bool] = None
         ):
         """
         All kwargs will be converted to ``List``.
@@ -243,9 +247,6 @@ class SearchFilter:
         """
         self.id = id if isinstance(id, list)\
             else ([] if not id else [id])
-
-        self.time = time if isinstance(time, list)\
-            else ([] if not time else [time])
 
         self.comment = comment if isinstance(comment, list)\
             else ([] if not comment else [comment])
@@ -268,6 +269,9 @@ class SearchFilter:
         self.verbyte = verbyte if isinstance(verbyte, list)\
             else ([] if not verbyte else [verbyte])
         
+        self.min_time = min_time
+        self.max_time = max_time
+
         self.exported = exported
         self.re = re
         
@@ -288,9 +292,13 @@ class SearchFilter:
             self.file_name, self.min_size, self.file_salt, self.verbyte, self.re
         ))
     def __add__(self, other: 'SearchFilter') -> None:
-        """Extends filters with ``other`` filters."""
+        """
+        Extends filters with ``other`` filters.
+
+        If ``min_time`` or ``max_time`` is specified
+        in ``other``, then it will be ignored.
+        """
         self.id.extend(other.id)
-        self.time.extend(other.time)
         self.comment.extend(other.comment)
         self.folder.extend(other.folder)
         self.file_name.extend(other.file_name)
@@ -303,18 +311,22 @@ class SearchFilter:
         """
         Makes a new ``SearchFilter`` from ``self`` and ``other`` filters.
         Kwarg ``exported`` will be used from ``other`` class.
+
+        If ``min_time`` or ``max_time`` is specified
+        in ``other`` or ``self``, then it will be ignored.
         """
         return SearchFilter(
-            id = self.id + other.id,
-            time = self.time + other.time,
-            comment = self.comment + other.comment,
-            folder = self.folder + other.folder,
+            id        = self.id + other.id,
+            comment   = self.comment + other.comment,
+            folder    = self.folder + other.folder,
             file_name = self.file_name + other.file_name,
-            min_size = self.min_size + other.min_size,
-            max_size = self.max_size + other.max_size,
+            min_size  = self.min_size + other.min_size,
+            max_size  = self.max_size + other.max_size,
             file_salt = self.file_salt + other.file_salt,
-            verbyte = self.verbyte + other.verbyte,
-            exported = other.exported, re = self.re
+            verbyte   = self.verbyte + other.verbyte,
+
+            exported  = True if self.exported and other.exported else False,
+            re        = True if self.re and other.re else False
         )
 class OpenPretender:
     """
