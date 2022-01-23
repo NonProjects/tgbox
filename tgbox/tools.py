@@ -267,14 +267,18 @@ class SearchFilter:
         self.verbyte = verbyte if isinstance(verbyte, list)\
             else ([] if not verbyte else [verbyte])
         
-        self.min_id = min_id
-        self.max_id = max_id
+        self.comment = [i.encode() if isinstance(i, str) else i for i in self.comment]
+        self.folder = [i.encode() if isinstance(i, str)  else i for i in self.folder]
+        self.file_name = [i.encode() if isinstance(i, str) else i for i in self.file_name]
 
-        self.min_size = min_size
-        self.max_size = max_size
+        self.min_id = min_id if not min_id else int(min_id)
+        self.max_id = max_id if not max_id else int(max_id)
 
-        self.min_time = min_time
-        self.max_time = max_time
+        self.min_size = min_size if not min_size else int(min_size)
+        self.max_size = max_size if not max_size else int(max_size)
+
+        self.min_time = min_time if not min_time else int(min_time)
+        self.max_time = max_time if not max_time else int(max_time)
 
         self.exported = exported
         self.re = re
