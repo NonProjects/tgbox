@@ -213,22 +213,19 @@ class SearchFilter:
     Container that filters search 
     in ``RemoteBox`` or ``DecryptedLocalBox``. 
 
-    All kwargs will be converted to ``List``.
-    If nothing specified, then search will nothing return. 
+    * You can extend all params concatenation 
+    of two ``SearchFilter`` classes.
     
-    You can extend all params via (i.e) ``sf.folder.append`` 
-    or via concatenation of two ``SearchFilter`` classes.
-    
-    You can make a new ``SearchFilter`` from two other 
+    * You can make a new ``SearchFilter`` from two other 
     SearchFilters via floordiv (``//``).
     
-    Any kwarg with ``bytes`` type can 
+    * Any kwarg with ``bytes`` type can 
     be also a regular expression.
     
-    kwarg ``re`` will tell the ``tgbox.api._search_func`` that
+    * Kwarg ``re`` will tell the ``tgbox.api._search_func`` that
     *all* bytes that you specify is Regular Expressions.
 
-    ``min_id = 5`` will include file with ``id == 5``, as
+    * ``min_id = 5`` will include file with ``id == 5``, as
     search_func check ``if file.X < min_X (i.e X=time, id, size)``
     """
     def __init__(
