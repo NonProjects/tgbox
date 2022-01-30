@@ -268,7 +268,7 @@ class SearchFilter:
             self.min_id = min_id if not min_id else int(min_id)
             self.max_id = max_id if not max_id else int(max_id)
         else:
-            self.min_id, self.max_id = id, id
+            self.min_id, self.max_id = int(id), int(id)
 
         self.min_size = min_size if not min_size else int(min_size)
         self.max_size = max_size if not max_size else int(max_size)
