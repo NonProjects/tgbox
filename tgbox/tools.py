@@ -222,6 +222,7 @@ class SearchFilter:
     * Kwarg ``re`` will tell the ``tgbox.api._search_func`` that *all* bytes that you specify is Regular Expressions.
 
     * ``min_id = 5`` will include file with ``id == 5``, as search_func check ``if file.X < min_X (i.e X=time, id, size)``
+    * ``min_id`` and ``max_id`` will be ``id``, if specified. Use it if you want to fetch only one file.
     """
     def __init__(
             self, *, 
@@ -241,7 +242,8 @@ class SearchFilter:
             max_time:  Optional[int] = None,
 
             exported:  Optional[bool] = None, 
-            re:        Optional[bool] = None
+            re:        Optional[bool] = None,
+            id:        Optional[int ] = None
         ):
         self.comment = comment if isinstance(comment, list)\
             else ([] if not comment else [comment])
@@ -261,9 +263,12 @@ class SearchFilter:
         self.comment = [i.encode() if isinstance(i, str) else i for i in self.comment]
         self.folder = [i.encode() if isinstance(i, str)  else i for i in self.folder]
         self.file_name = [i.encode() if isinstance(i, str) else i for i in self.file_name]
-
-        self.min_id = min_id if not min_id else int(min_id)
-        self.max_id = max_id if not max_id else int(max_id)
+        
+        if not id:
+            self.min_id = min_id if not min_id else int(min_id)
+            self.max_id = max_id if not max_id else int(max_id)
+        else:
+            self.min_id, self.max_id = id, id
 
         self.min_size = min_size if not min_size else int(min_size)
         self.max_size = max_size if not max_size else int(max_size)
