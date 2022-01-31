@@ -1721,14 +1721,17 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             aws = AES(self._filekey, self._file_iv)
         
         if isinstance(outfile, (str, PathLike)):
-            Path('BoxDownloads').mkdir(exist_ok=True)
+            Path(outfile).mkdir(exist_ok=True)
             outfile = Path(outfile) if not isinstance(outfile, PathLike) else outfile
 
             folder = DEF_UNK_FOLDER if hide_folder else self._foldername
             folder = DEF_NO_FOLDER if not folder else folder
             name = prbg(16).hex() if hide_name else self._file_name
             
-            outfile = Path(outfile, folder.decode(), name.decode())
+            outfile = Path(
+                outfile, folder.decode().lstrip('/'), 
+                name.decode().lstrip('/')
+            )
             outfile.parent.mkdir(exist_ok=True, parents=True)
             outfile = open(outfile,'wb')
             
