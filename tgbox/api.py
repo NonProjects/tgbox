@@ -974,7 +974,7 @@ class EncryptedRemoteBox:
             dlb = self._dlb
 
         it_messages = self._ta.TelegramClient.iter_messages(
-            self._box_channel, ids=sf.id if sf.id else None
+            self._box_channel, min_id=sf.min_id, max_id=sf.max_id
         )
         sfunc = _search_func(
             sf, mainkey=mainkey, 
