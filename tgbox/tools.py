@@ -121,7 +121,7 @@ class SearchFilter:
     * The ``SearchFilter`` accepts ``list`` as kwargs \
       value. You can ``SearchFilter(id=[3,5,10])``.
 
-    * The ``SearchFilter(**kwargs) will add all filters \
+    * The ``SearchFilter(**kwargs)`` will add all filters \
       to the **include**. Also use ``SearchFilter.include(...)`` \
       & ``SearchFilter.exclude(...)`` methods after initializion.
 
@@ -172,6 +172,7 @@ class SearchFilter:
             'exclude': self.ex_filters
         })
     def include(self, **kwargs) -> 'SearchFilter':
+        """Will extend included filters"""
         for k,v in kwargs.items():
             if isinstance(v, list):
                 self.in_filters[k].extend(v)
@@ -180,6 +181,7 @@ class SearchFilter:
         return self
     
     def exclude(self, **kwargs) -> 'SearchFilter':
+        """Will extend included filters"""
         for k,v in kwargs.items():
             if isinstance(v, list):
                 self.ex_filters[k].extend(v)
