@@ -190,7 +190,7 @@ class SearchFilter:
         return self
     
     def exclude(self, **kwargs) -> 'SearchFilter':
-        """Will extend included filters"""
+        """Will extend excluded filters"""
         for k,v in kwargs.items():
             if isinstance(v, list):
                 self.ex_filters[k].extend(v)
