@@ -1,5 +1,7 @@
 """This module stores utils required by API."""
 
+from copy import deepcopy
+from pprint import pformat
 from hashlib import sha256
 from random import randrange
 from asyncio import iscoroutine
@@ -57,6 +59,133 @@ try:
     anext() # Python 3.10+
 except NameError:
     anext = lambda agen: agen.__anext__()
+
+class _TypeList:
+    """
+    This is cutted version of ``list()`` that
+    checks type on ``.append(...)``.
+
+    You can specify multiply types with
+    ``tuple``, e.g: ``_TypeList((int, float))``
+    """
+    def __init__(self, type_, *args):
+        self.type = type_ if isinstance(type_, tuple) else (type_,)
+        self.list = [self.__check_type(i) for i in args]
+    
+    def __bool__(self):
+        return bool(self.list)
+
+    def __iter__(self):
+        for i in self.list:
+            yield i
+    
+    def __getitem__(self, sl):
+        return self.list[sl]
+
+    def __repr__(self) -> str:
+        return f'_TypeList({self.type}, *{self.list})'
+
+    def __check_type(self, value):
+        for type_ in self.type:
+            if isinstance(value, type_):
+                return value
+        else:
+            raise TypeError(
+                f'Invalid type! Expected {self.type}, got {type(value)}'
+            )
+    def append(self, value):
+        self.list.append(self.__check_type(value))
+
+    def extend(self, list):
+        self.list.extend([self.__check_type(i) for i in list])
+
+    def clear(self):
+        self.list.clear()
+
+class SearchFilter:
+    """
+    Container that filters search in ``DecryptedRemoteBox`` or     
+    ``DecryptedLocalBox``.
+
+    The ``SearchFilter`` has **two** filters: the **Include**
+    and **Exclude**. On search, all matching to **include**
+    files will be **yielded**, while all matching to
+    **exclude** will be **not yielded** (ignored).
+
+    * The ``tgbox.api._search_func`` will firstly check for \
+      **include** filters, so its priority higher.
+
+    * The ``tgbox.api._search_func`` will yield files that \
+      match **all** of filters, **not** one of it.
+
+    * The ``SearchFilter`` accepts ``list`` as kwargs \
+      value. You can ``SearchFilter(id=[3,5,10])``.
+
+    * The ``SearchFilter(**kwargs) will add all filters \
+      to the **include**. Also use ``SearchFilter.include(...)`` \
+      & ``SearchFilter.exclude(...)`` methods after initializion.
+
+    All filters:
+        * **id** *integer*: File's ID
+
+        * **comment**   *bytes*: File's comment
+        * **folder**    *bytes*: File's foldername
+        * **file_name** *bytes*: File's name
+        * **file_salt** *bytes*: File's salt
+        * **verbyte**   *bytes*: File's version byte
+
+        * **min_id** *integer*: File ID should be > min_id
+        * **max_id** *integer*: File ID should be < max_id
+
+        * **min_size** *integer*: File Size should be > min_size
+        * **max_size** *integer*: File Size should be < max_size
+
+        * **min_time** *integer/float*: Upload Time should be > min_time
+        * **max_time** *integer/float*: Upload Time should be < max_time
+
+        * **exported** *bool*: Yield only exported files
+        * **re**       *bool*: re_search for every ``bytes`` filter
+    """
+    def __init__(self, **kwargs):
+        self.in_filters = {
+            'comment':   _TypeList(bytes),
+            'folder':    _TypeList(bytes),
+            'file_name': _TypeList(bytes),
+            'file_salt': _TypeList(bytes),
+            'verbyte':   _TypeList(bytes),   
+            'id':        _TypeList(int),
+            'min_id':    _TypeList(int),   
+            'max_id':    _TypeList(int),  
+            'min_size':  _TypeList(int), 
+            'max_size':  _TypeList(int),
+            'min_time':  _TypeList((int,float)),  
+            'max_time':  _TypeList((int,float)), 
+            'exported':  _TypeList(bool), 
+            're':        _TypeList(bool), 
+        }
+        self.ex_filters = deepcopy(self.in_filters)
+        self.include(**kwargs)
+    
+    def __repr__(self) -> str:
+        return pformat({
+            'include': self.in_filters,
+            'exclude': self.ex_filters
+        })
+    def include(self, **kwargs) -> 'SearchFilter':
+        for k,v in kwargs.items():
+            if isinstance(v, list):
+                self.in_filters[k].extend(v)
+            else:
+                self.in_filters[k].append(v)
+        return self
+    
+    def exclude(self, **kwargs) -> 'SearchFilter':
+        for k,v in kwargs.items():
+            if isinstance(v, list):
+                self.ex_filters[k].extend(v)
+            else:
+                self.ex_filters[k].append(v)
+        return self
 
 class CustomAttributes:
     """
@@ -207,140 +336,7 @@ class RemoteBoxFileMetadata:
         
         self._constructed = metadata + self.file_iv
         return self._constructed
-        
-class SearchFilter:
-    """
-    Container that filters search 
-    in ``RemoteBox`` or ``DecryptedLocalBox``. 
 
-    * You can extend all params concatenation of two ``SearchFilter`` classes.
-    
-    * You can make a new ``SearchFilter`` from two other SearchFilters via floordiv (``//``).
-    
-    * Any kwarg with ``bytes`` type can be also a regular expression.
-    
-    * Kwarg ``re`` will tell the ``tgbox.api._search_func`` that *all* bytes that you specify is Regular Expressions.
-
-    * ``min_id = 5`` will include file with ``id == 5``, as search_func check ``if file.X < min_X (i.e X=time, id, size)``
-    * ``min_id`` and ``max_id`` will be ``id``, if specified. Use it if you want to fetch only one file.
-    """
-    def __init__(
-            self, *, 
-            comment:   Optional[Union[bytes, List[bytes]]] = None,
-            folder:    Optional[Union[bytes, List[bytes]]] = None,
-            file_name: Optional[Union[bytes, List[bytes]]] = None,
-            file_salt: Optional[Union[bytes, List[bytes]]] = None,
-            verbyte:   Optional[Union[bytes, List[bytes]]] = None,
-
-            min_id:    Optional[int] = None,
-            max_id:    Optional[int] = None,
-
-            min_size:  Optional[int] = None,
-            max_size:  Optional[int] = None,
-
-            min_time:  Optional[int] = None,
-            max_time:  Optional[int] = None,
-
-            exported:  Optional[bool] = None, 
-            re:        Optional[bool] = None,
-            id:        Optional[int ] = None
-        ):
-        self.comment = comment if isinstance(comment, list)\
-            else ([] if not comment else [comment])
-
-        self.folder = folder if isinstance(folder, list)\
-            else ([] if not folder else [folder])
-
-        self.file_name = file_name if isinstance(file_name, list)\
-            else ([] if not file_name else [file_name])
-
-        self.file_salt = file_salt if isinstance(file_salt, list)\
-            else ([] if not file_salt else [file_salt])
-
-        self.verbyte = verbyte if isinstance(verbyte, list)\
-            else ([] if not verbyte else [verbyte])
-        
-        self.comment = [i.encode() if isinstance(i, str) else i for i in self.comment]
-        self.folder = [i.encode() if isinstance(i, str)  else i for i in self.folder]
-        self.file_name = [i.encode() if isinstance(i, str) else i for i in self.file_name]
-        
-        if not id:
-            self.min_id = min_id if not min_id else int(min_id)
-            self.max_id = max_id if not max_id else int(max_id)
-        else:
-            self.min_id, self.max_id = int(id), int(id)
-
-        self.min_size = min_size if not min_size else int(min_size)
-        self.max_size = max_size if not max_size else int(max_size)
-
-        self.min_time = min_time if not min_time else int(min_time)
-        self.max_time = max_time if not max_time else int(max_time)
-
-        self.exported = exported
-        self.re = re
-        
-    def __hash__(self) -> int:
-        return hash((
-            self.min_id,    self.max_id,
-            self.min_size,  self.max_size,
-            self.min_time,  self.max_time,
-
-            self.comment,   self.folder, 
-            self.exported,  self.file_name,
-            self.file_salt, self.verbyte, 
-
-            self.re # So lonely :(
-        ))
-    def __eq__(self, other) -> bool:
-        return all((
-            isinstance(other, self.__class__), 
-            self.__hash__() == hash(other)
-        ))
-    def __bool__(self) -> bool:
-        """Will return ``True`` if any(kwargs)"""
-        return any((
-            self.min_id,    self.max_id,
-            self.min_size,  self.max_size,
-            self.min_time,  self.max_time,
-
-            self.comment,   self.folder, 
-            self.file_salt, self.verbyte, 
-
-            self.file_name,
-            self.re is not None,
-            self.exported is not None
-        ))
-    def __add__(self, other: 'SearchFilter') -> None:
-        """
-        Extends filters with ``other`` filters.
-
-        If ``min_time`` or ``max_time`` is specified
-        in ``other``, then it will be ignored.
-        """
-        self.comment.extend(other.comment)
-        self.folder.extend(other.folder)
-        self.file_name.extend(other.file_name)
-        self.file_salt.extend(other.file_salt)
-        self.verbyte.extend(other.verbyte)
-    
-    def __floordiv__(self, other: 'SearchFilter') -> 'SearchFilter':
-        """
-        Makes a new ``SearchFilter`` from ``self`` and ``other`` filters.
-        Kwarg ``exported`` will be used from ``other`` class.
-
-        If ``min_time`` or ``max_time`` is specified
-        in ``other`` or ``self``, then it will be ignored.
-        """
-        return SearchFilter(
-            comment   = self.comment + other.comment,
-            folder    = self.folder + other.folder,
-            file_name = self.file_name + other.file_name,
-            file_salt = self.file_salt + other.file_salt,
-            verbyte   = self.verbyte + other.verbyte,
-
-            exported  = True if self.exported and other.exported else False,
-            re        = True if self.re and other.re else False
-        )
 class OpenPretender:
     """
     Class to wrap Tgbox AES Generators and make it look
