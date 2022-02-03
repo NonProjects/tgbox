@@ -95,7 +95,11 @@ class _TypeList:
                 return value
             else:
                 try:
-                    return type_(value)
+                    if isinstance(b'', type_):
+                        # bytes(str) doesn't work
+                        return type_(value,'utf-8')
+                    else:
+                        return type_(value)
                 except:
                     pass
         else:
