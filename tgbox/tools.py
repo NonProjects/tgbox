@@ -67,6 +67,10 @@ class _TypeList:
 
     You can specify multiply types with
     ``tuple``, e.g: ``_TypeList((int, float))``
+    
+    * The list will try to change value type if \
+      ``isinstance(value, type_) is False`` to \
+      ``value = type_(value)``. Otherwise ``TypeError``.
     """
     def __init__(self, type_, *args):
         self.type = type_ if isinstance(type_, tuple) else (type_,)
@@ -89,6 +93,11 @@ class _TypeList:
         for type_ in self.type:
             if isinstance(value, type_):
                 return value
+            else:
+                try:
+                    return type_(value)
+                except:
+                    pass
         else:
             raise TypeError(
                 f'Invalid type! Expected {self.type}, got {type(value)}'
