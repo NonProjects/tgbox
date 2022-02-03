@@ -107,12 +107,12 @@ async def _search_func(
     only for internal use, and you shouldn't use it in your
     own projects. ``ta`` must be specified with ``it_messages``.
     
-    If file is imported from other ``RemoteBox`` and was exported
-    to your LocalBox, then we can specify box as ``lb``. AsyncGenerator
-    will try to get FILEKEY and decrypt ``EncryptedRemoteBoxFile``.
+    If file is imported from other RemoteBox and was exported
+    to your LocalBox, then you can specify box as ``lb``. AsyncGenerator
+    will try to get ``FileKey`` and decrypt ``EncryptedRemoteBoxFile``.
     Otherwise imported file will be ignored.
     """
-    in_func = re_search if sf.re else lambda p,s: p in s
+    in_func = re_search if sf.in_filters['re'] else lambda p,s: p in s
     iter_from = it_messages if it_messages else lb.files()
     
     if not iter_from:
@@ -153,65 +153,160 @@ async def _search_func(
         else:
             continue
         
-        if sf.exported is not None:
-            if file.exported != sf.exported: 
-                continue
+        # We will use it as flags, the first
+        # is for 'include', the second is for
+        # 'exclude'. Both should be True to
+        # match SearchFilter filters.
+        yield_result = [True, True]
 
-        if sf.min_time is not None:
-            if file.upload_time < sf.min_time:
-                continue
+        for indx, filter in enumerate((sf.in_filters, sf.ex_filters)):
+            if filter['exported']:
+                if bool(file.exported) != bool(filter['exported']): 
+                    if not indx: # O is Include
+                        yield_result[indx] = False
+                        break
 
-        if sf.max_time is not None:
-            if file.upload_time > sf.max_time:
-                continue
+                elif bool(file.exported) == bool(filter['exported']): 
+                    if indx: # 1 is Exclude
+                        yield_result[indx] = False
+                        break
+            
+            if filter['min_time']:
+                if file.upload_time < filter['min_time'][-1]:
+                    if not indx:
+                        yield_result[indx] = False
+                        break
 
-        if sf.min_size is not None:
-            if file_size < sf.min_size:
-                continue
+                elif file.upload_time >= filter['min_time'][-1]:
+                    if indx:
+                        yield_result[indx] = False
+                        break
 
-        if sf.max_size is not None:
-            if file_size > sf.max_size:
-                continue
+            if filter['max_time']:
+                if file.upload_time > filter['max_time'][-1]: 
+                    if not indx:
+                        yield_result[indx] = False
+                        break
+
+                elif file.upload_time <= filter['max_time'][-1]: 
+                    if indx:
+                        yield_result[indx] = False
+                        break
+
+            if filter['min_size']:
+                if file_size < filter['min_size'][-1]:
+                    if not indx:
+                        yield_result[indx] = False
+                        break
+
+                elif file_size >= filter['min_size'][-1]:
+                    if indx:
+                        yield_result[indx] = False
+                        break
+
+            if filter['max_size']:
+                if file_size > filter['max_size'][-1]: 
+                    if not indx:
+                        yield_result[indx] = False
+                        break
+
+                elif file_size <= filter['max_size'][-1]: 
+                    if indx:
+                        yield_result[indx] = False
+                        break
+
+            if filter['min_id']:
+                if file.id < filter['min_id'][-1]: 
+                    if not indx:
+                        yield_result[indx] = False
+                        break
+
+                elif file.id >= filter['min_id'][-1]: 
+                    if indx:
+                        yield_result[indx] = False
+                        break
+
+            if filter['max_id']:
+                if file.id > filter['max_id'][-1]: 
+                    if not indx:
+                        yield_result[indx] = False
+                        break
+
+                elif file.id <= filter['max_id'][-1]: 
+                    if indx:
+                        yield_result[indx] = False
+                        break
+            
+            for id in filter['id']:
+                if file.id == id:
+                    if indx:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['id']:
+                    if not indx:
+                        yield_result[indx] = False
+                        break
+
+            for comment in filter['comment']:
+                if file.comment and in_func(comment, file.comment):
+                    if indx:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['comment']:
+                    if not indx:
+                        yield_result[indx] = False
+                        break
+
+            for folder in filter['folder']:
+                if in_func(folder, file.foldername):
+                    if indx:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['folder']:
+                    if not indx:
+                        yield_result[indx] = False
+                        break
+
+            for file_name in filter['file_name']:
+                if in_func(file_name, file.file_name):
+                    if indx:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['file_name']:
+                    if not indx:
+                        yield_result[indx] = False
+                        break
+
+            for file_salt in filter['file_salt']:
+                if in_func(file_salt, file.file_salt):
+                    if indx:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['file_salt']:
+                    if not indx:
+                        yield_result[indx] = False
+                        break
+
+            for verbyte in filter['verbyte']:
+                if verbyte == file.verbyte:
+                    if indx:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['verbyte']:
+                    if not indx:
+                        yield_result[indx] = False
+                        break
         
-        if sf.min_id is not None:
-            if file.id < sf.min_id:
-                continue
-
-        if sf.max_id is not None:
-            if file.id > sf.max_id:
-                continue
-
-        for comment in sf.comment:
-            if file.comment and in_func(comment, file.comment):
-                break
-        else: 
-            if sf.comment: continue
-
-        for folder in sf.folder:
-            if in_func(folder, file.foldername):
-                break
-        else: 
-            if sf.folder: continue
-
-        for file_name in sf.file_name:
-            if in_func(file_name, file.file_name):
-                break
-        else: 
-            if sf.file_name: continue
-
-        for file_salt in sf.file_salt:
-            if in_func(file_salt, file.file_salt):
-                break
+        if all(yield_result):
+            yield file
         else:
-            if sf.file_salt: continue
-
-        for verbyte in sf.verbyte:
-            if verbyte == file.verbyte:
-                break
-        else:
-            if sf.verbyte: continue
-
-        yield file
+            continue
 
 async def make_remote_box(
         ta: 'TelegramAccount', 
@@ -972,7 +1067,7 @@ class EncryptedRemoteBox:
         
         if hasattr(self, '_dlb'):
             dlb = self._dlb
-
+        
         it_messages = self._ta.TelegramClient.iter_messages(
             self._box_channel, min_id=sf.min_id, 
             max_id=sf.max_id, reverse=True
