@@ -48,11 +48,12 @@ from .db import TgboxDB
 from . import loop
 
 from .errors import (
+    InUseException, BrokenDatabase, 
+    RemoteBoxDeleted, LimitExceeded,
     IncorrectKey, NotInitializedError,
     AlreadyImported, RemoteFileNotFound,
     DurationImpossible, SessionUnregistered,
-    NotImported, AESError, PreviewImpossible,
-    InUseException, BrokenDatabase, RemoteBoxDeleted
+    NotImported, AESError, PreviewImpossible
 )
 from .tools import (
     make_folder_id, get_media_duration, float_to_bytes, 
@@ -2322,7 +2323,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 the Metadata if ``True`` (default).
         """
         if len(comment) > COMMENT_MAX:
-            raise ValueError(f'Comment length must be <= {COMMENT_MAX} bytes.')
+            raise LimitExceeded(f'Comment length must be <= {COMMENT_MAX} bytes.')
                 
         file_salt, file_iv = get_rnd_bytes(), get_rnd_bytes(16)
         filekey = make_filekey(self._mainkey, file_salt)
@@ -2383,7 +2384,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             file_path = Path(file.name)
             file_name = file_path.name if not file_name else file_name
             if len(file_name) > FILE_NAME_MAX: 
-                raise ValueError(f'File name must be <= {FILE_NAME_MAX} bytes.')
+                raise LimitExceeded(f'File name must be <= {FILE_NAME_MAX} bytes.')
         else:
             file_name, file_path = prbg(8).hex(), ''
         
@@ -2409,10 +2410,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                         rb, file_size = file.read(), len(rb)
                         file = BytesIO(rb); del(rb)
                     
-            if file_size <= 0:
-                raise ValueError('File can\'t be empty.')
-            elif file_size > FILESIZE_MAX:
-                raise Exception(f'File size limit is {FILESIZE_MAX} bytes.')
+            if file_size > FILESIZE_MAX:
+                raise LimitExceeded(f'File size limit is {FILESIZE_MAX} bytes.')
         
         if make_preview and file_path:
             file_type = filetype_guess(file_path)
