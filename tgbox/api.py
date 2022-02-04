@@ -14,9 +14,11 @@ from telethon.tl.custom.file import File
 from telethon.tl.functions.auth import ResendCodeRequest
 from telethon.tl.functions.messages import EditChatAboutRequest
 
-from telethon.errors import SessionPasswordNeededError
-from telethon.errors.rpcerrorlist import AuthKeyUnregisteredError
-
+from telethon.errors import (
+    SessionPasswordNeededError, 
+    ChatAdminRequiredError, 
+    AuthKeyUnregisteredError
+)
 from telethon.tl.functions.channels import (
     CreateChannelRequest, EditPhotoRequest,
     GetFullChannelRequest, DeleteChannelRequest
@@ -40,14 +42,15 @@ from .keys import (
 from .constants import (
     FILE_NAME_MAX, FOLDERNAME_MAX, COMMENT_MAX, DEF_UNK_FOLDER,
     PREVIEW_MAX, DURATION_MAX, DEF_NO_FOLDER, NAVBYTES_SIZE,
-    VERSION, VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME,
-    DOWNLOAD_PATH, API_ID, API_HASH, FILESIZE_MAX
+    DOWNLOAD_PATH, API_ID, API_HASH, FILESIZE_MAX, PREFIX,
+    VERSION, VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME
 )
 from .fastelethon import upload_file, download_file
 from .db import TgboxDB
 from . import loop
 
 from .errors import (
+    NotEnoughRights, NotATgboxFile,
     InUseException, BrokenDatabase, 
     RemoteBoxDeleted, LimitExceeded,
     IncorrectKey, NotInitializedError,
@@ -1069,9 +1072,12 @@ class EncryptedRemoteBox:
         if hasattr(self, '_dlb'):
             dlb = self._dlb
         
+        min_id = sf.in_filters['min_id'][-1] if sf.in_filters['min_id'] else 0
+        max_id = sf.in_filters['max_id'][-1] if sf.in_filters['max_id'] else 0
+
         it_messages = self._ta.TelegramClient.iter_messages(
-            self._box_channel, min_id=sf.min_id, 
-            max_id=sf.max_id, reverse=True
+            self._box_channel, min_id=min_id, 
+            max_id=max_id, reverse=True
         )
         sfunc = _search_func(
             sf, mainkey=mainkey, 
@@ -1104,15 +1110,23 @@ class EncryptedRemoteBox:
             
         ifile = await upload_file(
             self._ta.TelegramClient, oe,
-            file_name = urlsafe_b64encode(ff.file_salt).decode(), 
-            part_size_kb = 512, file_size = ff.wm_size,
-            progress_callback = progress_callback
+            file_name=urlsafe_b64encode(ff.file_salt).decode(), 
+            part_size_kb=512, file_size=ff.wm_size,
+            progress_callback=progress_callback
         )
-        file_message = await self._ta.TelegramClient.send_file(
-            self._box_channel, 
-            file=ifile, silent=True,
-            force_document=True
-        )        
+        try:
+            file_message = await self._ta.TelegramClient.send_file(
+                self._box_channel, file=ifile, 
+                silent=True, force_document=True
+            )
+        except ChatAdminRequiredError:
+            box_name = await self.get_box_name()
+            raise NotEnoughRights(
+                '''You don\'t have enough privileges to upload '''
+               f'''files to remote {box_name}. Ask for it or '''
+                '''use this box as read only.'''
+            ) from None
+
         await ff.make_local(file_message.id, 
             int(file_message.date.timestamp())) 
         
@@ -1152,9 +1166,17 @@ class EncryptedRemoteBox:
 
         You need to have rights for this.
         """
-        await self._ta.TelegramClient(
-            DeleteChannelRequest(self._box_channel)
-        ) 
+        try:
+            await self._ta.TelegramClient(
+                DeleteChannelRequest(self._box_channel)
+            ) 
+        except ChatAdminRequiredError:
+            box_name = await self.get_box_name()
+            raise NotEnoughRights(
+                '''You don\'t have enough rights to delete '''
+               f'''{box_name} RemoteBox.'''
+            ) from None
+
     async def decrypt(
             self, *, key: Optional[Union[MainKey, ImportKey, BaseKey]] = None, 
             dlb: Optional['DecryptedLocalBox'] = None) -> 'DecryptedRemoteBox':
@@ -1361,6 +1383,10 @@ class EncryptedRemoteBoxFile:
         self._message = sended_file
         self._id = sended_file.id
         self._file = sended_file.file
+        
+        if not self._file:
+            raise NotATgboxFile('Specified message doesn\'t have a document')
+
         self._sender = sended_file.post_author
         
         self._ta = ta
@@ -1507,12 +1533,24 @@ class EncryptedRemoteBoxFile:
         """
         self._cache_preview = True
     
-    async def init(self) -> 'EncryptedRemoteBoxFile':
-        """Downloads and parses Metadata constant header."""
+    async def init(self, verify_prefix: bool=True) -> 'EncryptedRemoteBoxFile':
+        """
+        Downloads and parses Metadata constant header.
 
+        Arguments:
+            verify_prefix (``bool``, optional):
+                If ``True``, will check that file has a
+                ``tgbox.constants.PREFIX`` in metadata, and if 
+                not, will raise a ``NotATgboxFile`` exception.
+        """
         async for fixed_metadata in self._ta.TelegramClient.iter_download(
             self._message.document, offset=0, request_size=103):
                 self._prefix = bytes(fixed_metadata[:6])
+                if self._prefix != PREFIX:
+                    raise NotATgboxFile(
+                        f'''Invalid prefix! Expected {PREFIX}, '''
+                        f'''got {self._prefix}'''
+                    )
                 self._version_byte = bytes(fixed_metadata[6:7])
                 self._box_salt = bytes(fixed_metadata[7:39])
                 self._file_salt = bytes(fixed_metadata[39:71])
@@ -1533,9 +1571,14 @@ class EncryptedRemoteBoxFile:
             your LocalBox then you can use the
             same ``delete()`` method on your LocalBoxFile.
         """
-        await self._ta.TelegramClient.delete_messages(
+        rm_result = await self._ta.TelegramClient.delete_messages(
             self._box_channel_id, [self._id]
         )
+        if not rm_result[0].pts_count:
+            raise NotEnoughRights(
+                '''You don\'t have enough rights to delete '''
+                '''file from this RemoteBox.'''
+            ) from None
     
     def get_requestkey(self, mainkey: MainKey) -> RequestKey:
         """
@@ -2094,10 +2137,12 @@ class EncryptedLocalBox:
             cache_preview (``bool``, optional):
                 Cache preview in class or not.
         """
-        min_id = f'WHERE ID > {min_id}' if min_id else ''
-        max_id = f'AND ID < {max_id}' if max_id else ''
-
-        sql_query = f'SELECT ID FROM FILES {min_id} {max_id}'
+        min_id = f'ID > {min_id}' if min_id else ''
+        max_id = f'ID < {max_id}' if max_id else ''
+        max_id = 'AND ' + max_id if min_id else max_id
+        
+        sql_query = f'SELECT ID FROM FILES WHERE {min_id} {max_id}'
+        print(sql_query)
         cursor = await self._tgbox_db.Files.execute((sql_query ,()))
 
         async for file_id in cursor:
