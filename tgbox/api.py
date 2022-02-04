@@ -2139,10 +2139,11 @@ class EncryptedLocalBox:
         """
         min_id = f'ID > {min_id}' if min_id else ''
         max_id = f'ID < {max_id}' if max_id else ''
+
         max_id = 'AND ' + max_id if min_id else max_id
-        
-        sql_query = f'SELECT ID FROM FILES WHERE {min_id} {max_id}'
-        print(sql_query)
+        where = 'WHERE' if any((min_id, max_id)) else ''
+
+        sql_query = f'SELECT ID FROM FILES {where} {min_id} {max_id}'
         cursor = await self._tgbox_db.Files.execute((sql_query ,()))
 
         async for file_id in cursor:
