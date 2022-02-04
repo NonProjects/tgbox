@@ -1,61 +1,70 @@
-"""This module stores all Tgbox-unique errors."""
+"""This module stores all Tgbox-unique exceptions."""
+
+class TgboxException(Exception):
+    """Base TGBOX Exception"""
 
 # Base Exceptions
 
-class IncorrectKey(Exception):
-    """Specified key is invalid."""
-
-class NotInitializedError(Exception):
+class NotInitializedError(TgboxException):
     """The class you try to use isn't initialized"""
 
-class PathIsDirectory(Exception):
+class PathIsDirectory(TgboxException):
     """Specified path is Directory"""
 
-class LimitExceeded(Exception):
+class LimitExceeded(TgboxException):
     """Value is out of allowed range"""
+
+class NotATgboxFile(TgboxException):
+    """This Telegram mesage isn't a TGBOX file"""
 
 # Crypto Exceptions
 
-class ModeInvalid(Exception):
+class IncorrectKey(TgboxException):
+    """Specified key is invalid."""
+
+class ModeInvalid(TgboxException):
     """You should use only decryption or encryption per class"""
 
-class AESError(Exception):
+class AESError(TgboxException):
     """Invalid AES configuration"""
 
 # Tools Exceptions
 
-class ConcatError(Exception):
+class ConcatError(TgboxException):
     """You must concat metadata before using OpenPretender"""
 
-class PreviewImpossible(Exception):
+class PreviewImpossible(TgboxException):
     """Can\'t create file preview"""
 
-class DurationImpossible(Exception):
+class DurationImpossible(TgboxException):
     """Can\'t get media duration"""
 
 # Database Exceptions
 
-class InUseException(Exception):
+class InUseException(TgboxException):
     """The DB already exists and in use"""
 
-class BrokenDatabase(Exception):
+class BrokenDatabase(TgboxException):
     """Can\'t parse SQLite DB"""
 
 # RemoteBox Exceptions
 
-class RemoteFileNotFound(Exception):
+class RemoteFileNotFound(TgboxException):
     """Seems that there is no requested by you file"""
 
-class SessionUnregistered(Exception):
+class SessionUnregistered(TgboxException):
     """Session you trying to use was disconnected"""
 
-class RemoteBoxDeleted(Exception):
+class RemoteBoxDeleted(TgboxException):
     """The RemoteBox you try to use was deleted"""
+
+class NotEnoughRights(TgboxException):
+    """You don't have rigths for this action"""
 
 # LocalBox Exceptions
 
-class AlreadyImported(Exception):
+class AlreadyImported(TgboxException):
     """LocalBox have file with same ID"""
 
-class NotImported(Exception):
+class NotImported(TgboxException):
     """The file you try to retrieve wasn\'t imported yet"""
