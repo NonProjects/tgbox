@@ -11,6 +11,9 @@ class NotInitializedError(Exception):
 class PathIsDirectory(Exception):
     """Specified path is Directory"""
 
+class LimitExceeded(Exception):
+    """Value is out of allowed range"""
+
 # Crypto Exceptions
 
 class ModeInvalid(Exception):
