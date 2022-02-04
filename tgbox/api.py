@@ -2379,14 +2379,16 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     
             file = TelegramVirtualFile(file, self._session)
             make_preview = False # We will call get_preview
-
-        if hasattr(file, 'name') and file.name:
-            file_path = Path(file.name)
-            file_name = file_path.name if not file_name else file_name
-            if len(file_name) > FILE_NAME_MAX: 
-                raise LimitExceeded(f'File name must be <= {FILE_NAME_MAX} bytes.')
+        
+        if file_name:
+            file_path = '' 
+        elif hasattr(file,'name') and file.name:
+            file_path = Path(file.name).name
         else:
             file_name, file_path = prbg(8).hex(), ''
+
+        if len(file_name) > FILE_NAME_MAX: 
+            raise LimitExceeded(f'File name must be <= {FILE_NAME_MAX} bytes.')
         
         if not file_size:
             if hasattr(file, 'telegram_vf'):
