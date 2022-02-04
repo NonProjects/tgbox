@@ -2430,7 +2430,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             file_path = '' 
         elif hasattr(file,'name') and file.name:
             file_path = Path(file.name)
-            file_name = file_name.name
+            file_name = file_path.name
         else:
             file_name, file_path = prbg(8).hex(), ''
 
