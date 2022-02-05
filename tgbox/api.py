@@ -1865,7 +1865,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
             folder = DEF_UNK_FOLDER if hide_folder else self._foldername
             folder = DEF_NO_FOLDER if not folder else folder
-            name = prbg(16).hex() if hide_name else self._file_name
+            name = prbg(16).hex().encode() if hide_name else self._file_name
             
             outfile = Path(
                 outfile, folder.decode().lstrip('/'), 
