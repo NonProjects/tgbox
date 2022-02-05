@@ -117,7 +117,13 @@ async def _search_func(
     Otherwise imported file will be ignored.
     """
     in_func = re_search if sf.in_filters['re'] else lambda p,s: p in s
-    iter_from = it_messages if it_messages else lb.files()
+
+    if it_messages:
+        iter_from = it_messages
+    else:
+        min_id = sf.in_filters['min_id'][-1] if sf.in_filters['min_id'] else None
+        max_id = sf.in_filters['max_id'][-1] if sf.in_filters['max_id'] else None
+        iter_from = lb.files(min_id=min_id, max_id=max_id)
     
     if not iter_from:
         raise ValueError('At least it_messages or lb must be specified.')
@@ -2139,8 +2145,8 @@ class EncryptedLocalBox:
         """
         min_id = f'ID > {min_id}' if min_id else ''
         max_id = f'ID < {max_id}' if max_id else ''
-
-        max_id = 'AND ' + max_id if min_id else max_id
+        
+        min_id = min_id + ' AND' if all((min_id,max_id)) else min_id
         where = 'WHERE' if any((min_id, max_id)) else ''
 
         sql_query = f'SELECT ID FROM FILES {where} {min_id} {max_id}'
