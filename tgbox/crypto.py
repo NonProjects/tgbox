@@ -83,6 +83,9 @@ class Padding:
             unpad_func (``Callable``):
                 Unpadding function. 
         """
+        if not FAST_ENCRYPTION and not bytedata:
+            return b'' # pyaes.unpad raise exception on b''
+
         if unpad_func:
             unpad_, custom = unpad_func, True
         else:
