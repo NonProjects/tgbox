@@ -8,8 +8,8 @@ requirements = [
     'telethon==1.24.0',
     'ecdsa==0.16.1',
     'filetype==1.0.8',
-    'cryptg==0.2.post2',
-    'pycryptodome==3.10.1',
+    'cryptg==0.2.post4',
+    'pycryptodome==3.12.0',
     'sphinx-rtd-theme==1.0.0', 
     'regex==2021.11.10'
 ]
