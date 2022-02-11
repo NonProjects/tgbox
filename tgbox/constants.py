@@ -7,7 +7,8 @@ __all__ = [
     'API_HASH', 
     'VERSION', 
     'VERBYTE', 
-    'DEF_TGBOX_NAME', 
+    'DEF_TGBOX_NAME',
+    'REMOTEBOX_PREFIX',
     'DEF_NO_FOLDER', 
     'DEF_UNK_FOLDER', 
     'PREFIX', 
@@ -29,7 +30,7 @@ __all__ = [
     'SCRYPT_N', 
     'SCRYPT_R', 
     'SCRYPT_P', 
-    'DOWNLOAD_PATH', 
+    'DOWNLOAD_PATH'
 ]
 # Please DO NOT use this parameters in your projects. Thanks.
 # You can get your own at my.telegram.org. Use it, instead of default.
@@ -39,6 +40,7 @@ VERSION: str='0.4'
 VERBYTE: bytes=b'\x00'
 
 DEF_TGBOX_NAME: str='TGBOX'
+REMOTEBOX_PREFIX: str='tgbox: '
 
 DEF_NO_FOLDER:  bytes=b'NO_FOLDER'
 DEF_UNK_FOLDER: bytes=b'UNKNOWN_FOLDER'

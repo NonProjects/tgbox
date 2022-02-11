@@ -40,10 +40,10 @@ from .keys import (
     ShareKey, ImportKey, FileKey, BaseKey
 )
 from .constants import (
+    VERSION, VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME, REMOTEBOX_PREFIX,
     FILE_NAME_MAX, FOLDERNAME_MAX, COMMENT_MAX, DEF_UNK_FOLDER,
     PREVIEW_MAX, DURATION_MAX, DEF_NO_FOLDER, NAVBYTES_SIZE,
-    DOWNLOAD_PATH, API_ID, API_HASH, FILESIZE_MAX, PREFIX,
-    VERSION, VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME
+    DOWNLOAD_PATH, API_ID, API_HASH, FILESIZE_MAX, PREFIX
 )
 from .fastelethon import upload_file, download_file
 from .db import TgboxDB
@@ -320,7 +320,8 @@ async def _search_func(
 
 async def make_remote_box(
         ta: 'TelegramAccount', 
-        tgbox_db_name: str=DEF_TGBOX_NAME, 
+        tgbox_db_name: str=DEF_TGBOX_NAME,
+        tgbox_rb_prefix: str=REMOTEBOX_PREFIX,
         box_image_path: Union[PathLike, str] = BOX_IMAGE_PATH,
         box_salt: Optional[bytes] = None) -> 'EncryptedRemoteBox':
     """
@@ -334,6 +335,10 @@ async def make_remote_box(
         tgbox_db_name (``TgboxDB``, optional):
             Name of your Local and Remote boxes.
             ``constants.DEF_TGBOX_NAME`` by default.
+
+        tgbox_rb_prefix (``str``, optional):
+            Prefix of your RemoteBox.
+            ``constants.REMOTEBOX_PREFIX`` by default.
 
         box_image_path (``PathLike``, optional):
             ``PathLike`` to image that will be used as
@@ -353,7 +358,7 @@ async def make_remote_box(
     if (await tgbox_db.BoxData.count_rows()): 
         raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
 
-    channel_name = 'tgbox: ' + tgbox_db.name
+    channel_name = tgbox_rb_prefix + tgbox_db.name
     box_salt = urlsafe_b64encode(box_salt if box_salt else get_rnd_bytes())
 
     channel = (await ta.TelegramClient(
@@ -618,14 +623,15 @@ class TelegramAccount:
         )
 
     def get_session(self) -> str:
-        """Returns ``StringSession`` as ``str``"""
+        """Returns ``StringSession`` as url safe base64 encoded ``str``"""
         return self.TelegramClient.session.save()
     
-    async def tgboxes(self, yield_with: str='tgbox: ') -> AsyncGenerator:
+    async def tgboxes(self, yield_with: str=REMOTEBOX_PREFIX) -> AsyncGenerator:
         """
         Iterate over all Tgbox Channels in your account.
         It will return any channel with Tgbox prefix,
-        ``"tgbox: "`` by default, you can override this.
+        ``.constants.REMOTEBOX_PREFIX`` by default, 
+        you can override this with ``yield_with``.
         
         Arguments:
             yield_with (``str``):
@@ -683,8 +689,9 @@ class EncryptedRemoteBox:
         Arguments:
             box_channel (``Channel``):
                 Telegram channel that represents
-                ``RemoteBox``. By default have "tgbox: " 
-                prefix and always encoded by urlsafe
+                RemoteBox. By default have 
+                ``.constants.REMOTEBOX_PREFIX`` in name
+                and always encoded by urlsafe
                 b64encode BoxSalt in description.
 
             ta (``TelegramAccount``):
