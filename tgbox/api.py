@@ -1795,6 +1795,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         if preview_len and self._cache_preview:
             await self.get_preview()
+
+        elif preview_len and not self._cache_preview:
+            self._preview = None
         else:
             self._preview = b''
         
@@ -1818,7 +1821,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     preview = preview[:self._preview_pos[1]]
                     preview = AES(self._filekey).decrypt(preview)
                     break
-
+        
         if self._cache_preview:
             self._preview = preview
         return preview
@@ -2273,7 +2276,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             """This function was inherited from ``EncryptedLocalBox`` """
             """and cannot be used on ``DecryptedLocalBox``."""
         )
-    async def folders(self) -> 'LocalBoxFolder':
+    async def folders(self) -> AsyncGenerator['LocalBoxFolder', None]:
         """Iterate over all folders in LocalBox."""
 
         folders_list = await self._tgbox_db.Folders.execute(
@@ -2286,6 +2289,89 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 folder_iv = folder[1],
                 folder_id = folder[2]
             )
+    async def sync(
+            self, drb: DecryptedRemoteBox, 
+            start_from: int=0,
+            progress_callback: Optional[Callable[[int, int], None]] = None,
+            include_preview: bool=True):
+        """
+        """
+        async def _get_file(n=start_from):
+            iter_over = drb.files(
+                min_id=n, reverse=True, 
+                cache_preview=False
+            )
+            async for drbf in iter_over:
+                return drbf
+
+        async for drbf in drb.files(cache_preview=False):
+            last_drbf_id = drbf.id; break
+        
+        rbfiles = []
+        while True:
+            current = 0
+            
+            if not rbfiles:
+                rbfiles.append(await _get_file())
+                rbfiles.append(await _get_file(rbfiles[0].id))
+                last_id = rbfiles[0].id
+            else:
+                rbfiles.append(await _get_file(rbfiles[1].id))
+                if None in rbfiles: break
+            
+                rbfiles.append(await _get_file(rbfiles[2].id-1))
+                if None in rbfiles: break
+                rbfiles.pop(0); rbfiles.pop(1)
+
+            if progress_callback:
+                if iscoroutinefunction(progress_callback):
+                    await progress_callback(last_id, last_drbf_id)
+                else:
+                    progress_callback(last_id, last_drbf_id)
+            
+            while True:
+                if current == 2:
+                    break
+                try:
+                    lbfi_id = await self._tgbox_db.Files.select_once(
+                        sql_tuple = (
+                            'SELECT ID FROM FILES WHERE ID=?', 
+                            (rbfiles[current].id,)
+                        )
+                    )
+                except StopAsyncIteration:
+                    lbfi_id = None
+
+                if lbfi_id:
+                    current += 1
+                else:
+                    if include_preview:
+                        rbfiles[current]._cache_preview = True
+                        await rbfiles[current].get_preview()
+
+                    await self.import_file(rbfiles[current])
+                    
+                    if current == 0:
+                        rbfiles[0] = rbfiles[1]
+
+                    rbfiles[1] = await _get_file(rbfiles[0].id)
+                    
+                    if None in rbfiles: break
+                    last_id = rbfiles[1].id
+
+            sql_tuple = (
+                'DELETE FROM FILES WHERE ID > ? AND ID < ?',
+                (last_id, rbfiles[0].id)
+            )
+            await self._tgbox_db.Files.execute(sql_tuple=sql_tuple)
+            last_id = rbfiles[1].id
+
+            sql_tuple = (
+                'DELETE FROM FILES WHERE ID > ? AND ID < ?',
+                (rbfiles[0].id, rbfiles[1].id)
+            )
+            await self._tgbox_db.Files.execute(sql_tuple=sql_tuple)
+
     async def replace_session(
             self, basekey: BaseKey, ta: TelegramAccount) -> None:
         """
