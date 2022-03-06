@@ -1,25 +1,9 @@
-from sys import version_info, platform
 from setuptools import setup
-from tgbox.constants import VERSION
-
-
-requirements = [
-    'aiosqlite==0.17.0',
-    'telethon==1.24.0',
-    'ecdsa==0.16.1',
-    'filetype==1.0.8',
-    'cryptg==0.2.post4',
-    'pycryptodome==3.12.0',
-    'sphinx-rtd-theme==1.0.0', 
-    'regex==2021.11.10'
-]
-if version_info > (3, 7) and platform not in ('win32', 'cygwin', 'cli'):
-    requirements.append('uvloop==0.16.0')
 
 setup(
     name             = 'tgbox',
     packages         = ['tgbox'],
-    version          = VERSION,
+    version          = '0.4',
     license          = 'LGPL-2.1',
     description      = 'Encrypted cloud storage based on Telegram API',
     author           = 'NonProjects',
@@ -31,12 +15,26 @@ setup(
         'tgbox': ['tgbox/other'],
     },
     include_package_data = True,
-    install_requires = requirements,
-
+    
+    install_requires = [
+        'aiosqlite==0.17.0',
+        'telethon==1.24.0',
+        'ecdsa==0.16.1',
+        'filetype==1.0.8',
+        'sphinx-rtd-theme==1.0.0'
+    ],
     keywords = [
-        'Telegram', 'Cloud-Storage', 
+        'Telegram', 'Cloud-Storage', 'Cloud',
         'API', 'Asyncio', 'Non-official'
     ],
+    extras_require = {
+        'fast': [
+            'pycryptodome==3.12.0',
+            'cryptg==0.2.post4',
+            'regex==2021.11.10'
+        ],
+        'uvloop': ['uvloop==0.16.0'],
+    },
     classifiers = [
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
