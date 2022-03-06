@@ -1,6 +1,7 @@
 """This module stores API constants."""
 
 from pathlib import Path
+from . import __version__
 
 __all__ = [
     'API_ID', 
@@ -36,7 +37,7 @@ __all__ = [
 # You can get your own at my.telegram.org. Use it, instead of default.
 API_ID: int=2210681; API_HASH: str='33755adb5ba3c296ccf0dd5220143841'
 
-VERSION: str='0.4'
+VERSION: str=__version__
 VERBYTE: bytes=b'\x00'
 
 DEF_TGBOX_NAME: str='TGBOX'
