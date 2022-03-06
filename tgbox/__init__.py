@@ -13,10 +13,11 @@ try:
 except ModuleNotFoundError:
     FAST_EVENT_LOOP = False
 
+__version__ = '4.0'
+
 # Define and set global event loop
 loop = new_event_loop()
 set_event_loop(loop)
-
 
 from . import api
 from . import constants
