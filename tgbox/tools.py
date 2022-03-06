@@ -539,7 +539,7 @@ async def get_media_duration(file_path: str) -> float:
     try:
         future = await loop.run_in_executor(None, func)
         return float(future.stdout)
-    except ValueError:
+    except:
         raise DurationImpossible('Can\'t get media duration') from None 
 
 async def make_media_preview(
