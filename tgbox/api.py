@@ -2295,6 +2295,20 @@ class DecryptedLocalBox(EncryptedLocalBox):
             progress_callback: Optional[Callable[[int, int], None]] = None,
             include_preview: bool=True):
         """
+        This method will synchronize your LocalBox
+        with RemoteBox. All files that not in RemoteBox
+        but in Local will be **removed**, all that 
+        in Remote but not in LocalBox will be imported.
+
+        drb (``DecryptedRemoteBox``):
+            *RemoteBox* associated with this LocalBox.
+
+        start_from (``int``, optional):
+            Will check files that > start_from [ID].
+
+        include_preview (``bool``, optional):
+            Will download and save file preview
+            to the LocalBox if ``True`` (by default). 
         """
         async def _get_file(n=start_from):
             iter_over = drb.files(
@@ -2307,7 +2321,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         async for drbf in drb.files(cache_preview=False):
             last_drbf_id = drbf.id; break
         
-        rbfiles = []
+        rbfiles, initialized = [], False
         while True:
             current = 0
             
@@ -2358,6 +2372,16 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     
                     if None in rbfiles: break
                     last_id = rbfiles[1].id
+            
+            if not initialized:
+                sql_tuple = (
+                    'DELETE FROM FILES WHERE ID < ?', 
+                    (last_id,)
+                )
+                await self._tgbox_db.Files.execute(
+                    sql_tuple=sql_tuple
+                )
+                initialized = True
 
             sql_tuple = (
                 'DELETE FROM FILES WHERE ID > ? AND ID < ?',
