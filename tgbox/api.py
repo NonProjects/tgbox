@@ -2680,7 +2680,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             return make_sharekey(
                 requestkey=reqkey, 
                 mainkey=self._mainkey, 
-                file_salt=self._box_salt
+                box_salt=self._box_salt
             )
         else:
             return make_sharekey(mainkey=self._mainkey)
