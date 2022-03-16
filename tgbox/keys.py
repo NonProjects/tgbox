@@ -27,7 +27,7 @@ from .constants import (
     SCRYPT_DKLEN, WORDS_PATH
 )
 from .crypto import AESwState as AES
-
+from .errors import IncorrectKey
 
 __all__ = [
     'Phrase', 
@@ -178,14 +178,17 @@ class Key:
             ``MSGVsbG8hIEkgYW0gTm9uISBJdCdzIDI5LzExLzIwMjE=``.
             You can decode it with ``Key.decode``.
         """
-        ekey_types = {
-            'B': BaseKey,    'M': MainKey,
-            'R': RequestKey, 'S': ShareKey,
-            'I': ImportKey,  'F': FileKey,
-            'E': EncryptedMainkey
-        }
-        ekey_type = ekey_types[encoded_key[0]]
-        return ekey_type(urlsafe_b64decode(encoded_key[1:]))
+        try:
+            ekey_types = {
+                'B': BaseKey,    'M': MainKey,
+                'R': RequestKey, 'S': ShareKey,
+                'I': ImportKey,  'F': FileKey,
+                'E': EncryptedMainkey
+            }
+            ekey_type = ekey_types[encoded_key[0]]
+            return ekey_type(urlsafe_b64decode(encoded_key[1:]))
+        except:
+            raise IncorrectKey(IncorrectKey.__doc__)
     
     def encode(self) -> str:
         """Encode raw key with ``urlsafe_b64encode`` and add prefix."""
