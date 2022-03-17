@@ -1279,6 +1279,7 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
     
     async def clone(
             self, basekey: BaseKey, 
+            progress_callback: Optional[Callable[[int, int], None]] = None,
             box_path: Optional[Union[PathLike, str]] = None) -> 'DecryptedLocalBox':
         """
         This method makes ``LocalBox`` from ``RemoteBox`` and
@@ -1289,6 +1290,10 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
                 ``BaseKey`` with which you will decrypt your
                 cloned ``EncryptedLocalBox``. ``BaseKey`` encrypts
                 Session and ``MainKey`` of original LocalBox.
+
+            progress_callback (``Callable[[int, int], None]``, optional):
+                A callback function accepting two parameters: 
+                (downloaded_bytes, total). 
 
             box_path (``PathLike``, ``str``, optional):
                 Direct path with filename included. If
@@ -1316,6 +1321,12 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
         dlb = await EncryptedLocalBox(tgbox_db).decrypt(basekey)
 
         async for drbf in self.files(key=self._mainkey, decrypt=True, reverse=True):
+            if progress_callback:
+                if iscoroutinefunction(progress_callback):
+                    await progress_callback(drbf.id, last_file_id)
+                else:
+                    progress_callback(drbf.id, last_file_id)
+
             await dlb.import_file(drbf, foldername=drbf.foldername)
         
         return dlb
