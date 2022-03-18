@@ -1306,7 +1306,8 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
 
         if (await tgbox_db.BoxData.count_rows()): 
             raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
-
+        
+        last_file_id = 0
         async for erbf in self.files(decrypt=False, return_imported_as_erbf=True):
             last_file_id = erbf.id; break
 
