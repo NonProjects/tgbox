@@ -1274,6 +1274,8 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
             
             if isinstance(key, (MainKey, ImportKey)):
                 self._mainkey = MainKey(key.key)
+            elif isinstance(key, BaseKey):
+                self._mainkey = make_mainkey(key, self._box_salt)
             else:
                 raise IncorrectKey('key is not Union[MainKey, ImportKey, BaseKey]')
     
