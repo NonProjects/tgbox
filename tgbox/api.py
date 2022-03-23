@@ -1017,7 +1017,7 @@ class EncryptedRemoteBox:
                     try:
                         rbf = await EncryptedRemoteBoxFile(
                             m, self._ta, cache_preview=cache_preview).decrypt(key)
-                    except Exception as e: # In case of imported file
+                    except SyntaxError:#Exception as e: # In case of imported file
                         if return_imported_as_erbf and not dlb:
                             rbf = await EncryptedRemoteBoxFile(
                                 m, self._ta, cache_preview=cache_preview).init()
@@ -2339,8 +2339,18 @@ class DecryptedLocalBox(EncryptedLocalBox):
         while True:
             current = 0
             
+            if None in rbfiles: 
+                break
+            
             if not rbfiles:
                 rbfiles.append(await _get_file())
+                
+                if rbfiles[0] is None:
+                    # RemoteBox doesn't have any files
+                    await self._tgbox_db.Files.execute(
+                        sql_tuple=('DELETE FROM FILES', ()))
+                    break
+
                 rbfiles.append(await _get_file(rbfiles[0].id))
                 last_id = rbfiles[0].id
             else:
@@ -2358,7 +2368,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     progress_callback(last_id, last_drbf_id)
             
             while True:
-                if current == 2:
+                if current == 2 or not rbfiles[current]:
                     break
                 try:
                     lbfi_id = await self._tgbox_db.Files.select_once(
@@ -2379,12 +2389,13 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
                     await self.import_file(rbfiles[current])
                     
-                    if current == 0:
+                    if None in rbfiles:
+                        break
+                    
+                    elif current == 0:
                         rbfiles[0] = rbfiles[1]
 
                     rbfiles[1] = await _get_file(rbfiles[0].id)
-                    
-                    if None in rbfiles: break
                     last_id = rbfiles[1].id
             
             if not initialized:
@@ -2402,13 +2413,22 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 (last_id, rbfiles[0].id)
             )
             await self._tgbox_db.Files.execute(sql_tuple=sql_tuple)
-            last_id = rbfiles[1].id
-
-            sql_tuple = (
-                'DELETE FROM FILES WHERE ID > ? AND ID < ?',
-                (rbfiles[0].id, rbfiles[1].id)
-            )
-            await self._tgbox_db.Files.execute(sql_tuple=sql_tuple)
+            
+            last_id = rbfiles[1].id if rbfiles[1] else None
+            
+            if last_id:
+                sql_tuple = (
+                    'DELETE FROM FILES WHERE ID > ? AND ID < ?',
+                    (rbfiles[0].id, rbfiles[1].id)
+                )
+                await self._tgbox_db.Files.execute(sql_tuple=sql_tuple)
+            else:
+                sql_tuple = (
+                    'DELETE FROM FILES WHERE ID = ?',
+                    (rbfiles[0].id,)
+                )
+                await self._tgbox_db.Files.execute(sql_tuple=sql_tuple)
+                break
 
     async def replace_session(
             self, basekey: BaseKey, ta: TelegramAccount) -> None:
