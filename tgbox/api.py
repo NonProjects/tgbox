@@ -1017,7 +1017,7 @@ class EncryptedRemoteBox:
                     try:
                         rbf = await EncryptedRemoteBoxFile(
                             m, self._ta, cache_preview=cache_preview).decrypt(key)
-                    except SyntaxError:#Exception as e: # In case of imported file
+                    except Exception as e: # In case of imported file
                         if return_imported_as_erbf and not dlb:
                             rbf = await EncryptedRemoteBoxFile(
                                 m, self._ta, cache_preview=cache_preview).init()
