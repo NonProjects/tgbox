@@ -55,8 +55,8 @@ class RemoteFileNotFound(TgboxException):
 class SessionUnregistered(TgboxException):
     """Session you trying to use was disconnected"""
 
-class RemoteBoxDeleted(TgboxException):
-    """The RemoteBox you try to use was deleted"""
+class RemoteBoxInaccessible(TgboxException):
+    """The RemoteBox you try to use is inaccessible"""
 
 class NotEnoughRights(TgboxException):
     """You don't have rigths for this action"""

@@ -52,7 +52,7 @@ from . import loop
 from .errors import (
     NotEnoughRights, NotATgboxFile,
     InUseException, BrokenDatabase, 
-    RemoteBoxDeleted, LimitExceeded,
+    RemoteBoxInaccessible, LimitExceeded,
     IncorrectKey, NotInitializedError,
     AlreadyImported, RemoteFileNotFound,
     DurationImpossible, SessionUnregistered,
@@ -415,7 +415,7 @@ async def get_remote_box(
         ) from None
     except ValueError:
         # ValueError: Could not find the input entity for PeerChannel
-        raise RemoteBoxDeleted(RemoteBoxDeleted.__doc__) from None
+        raise RemoteBoxInaccessible(RemoteBoxInaccessible.__doc__) from None
 
     if not dlb:
         return EncryptedRemoteBox(channel_entity, account)
