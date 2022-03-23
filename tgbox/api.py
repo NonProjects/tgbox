@@ -2389,13 +2389,13 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
                     await self.import_file(rbfiles[current])
                     
-                    if None in rbfiles:
-                        break
-                    
-                    elif current == 0:
+                    if current == 0:
                         rbfiles[0] = rbfiles[1]
 
+                    if None in rbfiles: break
                     rbfiles[1] = await _get_file(rbfiles[0].id)
+
+                    if None in rbfiles: break
                     last_id = rbfiles[1].id
             
             if not initialized:
