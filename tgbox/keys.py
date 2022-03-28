@@ -83,7 +83,7 @@ class Phrase:
         words_list = open(WORDS_PATH,'rb').readlines()
 
         phrase = [
-            sysrnd.choice(words_list)[:-1] 
+            sysrnd.choice(words_list).strip()
             for _ in range(words_count)
         ]     
         return cls(b' '.join(phrase))
