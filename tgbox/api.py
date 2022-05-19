@@ -2335,7 +2335,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
         async for drbf in drb.files(cache_preview=False):
             last_drbf_id = drbf.id; break
         
-        rbfiles, initialized = [], False
+        rbfiles = []
+
         while True:
             current = 0
             
@@ -2353,6 +2354,14 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
                 rbfiles.append(await _get_file(rbfiles[0].id))
                 last_id = rbfiles[0].id
+
+                sql_tuple = (
+                    'DELETE FROM FILES WHERE ID < ?', 
+                    (last_id,)
+                )
+                await self._tgbox_db.Files.execute(
+                    sql_tuple=sql_tuple
+                )
             else:
                 rbfiles.append(await _get_file(rbfiles[1].id))
                 if None in rbfiles: break
@@ -2398,16 +2407,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     if None in rbfiles: break
                     last_id = rbfiles[1].id
             
-            if not initialized:
-                sql_tuple = (
-                    'DELETE FROM FILES WHERE ID < ?', 
-                    (last_id,)
-                )
-                await self._tgbox_db.Files.execute(
-                    sql_tuple=sql_tuple
-                )
-                initialized = True
-
             sql_tuple = (
                 'DELETE FROM FILES WHERE ID > ? AND ID < ?',
                 (last_id, rbfiles[0].id)
