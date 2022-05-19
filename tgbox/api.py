@@ -890,7 +890,7 @@ class EncryptedRemoteBox:
         .. note::
             - The default order is from newest to oldest, but this\
             behaviour can be changed with the ``reverse`` parameter.
-            - You may ignore ``key`` and ``dlb`` if you call\
+            - You can ignore ``key`` and ``dlb`` if you call\
             this method on ``DecryptedRemoteBox``.
 
         Arguments:
@@ -2327,7 +2327,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
         async def _get_file(n=start_from):
             iter_over = drb.files(
                 min_id=n, reverse=True, 
-                cache_preview=False
+                cache_preview=False,
+                return_imported_as_erbf=True
             )
             async for drbf in iter_over:
                 return drbf
@@ -2369,7 +2370,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 rbfiles.append(await _get_file(rbfiles[2].id-1))
                 if None in rbfiles: break
                 rbfiles.pop(0); rbfiles.pop(1)
-
+            
             if progress_callback:
                 if iscoroutinefunction(progress_callback):
                     await progress_callback(last_id, last_drbf_id)
@@ -2389,7 +2390,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 except StopAsyncIteration:
                     lbfi_id = None
 
-                if lbfi_id:
+                if lbfi_id or isinstance(rbfiles[current], EncryptedRemoteBoxFile):
                     current += 1
                 else:
                     if include_preview:
