@@ -1,5 +1,10 @@
 """This module stores utils required by API."""
 
+try:
+    from regex import search as re_search
+except ImportError:
+    from re import search as re_search
+
 from copy import deepcopy
 from pprint import pformat
 from hashlib import sha256
@@ -28,7 +33,7 @@ from os import remove as remove_file
 from .constants import (
     VERBYTE_MAX, FILE_SALT_SIZE, FILE_NAME_MAX,
     FOLDERNAME_MAX, COMMENT_MAX, PREVIEW_MAX,
-    DURATION_MAX, FILESIZE_MAX, PREFIX, 
+    DURATION_MAX, FILESIZE_MAX, PREFIX, FFMPEG,
     METADATA_MAX, FILEDATA_MAX, NAVBYTES_SIZE
 )
 from .errors import (
@@ -526,21 +531,19 @@ def bytes_to_float(bytes_: bytes) -> float:
     """Converts bytes to float."""
     return struct_unpack('!f', bytes_)[0]
 
-async def get_media_duration(file_path: str) -> float:
-    """Returns video/audio duration with ffprobe."""
+async def get_media_duration(file_path: str) -> int:
+    """Returns video/audio duration with ffmpeg in seconds."""
     func = partial(subprocess_run,
-        args=[
-            'ffprobe', '-v', 'error', '-show_entries', 'format=duration', 
-            '-of', 'default=noprint_wrappers=1:nokey=1', file_path
-        ],
-        stdout=PIPE, 
-        stderr=STDOUT
+        args=[FFMPEG, '-i', file_path],
+        stdout=None, stderr=PIPE
     )
     try:
-        future = await loop.run_in_executor(None, func)
-        return float(future.stdout)
-    except:
-        raise DurationImpossible('Can\'t get media duration') from None 
+        stderr = (await loop.run_in_executor(None, func)).stderr
+        duration = re_search(b'Duration: (.)+,', stderr).group()
+        d = duration.decode().split('.')[0].split(': ')[1].split(':')
+        return int(d[0]) * 60**2 + int(d[1]) * 60 + int(d[2])
+    except Exception as e:
+        raise DurationImpossible(f'Can\'t get media duration: {e}') from None 
 
 async def make_media_preview(
         file_path: PathLike, 
@@ -556,16 +559,16 @@ async def make_media_preview(
     
     func = partial(subprocess_run,
         args=[
-            'ffmpeg', '-i', file_path, '-filter:v', f'scale={x}:{y}', '-an',
+            FFMPEG, '-i', file_path, '-filter:v', f'scale={x}:{y}', '-an',
             '-loglevel', 'quiet', '-q:v', '2', thumbnail_path
         ],
         stdout=PIPE, 
-        stderr=STDOUT
+        stderr=None
     )
     try:
         await loop.run_in_executor(None, func)
         thumb = BytesIO(open(thumbnail_path,'rb').read())
         remove_file(thumbnail_path); return thumb
-    except FileNotFoundError as e:
-        # if something goes wrong then file not created
-        raise PreviewImpossible(f'Not a media file. {e}') from None
+    except Exception as e:
+        # If something goes wrong then file is not created (FileNotFoundError)
+        raise PreviewImpossible(f'Can\'t make thumbnail: {e}') from None
