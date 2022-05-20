@@ -2332,6 +2332,17 @@ class DecryptedLocalBox(EncryptedLocalBox):
             )
             async for drbf in iter_over:
                 return drbf
+        
+        def difference(sql_tuple_ids: tuple) -> bool:
+            """
+            This local func will sort out useless SQL
+            querys, like DELETE FROM FILES WHERE ID > 5 AND ID < 5
+            """
+            if sql_tuple_ids[0] == sql_tuple_ids[1] \
+                or sql_tuple_ids[0]+1 == sql_tuple_ids[1]:
+                    return False
+            else:
+                return True
 
         async for drbf in drb.files(cache_preview=False):
             last_drbf_id = drbf.id; break
@@ -2389,14 +2400,14 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     )
                 except StopAsyncIteration:
                     lbfi_id = None
-
-                if lbfi_id or isinstance(rbfiles[current], EncryptedRemoteBoxFile):
+                
+                if lbfi_id or type(rbfiles[current]) is EncryptedRemoteBoxFile:
                     current += 1
                 else:
                     if include_preview:
                         rbfiles[current]._cache_preview = True
                         await rbfiles[current].get_preview()
-
+                    
                     await self.import_file(rbfiles[current])
                     
                     if current == 0:
@@ -2412,7 +2423,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 'DELETE FROM FILES WHERE ID > ? AND ID < ?',
                 (last_id, rbfiles[0].id)
             )
-            await self._tgbox_db.Files.execute(sql_tuple=sql_tuple)
+            if difference(sql_tuple[1]):
+                await self._tgbox_db.Files.execute(sql_tuple=sql_tuple)
             
             last_id = rbfiles[1].id if rbfiles[1] else None
             
@@ -2421,7 +2433,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     'DELETE FROM FILES WHERE ID > ? AND ID < ?',
                     (rbfiles[0].id, rbfiles[1].id)
                 )
-                await self._tgbox_db.Files.execute(sql_tuple=sql_tuple)
+                if difference(sql_tuple[1]):
+                    await self._tgbox_db.Files.execute(sql_tuple=sql_tuple)
             else:
                 sql_tuple = (
                     'DELETE FROM FILES WHERE ID = ?',
