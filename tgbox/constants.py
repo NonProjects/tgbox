@@ -33,6 +33,8 @@ __all__ = [
     'WORDS_PATH', 
     'SCRYPT_SALT', 
     'SCRYPT_DKLEN', 
+    'FFMPEG',
+    'ABSPATH',
     'SCRYPT_N', 
     'SCRYPT_R', 
     'SCRYPT_P', 
