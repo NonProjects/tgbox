@@ -2352,7 +2352,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         while True:
             current = 0
             
-            if None in rbfiles: 
+            if None in rbfiles:
                 break
             
             if not rbfiles:
@@ -2413,11 +2413,22 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     if current == 0:
                         rbfiles[0] = rbfiles[1]
 
-                    if None in rbfiles: break
-                    rbfiles[1] = await _get_file(rbfiles[0].id)
+                    if None in rbfiles: 
+                        break
 
-                    if None in rbfiles: break
-                    last_id = rbfiles[1].id
+                    rbfiles[1] = await _get_file(rbfiles[0].id)
+                    
+                    if rbfiles[0] and not rbfiles[1]:
+                        if current == 0:
+                            try:
+                                await self.import_file(rbfiles[current])
+                            except AlreadyImported:
+                                pass # Last file may be already in Box, so skip
+
+                        rbfiles[1] = rbfiles[0]
+                        break
+                    else:
+                        last_id = rbfiles[1].id
             
             sql_tuple = (
                 'DELETE FROM FILES WHERE ID > ? AND ID < ?',
