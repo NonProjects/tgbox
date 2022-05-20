@@ -66,12 +66,27 @@ METADATA_MAX:   int=1064639
 FILEDATA_MAX:   int=64584 # IV included
 NAVBYTES_SIZE:  int=32 # IV included
 
-abspath: Path = Path(_MEIPASS) if _MEIPASS is not None\
+ABSPATH: Path = Path(_MEIPASS) if _MEIPASS is not None\
     else Path(__file__).parent
 
 # Get path to "other" folder where we store
 # words.txt and tgbox_logo.png files.
-_other: Path = abspath / 'other'
+_other: Path = ABSPATH / 'other'
+
+# We will use it in subprocess.call
+FFMPEG = 'ffmpeg'
+
+# You can add ffmpeg.exe to 'other' folder
+# before build with PyInstaller on Windows or
+# just if you want TGBOX to make file thumbnails 
+# or extract duration. It will be added to 
+# your resulted executable.
+# 
+# https://www.ffmpeg.org/download.html#build-windows
+#
+for file in _other.iterdir():
+    if file.name == 'ffmpeg.exe':
+        FFMPEG = _other / 'ffmpeg.exe'
 
 # By default, PyInstaller will not grab files
 # from 'other' folder. To resolve this error 
