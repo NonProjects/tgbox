@@ -13,7 +13,7 @@ try:
 except ModuleNotFoundError:
     FAST_EVENT_LOOP = False
 
-__version__ = '4.0'
+__version__ = '0.4'
 
 # Define and set global event loop
 loop = new_event_loop()
