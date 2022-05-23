@@ -2312,7 +2312,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
         self._box_cr_time = bytes_to_int(
             AES(self._mainkey).decrypt(elb._box_cr_time)
         )
-        self._box_salt = elb._box_salt 
+        self._box_salt = elb._box_salt
+        self._api_id = elb._api_id
+        self._api_hash = elb._api_hash
 
     @staticmethod
     def init() -> NoReturn:
