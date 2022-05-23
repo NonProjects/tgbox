@@ -43,7 +43,7 @@ from .constants import (
     VERSION, VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME, REMOTEBOX_PREFIX,
     FILE_NAME_MAX, FOLDERNAME_MAX, COMMENT_MAX, DEF_UNK_FOLDER,
     PREVIEW_MAX, DURATION_MAX, DEF_NO_FOLDER, NAVBYTES_SIZE,
-    DOWNLOAD_PATH, API_ID, API_HASH, FILESIZE_MAX, PREFIX
+    DOWNLOAD_PATH, FILESIZE_MAX, PREFIX
 )
 from .fastelethon import upload_file, download_file
 from .db import TgboxDB
@@ -499,9 +499,15 @@ class TelegramAccount:
         from tgbox.api import TelegramAccount, make_remote_box
         from getpass import getpass # For hidden input
         
+        PHONE_NUMBER = input('Your phone number: ')
+        API_ID = 1234567 # Your own API_ID: my.telegram.org
+        API_HASH = '00000000000000000000000000000000' # Your own API_HASH
+        
         async def main():
             ta = TelegramAccount(
-                phone_number = input('Phone: ')
+                phone_number = PHONE_NUMBER,
+                api_id = API_ID, 
+                api_hash = API_HASH
             )
             await ta.connect()
             await ta.send_code_request()
@@ -515,19 +521,17 @@ class TelegramAccount:
         asyncio_run(main())
     """
     def __init__(
-            self, api_id: int=API_ID, 
-            api_hash: str=API_HASH, 
+            self, api_id: Optional[int] = None, 
+            api_hash: Optional[str] = None, 
             phone_number: Optional[str] = None, 
             session: Optional[Union[str, StringSession]] = None):
         """
         Arguments:
             api_id (``int``, optional):
                 API_ID from https://my.telegram.org.
-                ``constants.API_ID`` by default.
 
             api_hash (``int``, optional):
                 API_HASH from https://my.telegram.org.
-                ``constants.API_HASH`` by default.
             
             phone_number (``str``, optional):
                 Phone number linked to your Telegram
@@ -540,7 +544,15 @@ class TelegramAccount:
                 your Telegram account. You can get it
                 after connecting and signing in via
                 ``TelegramAccount.get_session()`` method.
+
+            You should specify at least ``session`` or
+            ``api_id``, ``api_hash`` and ``phone_number``.
         """
+        if session is None and not all((api_id, api_hash, phone_number)):
+            raise ValueError(
+                '''You should specify at least ``session`` or '''
+                '''``api_id``, ``api_hash`` and ``phone_number``.'''
+            )
         self._api_id, self._api_hash = api_id, api_hash
         self._phone_number = phone_number
         

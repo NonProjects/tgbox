@@ -14,11 +14,17 @@ Logging in & Box creation
         from asyncio import get_event_loop
         from tgbox.keys import Phrase, make_basekey
         from getpass import getpass # For hidden input
+        
+        PHONE_NUMBER = input('Your phone number: ')
 
+        API_ID = 1234567 # https://my.telegram.org
+        API_HASH = '00000000000000000000000000000000' 
 
         async def main():
             ta = TelegramAccount(
-                phone_number = input('Phone: ')
+                phone_number = PHONE_NUMBER,
+                api_id = API_ID, 
+                api_hash = API_HASH
             )
             await ta.connect()
             await ta.send_code_request()

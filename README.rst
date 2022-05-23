@@ -4,20 +4,29 @@ TGBOX: encrypted cloud storage based on Telegram API
 
 .. code-block:: python
 
-        from tgbox import loop
-
         from tgbox.api import (
             TelegramAccount, 
             make_remote_box,
             make_local_box
         )
-        from tgbox.keys import make_basekey
+        from tgbox.keys import make_basekey, Phrase
+        from asyncio import get_event_loop
         from getpass import getpass 
 
+        PHONE_NUMBER = input('Your phone number: ')
+
+        API_ID = 1234567 # https://my.telegram.org
+        API_HASH = '00000000000000000000000000000000'
+        
+        # We will use it to encrypt all data in Box
+        box_phrase = Phrase.generate()
+        print(box_phrase, '- phrase to your Box')
 
         async def main():
             ta = TelegramAccount(
-                phone_number = input('Phone: ')
+                phone_number = PHONE_NUMBER,
+                api_id = API_ID, 
+                api_hash = API_HASH
             )
             await ta.connect()
             await ta.send_code_request()
@@ -26,7 +35,7 @@ TGBOX: encrypted cloud storage based on Telegram API
                 code = int(input('Code: ')),
                 password = getpass('Pass: ')
             )
-            basekey = make_basekey(b'very_bad_phrase')
+            basekey = make_basekey(box_phrase)
 
             erb = await make_remote_box(ta)
             dlb = await make_local_box(erb, ta, basekey)
@@ -38,9 +47,10 @@ TGBOX: encrypted cloud storage based on Telegram API
                 comment = b'Cats are cool B-)',
                 foldername = b'Pictures/Kitties' 
             )
-            drbfi = await drb.push_file(ff)
-            await drbfi.download()
-
+            drbfi = await drb.push_file(ff) # Upload file
+            await drbfi.download() # Download it back
+        
+        loop = get_event_loop()
         loop.run_until_complete(main()) 
 
 Motivation
