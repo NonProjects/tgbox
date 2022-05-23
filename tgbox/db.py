@@ -119,6 +119,7 @@ class TgboxDB:
     async def close(self) -> None:
         await self._aiosql_db.close()
         self._aiosql_db_is_closed = True
+
         self.BoxData = None
         self.Files = None
         self.Folders = None
@@ -128,7 +129,8 @@ class TgboxDB:
         await self._aiosql_db.execute(
             """CREATE TABLE IF NOT EXISTS BOX_DATA (LAST_FILE_ID int NOT NULL, """
             """BOX_CHANNEL_ID blob NOT NULL, BOX_CR_TIME blob NOT NULL, """
-            """BOX_SALT blob NOT NULL, MAINKEY blob, SESSION blob NOT NULL);""" 
+            """BOX_SALT blob NOT NULL, MAINKEY blob, SESSION blob NOT NULL, """ 
+            """API_ID int NOT NULL, API_HASH blob NOT NULL);""" 
         )
         await self._aiosql_db.execute(
             """CREATE TABLE IF NOT EXISTS FILES (ID integer PRIMARY KEY, """
