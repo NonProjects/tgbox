@@ -9,10 +9,6 @@ PyPI (pip)
    python3 -m pip install tgbox # Pure Python (very slow)
    python3 -m pip install tgbox[fast] # With C libraries
 
-   # Additionally, install uvloop. Linux only.
-   python3 -m pip install tgbox[uvloop] 
-
-
 Clone from GitHub
 -----------------
 

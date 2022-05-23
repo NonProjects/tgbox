@@ -5,11 +5,13 @@ try:
 except ImportError:
     from re import search as re_search
 
+from asyncio import (
+    iscoroutine, get_event_loop
+)
 from copy import deepcopy
 from pprint import pformat
 from hashlib import sha256
 from random import randrange
-from asyncio import iscoroutine
 
 from subprocess import (
     PIPE, STDOUT, 
@@ -41,7 +43,6 @@ from .errors import (
     PreviewImpossible, 
     DurationImpossible
 )
-from . import loop
 from .keys import FileKey, MainKey
 from .crypto import AESwState as AES
 
@@ -538,6 +539,7 @@ async def get_media_duration(file_path: str) -> int:
         stdout=None, stderr=PIPE
     )
     try:
+        loop = get_event_loop()
         stderr = (await loop.run_in_executor(None, func)).stderr
         duration = re_search(b'Duration: (.)+,', stderr).group()
         d = duration.decode().split('.')[0].split(': ')[1].split(':')
@@ -566,6 +568,7 @@ async def make_media_preview(
         stderr=None
     )
     try:
+        loop = get_event_loop()
         await loop.run_in_executor(None, func)
         thumb = BytesIO(open(thumbnail_path,'rb').read())
         remove_file(thumbnail_path); return thumb

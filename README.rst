@@ -82,5 +82,3 @@ Third party & thanks to
 - `Filetype <https://github.com/h2non/filetype.py>`_ (`MIT <https://github.com/h2non/filetype.py/blob/master/LICENSE>`_)
 - `Cryptg <https://github.com/cher-nov/cryptg>`_ (`LICENSE <https://github.com/cher-nov/cryptg/blob/master/LICENSE.txt>`_)
 - `Pycryptodome <https://github.com/Legrandin/pycryptodome>`_ (`LICENSE <https://github.com/Legrandin/pycryptodome/blob/master/LICENSE.rst>`_)
-- `Uvloop <https://github.com/MagicStack/uvloop>`_ (`LICENSE <https://github.com/MagicStack/uvloop/blob/master/LICENSE-APACHE>`_)
-

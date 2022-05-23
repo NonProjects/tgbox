@@ -4,8 +4,8 @@ try:
 except ImportError:
     from re import search as re_search
 
-from asyncio import iscoroutinefunction
 from filetype import guess as filetype_guess
+from asyncio import iscoroutinefunction
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
@@ -47,7 +47,6 @@ from .constants import (
 )
 from .fastelethon import upload_file, download_file
 from .db import TgboxDB
-from . import loop
 
 from .errors import (
     NotEnoughRights, NotATgboxFile,
@@ -547,7 +546,7 @@ class TelegramAccount:
         
         self.TelegramClient = TelegramClient(
             StringSession(session), 
-            self._api_id, self._api_hash, loop=loop
+            self._api_id, self._api_hash
         )
     async def signed_in(self) -> bool:
         """Returns ``True`` if you logged in account"""

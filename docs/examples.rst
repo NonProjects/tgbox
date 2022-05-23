@@ -6,17 +6,12 @@ Logging in & Box creation
 
 .. code-block:: python
 
-        # This is global Tgbox loop.
-        # You should use it if you
-        # want to add coroutines to
-        # the event loop.
-        from tgbox import loop
-
         from tgbox.api import (
             TelegramAccount, 
             make_remote_box,
             make_local_box
         )
+        from asyncio import get_event_loop
         from tgbox.keys import Phrase, make_basekey
         from getpass import getpass # For hidden input
 
@@ -44,7 +39,8 @@ Logging in & Box creation
             erb = await make_remote_box(ta)
             # Make DecryptedLocalBox
             dlb = await make_local_box(erb, ta, basekey)
-
+        
+        loop = get_event_loop()
         loop.run_until_complete(main()) 
 
 
@@ -56,7 +52,7 @@ Synchronous
 
 .. code-block:: python
         
-        from tgbox import loop
+        from asyncio import get_event_loop
         from tgbox.api import get_local_box, get_remote_box
         from tgbox.keys import Phrase, make_basekey
 
@@ -92,7 +88,8 @@ Synchronous
             
             # Download it back.
             await drbfi.download()
-
+        
+        loop = get_event_loop()
         loop.run_until_complete(main())
 
 .. note::
@@ -103,8 +100,6 @@ Asynchronous
 
 .. code-block:: python
         
-        # We use gather() here, but 
-        # there is also tgbox.loop.create_task
         from asyncio import gather
 
         ... # some code omitted
@@ -207,12 +202,11 @@ Box clone
 
 .. code-block:: python
 
-    from tgbox import loop
-
     from tgbox.api import (
         TelegramAccount,
         get_remote_box
     )
+    from asyncio import get_event_loop
     from tgbox.keys import make_basekey
     from getpass import getpass
 
@@ -257,7 +251,8 @@ Box clone
         drb = await erb.decrypt(key=mainkey)
         # Clone and retreive DecryptedLocalBox
         dlb = await drb.clone(basekey)
-
+    
+    loop = get_event_loop()
     loop.run_until_complete(main())
 
 

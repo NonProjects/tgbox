@@ -32,8 +32,7 @@ setup(
             'pycryptodome==3.12.0',
             'cryptg==0.2.post4',
             'regex==2021.11.10'
-        ],
-        'uvloop': ['uvloop==0.16.0'],
+        ]
     },
     classifiers = [
         'Development Status :: 4 - Beta',
@@ -43,7 +42,6 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: System :: Archiving :: Backup',
         'License :: OSI Approved :: GNU General Public License v2 (GPLv2)',
-        'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9'
