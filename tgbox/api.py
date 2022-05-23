@@ -403,7 +403,12 @@ async def get_remote_box(
     elif ta and not entity:
         raise ValueError('entity must be specified with ta')
     else:
-        account = await TelegramAccount(session=dlb._session).connect()
+        account = TelegramAccount(
+            session=dlb._session,
+            api_id=dlb._api_id,
+            api_hash=dlb._api_hash
+        )
+        await account.connect()
     try:
         entity = entity if entity else PeerChannel(dlb._box_channel_id)
         channel_entity = await account.TelegramClient.get_entity(entity)
@@ -455,6 +460,8 @@ async def make_local_box(
         box_salt,
         None, # We aren't cloned box, so Mainkey is empty
         AES(basekey).encrypt(ta.get_session().encode()),
+        erb._ta._api_id, 
+        bytes.fromhex(erb._ta._api_hash)
     )
     return await EncryptedLocalBox(tgbox_db).decrypt(basekey)
 
@@ -521,16 +528,15 @@ class TelegramAccount:
         asyncio_run(main())
     """
     def __init__(
-            self, api_id: Optional[int] = None, 
-            api_hash: Optional[str] = None, 
+            self, api_id: int, api_hash: str, 
             phone_number: Optional[str] = None, 
             session: Optional[Union[str, StringSession]] = None):
         """
         Arguments:
-            api_id (``int``, optional):
+            api_id (``int``):
                 API_ID from https://my.telegram.org.
 
-            api_hash (``int``, optional):
+            api_hash (``int``):
                 API_HASH from https://my.telegram.org.
             
             phone_number (``str``, optional):
@@ -545,13 +551,11 @@ class TelegramAccount:
                 after connecting and signing in via
                 ``TelegramAccount.get_session()`` method.
 
-            You should specify at least ``session`` or
-            ``api_id``, ``api_hash`` and ``phone_number``.
+            You should specify at least ``session`` or ``phone_number``.
         """
-        if session is None and not all((api_id, api_hash, phone_number)):
+        if not session and not phone_number:
             raise ValueError(
-                '''You should specify at least ``session`` or '''
-                '''``api_id``, ``api_hash`` and ``phone_number``.'''
+                'You should specify at least ``session`` or ``phone_number``.'
             )
         self._api_id, self._api_hash = api_id, api_hash
         self._phone_number = phone_number
@@ -678,10 +682,16 @@ class EncryptedRemoteBox:
         from getpass import getpass
         from asyncio import run as asyncio_run
         
+        PHONE_NUMBER = input('Your phone number: ')
+        API_ID = 1234567 # Your own API_ID: my.telegram.org
+        API_HASH = '00000000000000000000000000000000' # Your own API_HASH
+        
         async def main():
             # Connecting and logging to Telegram
             ta = TelegramAccount(
-                phone_number = input('Phone: ')
+                phone_number = PHONE_NUMBER,
+                api_id = API_ID, 
+                api_hash = API_HASH
             )
             await ta.connect()
             await ta.send_code_request()
@@ -1983,7 +1993,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 class EncryptedLocalBox:
     """
     This class represents an encrypted local box. On more
-    low-level, that's a wrapper around ``TgboxDB``. Usually
+    low-level that's a wrapper around ``TgboxDB``. Usually
     you will never meet this class in your typical code, 
     but you may want to extract some encrypted data.
 
@@ -2031,9 +2041,13 @@ class EncryptedLocalBox:
         """
         self._tgbox_db = tgbox_db
         
+        self._api_id = None
+        self._api_hash = None
+
         self._mainkey = None
         self._box_salt = None
         self._session = None
+
         self._box_channel_id = None
         self._box_cr_time = None
 
@@ -2056,6 +2070,16 @@ class EncryptedLocalBox:
     def __raise_initialized(self) -> NoReturn:
         if not self._initialized:
             raise NotInitializedError('Not initialized. Call .init().')
+    
+    @property
+    def api_id(self) -> Union[int, None]:
+        """Returns API_ID."""
+        return self._api_id
+
+    @property
+    def api_hash(self) -> Union[str, None]:
+        """Returns API_HASH."""
+        return self._api_hash
 
     @property
     def tgbox_db(self) -> TgboxDB:
@@ -2128,6 +2152,7 @@ class EncryptedLocalBox:
             last_file_id, self._box_channel_id = box_data[:2]
             self._box_cr_time, self._box_salt, self._mainkey = box_data[2:5]
             self._session, self._initialized = box_data[5], True
+            self._api_id, self._api_hash = box_data[6], box_data[7].hex()
             
             if self._mainkey:
                 self._mainkey = EncryptedMainkey(self._mainkey)
@@ -2576,7 +2601,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     self.doc_pic = doc_pic
 
                     self.ta = TelegramAccount(
-                        session=session).connect()
+                        session=session,
+                        api_id=self._api_id,
+                        api_hash=self._api_hash
+                    )
+                    self.ta = self.ta.connect()
                     self._client_initialized = False
                     
                     file = File(doc_pic)
