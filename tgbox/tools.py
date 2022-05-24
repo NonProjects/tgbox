@@ -280,7 +280,7 @@ class RemoteBoxFileMetadata:
     and assembled. You will need to add it to
     the file via ``OpenPretender.concat_metadata``.
     """
-    file_name: str
+    file_name: bytes
     enc_foldername: bytes
     filekey: FileKey
     comment: bytes
@@ -326,17 +326,20 @@ class RemoteBoxFileMetadata:
         assert self.duration <= DURATION_MAX
         
         metadata = (
-            PREFIX + self.verbyte \
-          + self.box_salt \
+            PREFIX         \
+          + self.verbyte   \
+          + self.box_salt  \
           + self.file_salt
         )
         filedata = (
-            int_to_bytes(self.size,4) \
-          + float_to_bytes(self.duration) \
-          + int_to_bytes(len(self.enc_foldername),2,signed=False) \
-          + self.enc_foldername + bytes([len(self.comment)]) \
-          + self.comment + int_to_bytes(len(self.file_name),2,signed=False) \
-          + self.file_name.encode()
+            int_to_bytes(self.size,4)                              \
+          + float_to_bytes(self.duration)                          \
+          + int_to_bytes(len(self.enc_foldername),2,signed=False)  \
+          + self.enc_foldername                                    \
+          + bytes([len(self.comment)])                             \
+          + self.comment                                           \
+          + int_to_bytes(len(self.file_name),2,signed=False)       \
+          + self.file_name
         )
         filedata = AES(self.filekey).encrypt(filedata)
         assert len(filedata) <= FILEDATA_MAX

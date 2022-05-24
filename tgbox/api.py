@@ -2658,6 +2658,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
             file_name = file_path.name
         else:
             file_name, file_path = prbg(8).hex(), ''
+        
+        if not isinstance(file_name, bytes):
+            file_name = file_name.encode()
 
         if len(file_name) > FILE_NAME_MAX: 
             raise LimitExceeded(f'File name must be <= {FILE_NAME_MAX} bytes.')
@@ -3420,7 +3423,7 @@ class FutureFile:
     Usually it's only for internal use.
     """
     dlb: DecryptedLocalBox
-    file_name: str
+    file_name: bytes
     foldername: bytes
     file: BinaryIO
     filekey: FileKey
@@ -3490,11 +3493,6 @@ class FutureFile:
         else:
             filekey = None
 
-        if isinstance(self.file_name, bytes):
-            file_name = self.file_name
-        else:
-            file_name = self.file_name.encode()
-        
         file_path = None
         if hasattr(self.file, 'name') and self.file.name:
             if Path(self.file.name).exists():
@@ -3521,7 +3519,7 @@ class FutureFile:
             AES(self.filekey).encrypt(duration),
             self.file_iv, 
             filekey,
-            AES(self.filekey).encrypt(file_name),
+            AES(self.filekey).encrypt(self.file_name),
             self.file_salt,
             AES(self.filekey).encrypt(self.preview),
             AES(self.filekey).encrypt(size),
