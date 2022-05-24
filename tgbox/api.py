@@ -1340,7 +1340,9 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
             AES(self._mainkey).encrypt(int_to_bytes(int(time()))),
             await self.get_box_salt(),
             AES(basekey).encrypt(self._mainkey.key),
-            AES(basekey).encrypt(self._ta.get_session().encode())
+            AES(basekey).encrypt(self._ta.get_session().encode()),
+            self._ta._api_id,
+            bytes.fromhex(self._ta._api_hash)
         )
         dlb = await EncryptedLocalBox(tgbox_db).decrypt(basekey)
 
