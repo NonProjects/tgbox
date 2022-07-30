@@ -1,5 +1,15 @@
 """This module stores utils required by API."""
 
+try:
+    from regex import search as re_search
+except ImportError:
+    from re import search as re_search
+
+from asyncio import (
+    iscoroutine, get_event_loop
+)
+from copy import deepcopy
+from pprint import pformat
 from hashlib import sha256
 from random import randrange
 
@@ -25,7 +35,7 @@ from os import remove as remove_file
 from .constants import (
     VERBYTE_MAX, FILE_SALT_SIZE, FILE_NAME_MAX,
     FOLDERNAME_MAX, COMMENT_MAX, PREVIEW_MAX,
-    DURATION_MAX, FILESIZE_MAX, PREFIX, 
+    DURATION_MAX, FILESIZE_MAX, PREFIX, FFMPEG,
     METADATA_MAX, FILEDATA_MAX, NAVBYTES_SIZE
 )
 from .errors import (
@@ -33,7 +43,6 @@ from .errors import (
     PreviewImpossible, 
     DurationImpossible
 )
-from . import loop
 from .keys import FileKey, MainKey
 from .crypto import AESwState as AES
 
@@ -56,6 +65,148 @@ try:
     anext() # Python 3.10+
 except NameError:
     anext = lambda agen: agen.__anext__()
+
+class _TypeList:
+    """
+    This is cutted version of ``list()`` that
+    checks type on ``.append(...)``.
+
+    You can specify multiply types with
+    ``tuple``, e.g: ``_TypeList((int, float))``
+    
+    * The list will try to change value type if \
+      ``isinstance(value, type_) is False`` to \
+      ``value = type_(value)``. Otherwise ``TypeError``.
+    """
+    def __init__(self, type_, *args):
+        self.type = type_ if isinstance(type_, tuple) else (type_,)
+        self.list = [self.__check_type(i) for i in args]
+    
+    def __bool__(self):
+        return bool(self.list)
+
+    def __iter__(self):
+        for i in self.list:
+            yield i
+    
+    def __getitem__(self, sl):
+        return self.list[sl]
+
+    def __repr__(self) -> str:
+        return f'_TypeList({self.type}, *{self.list})'
+
+    def __check_type(self, value):
+        for type_ in self.type:
+            if isinstance(value, type_):
+                return value
+            else:
+                try:
+                    if isinstance(b'', type_):
+                        # bytes(str) doesn't work
+                        return type_(value,'utf-8')
+                    else:
+                        return type_(value)
+                except:
+                    pass
+        else:
+            raise TypeError(
+                f'Invalid type! Expected {self.type}, got {type(value)}'
+            )
+    def append(self, value):
+        self.list.append(self.__check_type(value))
+
+    def extend(self, list):
+        self.list.extend([self.__check_type(i) for i in list])
+
+    def clear(self):
+        self.list.clear()
+
+class SearchFilter:
+    """
+    Container that filters search in ``DecryptedRemoteBox`` or     
+    ``DecryptedLocalBox``.
+
+    The ``SearchFilter`` has **two** filters: the **Include**
+    and **Exclude**. On search, all matching to **include**
+    files will be **yielded**, while all matching to
+    **exclude** will be **not yielded** (ignored).
+
+    * The ``tgbox.api._search_func`` will firstly check for \
+      **include** filters, so its priority higher.
+
+    * The ``tgbox.api._search_func`` will yield files that \
+      match **all** of filters, **not** one of it.
+
+    * The ``SearchFilter`` accepts ``list`` as kwargs \
+      value. You can ``SearchFilter(id=[3,5,10])``.
+
+    * The ``SearchFilter(**kwargs)`` will add all filters \
+      to the **include**. Also use ``SearchFilter.include(...)`` \
+      & ``SearchFilter.exclude(...)`` methods after initializion.
+
+    All filters:
+        * **id** *integer*: File's ID
+
+        * **comment**   *bytes*: File's comment
+        * **folder**    *bytes*: File's foldername
+        * **file_name** *bytes*: File's name
+        * **file_salt** *bytes*: File's salt
+        * **verbyte**   *bytes*: File's version byte
+
+        * **min_id** *integer*: File ID should be > min_id
+        * **max_id** *integer*: File ID should be < max_id
+
+        * **min_size** *integer*: File Size should be > min_size
+        * **max_size** *integer*: File Size should be < max_size
+
+        * **min_time** *integer/float*: Upload Time should be > min_time
+        * **max_time** *integer/float*: Upload Time should be < max_time
+
+        * **exported** *bool*: Yield only exported files
+        * **re**       *bool*: re_search for every ``bytes`` filter
+    """
+    def __init__(self, **kwargs):
+        self.in_filters = {
+            'comment':   _TypeList(bytes),
+            'folder':    _TypeList(bytes),
+            'file_name': _TypeList(bytes),
+            'file_salt': _TypeList(bytes),
+            'verbyte':   _TypeList(bytes),   
+            'id':        _TypeList(int),
+            'min_id':    _TypeList(int),   
+            'max_id':    _TypeList(int),  
+            'min_size':  _TypeList(int), 
+            'max_size':  _TypeList(int),
+            'min_time':  _TypeList((int,float)),  
+            'max_time':  _TypeList((int,float)), 
+            'exported':  _TypeList(bool), 
+            're':        _TypeList(bool), 
+        }
+        self.ex_filters = deepcopy(self.in_filters)
+        self.include(**kwargs)
+    
+    def __repr__(self) -> str:
+        return pformat({
+            'include': self.in_filters,
+            'exclude': self.ex_filters
+        })
+    def include(self, **kwargs) -> 'SearchFilter':
+        """Will extend included filters"""
+        for k,v in kwargs.items():
+            if isinstance(v, list):
+                self.in_filters[k].extend(v)
+            else:
+                self.in_filters[k].append(v)
+        return self
+    
+    def exclude(self, **kwargs) -> 'SearchFilter':
+        """Will extend excluded filters"""
+        for k,v in kwargs.items():
+            if isinstance(v, list):
+                self.ex_filters[k].extend(v)
+            else:
+                self.ex_filters[k].append(v)
+        return self
 
 class CustomAttributes:
     """
@@ -129,7 +280,7 @@ class RemoteBoxFileMetadata:
     and assembled. You will need to add it to
     the file via ``OpenPretender.concat_metadata``.
     """
-    file_name: str
+    file_name: bytes
     enc_foldername: bytes
     filekey: FileKey
     comment: bytes
@@ -175,24 +326,26 @@ class RemoteBoxFileMetadata:
         assert self.duration <= DURATION_MAX
         
         metadata = (
-            PREFIX + self.verbyte \
-          + self.box_salt \
+            PREFIX         \
+          + self.verbyte   \
+          + self.box_salt  \
           + self.file_salt
         )
         filedata = (
-            int_to_bytes(self.size,4) \
-          + float_to_bytes(self.duration) \
-          + int_to_bytes(len(self.enc_foldername),2,signed=False) \
-          + self.enc_foldername + bytes([len(self.comment)]) \
-          + self.comment + int_to_bytes(len(self.file_name),2,signed=False) \
-          + self.file_name.encode()
+            int_to_bytes(self.size,4)                              \
+          + float_to_bytes(self.duration)                          \
+          + int_to_bytes(len(self.enc_foldername),2,signed=False)  \
+          + self.enc_foldername                                    \
+          + bytes([len(self.comment)])                             \
+          + self.comment                                           \
+          + int_to_bytes(len(self.file_name),2,signed=False)       \
+          + self.file_name
         )
         filedata = AES(self.filekey).encrypt(filedata)
         assert len(filedata) <= FILEDATA_MAX
 
         if self.preview:
-            preview = AES(self.filekey).encrypt(preview)
-            assert len(preview) <= PREVIEW_MAX+16 
+            preview = AES(self.filekey).encrypt(self.preview)
         else:
             preview = b''
 
@@ -207,121 +360,17 @@ class RemoteBoxFileMetadata:
         
         self._constructed = metadata + self.file_iv
         return self._constructed
-        
-class SearchFilter:
-    """
-    Container that filters search 
-    in ``RemoteBox`` or ``DecryptedLocalBox``. 
-    """
-    def __init__(
-            self, *, id: Optional[Union[int, List[int]]] = None, 
-            time: Optional[Union[int, List[int]]] = None,
-            comment: Optional[Union[bytes, List[bytes]]] = None,
-            folder: Optional[Union[bytes, List[bytes]]] = None,
-            file_name: Optional[Union[bytes, List[bytes]]] = None,
-            min_size: Optional[Union[int, List[int]]] = None,
-            max_size: Optional[Union[int, List[int]]] = None,
-            file_salt: Optional[Union[bytes, List[bytes]]] = None,
-            verbyte: Optional[Union[bytes, List[bytes]]] = None,
-            exported: Optional[bool] = None, re: Optional[bool] = None
-        ):
-        """
-        All kwargs will be converted to ``List``.
-        If nothing specified, then search will nothing return. 
-        
-        You can extend all params via (i.e) ``sf.id.append`` or via
-        concatenation (``+``) of two ``SearchFilter`` classes.
-        
-        You can make a new ``SearchFilter`` from two other 
-        SearchFilters via floordiv (``//``).
-        
-        Any kwarg with ``bytes`` type can 
-        be also a regular expression.
-        
-        kwarg ``re`` will tell the ``tgbox.api._search_func`` that
-        *all* bytes that you specify is Regular Expressions. 
-        """
-        self.id = id if isinstance(id, list)\
-            else ([] if not id else [id])
 
-        self.time = time if isinstance(time, list)\
-            else ([] if not time else [time])
-
-        self.comment = comment if isinstance(comment, list)\
-            else ([] if not comment else [comment])
-
-        self.folder = folder if isinstance(folder, list)\
-            else ([] if not folder else [folder])
-
-        self.file_name = file_name if isinstance(file_name, list)\
-            else ([] if not file_name else [file_name])
-
-        self.min_size = min_size if isinstance(min_size, list)\
-            else ([] if not min_size else [min_size])
-
-        self.max_size = max_size if isinstance(max_size, list)\
-            else ([] if not max_size else [max_size])
-
-        self.file_salt = file_salt if isinstance(file_salt, list)\
-            else ([] if not file_salt else [file_salt])
-
-        self.verbyte = verbyte if isinstance(verbyte, list)\
-            else ([] if not verbyte else [verbyte])
-        
-        self.exported = exported
-        self.re = re
-        
-    def __hash__(self) -> int:
-        return hash((
-            self.id, self.time, self.comment, self.folder, self.exported, self.max_size,
-            self.file_name, self.min_size, self.file_salt, self.verbyte, self.re
-        ))
-    def __eq__(self, other) -> bool:
-        return all((
-            isinstance(other, self.__class__), 
-            self.__hash__() == hash(other)
-        ))
-    def __bool__(self) -> bool:
-        """Will return ``True`` if any(kwargs)"""
-        return any((
-            self.id, self.time, self.comment, self.folder, self.exported, self.max_size,
-            self.file_name, self.min_size, self.file_salt, self.verbyte, self.re
-        ))
-    def __add__(self, other: 'SearchFilter') -> None:
-        """Extends filters with ``other`` filters."""
-        self.id.extend(other.id)
-        self.time.extend(other.time)
-        self.comment.extend(other.comment)
-        self.folder.extend(other.folder)
-        self.file_name.extend(other.file_name)
-        self.min_size.extend(other.min_size)
-        self.max_size.extend(other.max_size)
-        self.file_salt.extend(other.file_salt)
-        self.verbyte.extend(other.verbyte)
-    
-    def __floordiv__(self, other: 'SearchFilter') -> 'SearchFilter':
-        """
-        Makes a new ``SearchFilter`` from ``self`` and ``other`` filters.
-        Kwarg ``exported`` will be used from ``other`` class.
-        """
-        return SearchFilter(
-            id = self.id + other.id,
-            time = self.time + other.time,
-            comment = self.comment + other.comment,
-            folder = self.folder + other.folder,
-            file_name = self.file_name + other.file_name,
-            min_size = self.min_size + other.min_size,
-            max_size = self.max_size + other.max_size,
-            file_salt = self.file_salt + other.file_salt,
-            verbyte = self.verbyte + other.verbyte,
-            exported = other.exported, re = self.re
-        )
 class OpenPretender:
     """
     Class to wrap Tgbox AES Generators and make it look
-    like opened to "rb"-read file. Designed to work with Telethon.
+    like opened to "rb"-read file. 
     """
-    def __init__(self, flo: BinaryIO, aes_state: AES, mode: int):
+    def __init__(
+            self, flo: BinaryIO, 
+            aes_state: AES, 
+            file_size: Optional[int] = None
+        ):
         """
         Arguments:
             flo (``BinaryIO``):
@@ -329,33 +378,35 @@ class OpenPretender:
 
             aes_state (``AESwState``):
                 ``AESwState`` with Key and IV.
-
-            mode (``int``):
-                Mode of ``AESwState`` (1=Enc, 2=Dec).
         """
         self._aes_state = aes_state
-        self._mode, self._flo = mode, flo
+        self._flo = flo
+
         self._buffered_bytes = b''
-        self._total_size = None
+        self._total_size = file_size
         self._position = 0
 
     def concat_metadata(self, metadata: RemoteBoxFileMetadata) -> None:
         """Concates metadata to the file as (metadata + file)."""
         assert len(metadata) <= METADATA_MAX
 
-        if self._total_size is not None or self._buffered_bytes:
+        if self._position: 
             raise ConcatError('Concat must be before any usage of object.')
         else:
             self._buffered_bytes += metadata.constructed 
     
-    def read(self, size: int=-1) -> bytes: 
+    async def read(self, size: int=-1) -> bytes: 
         """
-        Returns ``size`` bytes from Generator.
+        Returns ``size`` bytes from async Generator.
+
+        This function is async only because of 
+        Telegram ``File`` uploading feature. You
+        can use ``tgbox.sync`` in your code for reading.
         
         Arguments:
             size (``int``):
-                Amount of bytes to return. By default 
-                is negative (return all). 
+                Amount of bytes to return. By 
+                default is negative (return all). 
         """
         if size % 16 and not size == -1:
             raise ValueError('size must be divisible by 16 or -1 (return all)')
@@ -372,15 +423,14 @@ class OpenPretender:
             self._buffered_bytes = b''
 
             if size == -1:
-                if self._mode == 1:
-                    block = buffered + self._aes_state.encrypt(
-                        self._flo.read(), pad=True)
-                else:
-                    block = buffered + self._aes_state.decrypt(
-                        self._flo.read(), unpad=True)
-            
-            elif self._mode == 1:
+                chunk = self._flo.read()
+                chunk = await chunk if iscoroutine(chunk) else chunk
+
+                block = buffered + self._aes_state.encrypt(
+                    chunk, pad=True, concat_iv=False)
+            else:
                 chunk = self._flo.read(size)
+                chunk = await chunk if iscoroutine(chunk) else chunk
 
                 if len(chunk) % 16:
                     shift = int(-(len(chunk) % 16))
@@ -388,9 +438,11 @@ class OpenPretender:
                     shift = None
                 
                 if self._total_size <= 0 or size > self._total_size or shift != None:
-                    chunk = buffered + self._aes_state.encrypt(chunk, pad=True)
+                    chunk = buffered + self._aes_state.encrypt(
+                        chunk, pad=True, concat_iv=False)
                 else:
-                    chunk = buffered + self._aes_state.encrypt(chunk, pad=False)
+                    chunk = buffered + self._aes_state.encrypt(
+                        chunk, pad=False, concat_iv=False)
                 
                 shift = size if len(chunk) > size else None
                 
@@ -399,12 +451,6 @@ class OpenPretender:
 
                 self._total_size -= size
                 block = chunk[:shift]
-            else:
-                self._total_size -= size
-                if self._total_size <= 16:
-                    block = aes_t(self._flo.read(size), unpad=True)
-                else:
-                    block = aes_t(self._flo.read(size), unpad=False)
         
         self._position += len(block)
         return block
@@ -467,7 +513,7 @@ def make_folder_id(mainkey: MainKey, foldername: bytes) -> bytes:
             Folder name.
     """
     return sha256(sha256(mainkey.key).digest() + foldername).digest()[:16]
-        
+
 def prbg(size: int) -> bytes:
     """Will generate ``size`` pseudo-random bytes."""
     return bytes([randrange(256) for _ in range(size)])
@@ -489,21 +535,20 @@ def bytes_to_float(bytes_: bytes) -> float:
     """Converts bytes to float."""
     return struct_unpack('!f', bytes_)[0]
 
-async def get_media_duration(file_path: str) -> float:
-    """Returns video/audio duration with ffprobe."""
+async def get_media_duration(file_path: str) -> int:
+    """Returns video/audio duration with ffmpeg in seconds."""
     func = partial(subprocess_run,
-        args=[
-            'ffprobe', '-v', 'error', '-show_entries', 'format=duration', 
-            '-of', 'default=noprint_wrappers=1:nokey=1', file_path
-        ],
-        stdout=PIPE, 
-        stderr=STDOUT
+        args=[FFMPEG, '-i', file_path],
+        stdout=None, stderr=PIPE
     )
     try:
-        future = await loop.run_in_executor(None, func)
-        return float(future.stdout)
-    except ValueError:
-        raise DurationImpossible('Can\'t get media duration') from None 
+        loop = get_event_loop()
+        stderr = (await loop.run_in_executor(None, func)).stderr
+        duration = re_search(b'Duration: (.)+,', stderr).group()
+        d = duration.decode().split('.')[0].split(': ')[1].split(':')
+        return int(d[0]) * 60**2 + int(d[1]) * 60 + int(d[2])
+    except Exception as e:
+        raise DurationImpossible(f'Can\'t get media duration: {e}') from None 
 
 async def make_media_preview(
         file_path: PathLike, 
@@ -519,16 +564,17 @@ async def make_media_preview(
     
     func = partial(subprocess_run,
         args=[
-            'ffmpeg', '-i', file_path, '-filter:v', f'scale={x}:{y}', '-an',
+            FFMPEG, '-i', file_path, '-filter:v', f'scale={x}:{y}', '-an',
             '-loglevel', 'quiet', '-q:v', '2', thumbnail_path
         ],
         stdout=PIPE, 
-        stderr=STDOUT
+        stderr=None
     )
     try:
+        loop = get_event_loop()
         await loop.run_in_executor(None, func)
         thumb = BytesIO(open(thumbnail_path,'rb').read())
         remove_file(thumbnail_path); return thumb
-    except FileNotFoundError as e:
-        # if something goes wrong then file not created
-        raise PreviewImpossible(f'Not a media file. {e}') from None
+    except Exception as e:
+        # If something goes wrong then file is not created (FileNotFoundError)
+        raise PreviewImpossible(f'Can\'t make thumbnail: {e}') from None

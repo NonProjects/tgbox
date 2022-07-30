@@ -1,22 +1,32 @@
 TGBOX: encrypted cloud storage based on Telegram API
 ====================================================
+.. image:: https://readthedocs.org/projects/tgbox/badge/?version=latest
 
 .. code-block:: python
-
-        from tgbox import loop
 
         from tgbox.api import (
             TelegramAccount, 
             make_remote_box,
             make_local_box
         )
-        from tgbox.keys import make_basekey
+        from tgbox.keys import make_basekey, Phrase
+        from asyncio import get_event_loop
         from getpass import getpass 
 
+        PHONE_NUMBER = input('Your phone number: ')
+
+        API_ID = 1234567 # https://my.telegram.org
+        API_HASH = '00000000000000000000000000000000'
+        
+        # We will use it to encrypt all data in Box
+        box_phrase = Phrase.generate()
+        print(box_phrase, '- phrase to your Box')
 
         async def main():
             ta = TelegramAccount(
-                phone_number = input('Phone: ')
+                phone_number = PHONE_NUMBER,
+                api_id = API_ID, 
+                api_hash = API_HASH
             )
             await ta.connect()
             await ta.send_code_request()
@@ -25,7 +35,7 @@ TGBOX: encrypted cloud storage based on Telegram API
                 code = int(input('Code: ')),
                 password = getpass('Pass: ')
             )
-            basekey = make_basekey(b'very_bad_phrase')
+            basekey = make_basekey(box_phrase)
 
             erb = await make_remote_box(ta)
             dlb = await make_local_box(erb, ta, basekey)
@@ -37,9 +47,10 @@ TGBOX: encrypted cloud storage based on Telegram API
                 comment = b'Cats are cool B-)',
                 foldername = b'Pictures/Kitties' 
             )
-            drbfi = await drb.push_file(ff)
-            await drbfi.download()
-
+            drbfi = await drb.push_file(ff) # Upload file
+            await drbfi.download() # Download it back
+        
+        loop = get_event_loop()
         loop.run_until_complete(main()) 
 
 Motivation
@@ -55,7 +66,7 @@ This library targets to be a PoC of **encrypted file storage** inside Telegram, 
 Abstract
 --------
 
-We name *"encrypted cloud storage"* as **Box** and the API to it as **Tgbox**. There is **two** of boxes: the **RemoteBox** and the **LocalBox**. They define a basic primitives. You can share your Box and separate Files with other people absolutely secure - only You and someone you want will have decryption key, even through insecure communication canals (`e2e <https://en.wikipedia.org/wiki/End-to-end_encryption>`_). You can make unlimited amount of Boxes, upload speed equals to vanilla Telegram and maximum filesize is ``~2GB-2MB``.
+We name *"encrypted cloud storage"* as **Box** and the API to it as **Tgbox**. There is **two** of boxes: the **RemoteBox** and the **LocalBox**. They define a basic primitives. You can share your Box and separate Files with other people absolutely secure - only You and someone you want will have decryption key, even through insecure communication canals (`e2e <https://en.wikipedia.org/wiki/End-to-end_encryption>`_). You can make unlimited amount of Boxes, Upload & Download speed is **faster** than in official Telegram clients and maximum filesize is around **2GB** *minus* **2MB**.
 
 Documentation
 -------------
@@ -67,8 +78,8 @@ You can also build docs from the source
 .. code-block:: console
 
    git clone https://github.com/NonProject/tgbox --branch=main
-   cd tgbox; python3 -m pip install -r requirements.txt
-   cd docs; make html; <your-browser> _build/html/index.html
+   cd tgbox & python3 -m pip install .[fast] # Install TGBOX
+   cd docs & make html & <your-browser> _build/html/index.html
 
 Third party & thanks to
 -----------------------
@@ -81,5 +92,3 @@ Third party & thanks to
 - `Filetype <https://github.com/h2non/filetype.py>`_ (`MIT <https://github.com/h2non/filetype.py/blob/master/LICENSE>`_)
 - `Cryptg <https://github.com/cher-nov/cryptg>`_ (`LICENSE <https://github.com/cher-nov/cryptg/blob/master/LICENSE.txt>`_)
 - `Pycryptodome <https://github.com/Legrandin/pycryptodome>`_ (`LICENSE <https://github.com/Legrandin/pycryptodome/blob/master/LICENSE.rst>`_)
-- `Uvloop <https://github.com/MagicStack/uvloop>`_ (`LICENSE <https://github.com/MagicStack/uvloop/blob/master/LICENSE-APACHE>`_)
-

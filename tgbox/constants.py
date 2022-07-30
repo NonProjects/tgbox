@@ -1,13 +1,18 @@
 """This module stores API constants."""
 
 from pathlib import Path
+from . import __version__
+
+try:
+    from sys import _MEIPASS
+except ImportError:
+    _MEIPASS = None
 
 __all__ = [
-    'API_ID', 
-    'API_HASH', 
     'VERSION', 
     'VERBYTE', 
-    'DEF_TGBOX_NAME', 
+    'DEF_TGBOX_NAME',
+    'REMOTEBOX_PREFIX',
     'DEF_NO_FOLDER', 
     'DEF_UNK_FOLDER', 
     'PREFIX', 
@@ -26,19 +31,19 @@ __all__ = [
     'WORDS_PATH', 
     'SCRYPT_SALT', 
     'SCRYPT_DKLEN', 
+    'FFMPEG',
+    'ABSPATH',
     'SCRYPT_N', 
     'SCRYPT_R', 
     'SCRYPT_P', 
-    'DOWNLOAD_PATH', 
+    'DOWNLOAD_PATH',
+    'PYINSTALLER_DATA'
 ]
-# Please DO NOT use this parameters in your projects. Thanks.
-# You can get your own at my.telegram.org. Use it, instead of default.
-API_ID: int=2210681; API_HASH: str='33755adb5ba3c296ccf0dd5220143841'
-
-VERSION: str='0.3.3'
+VERSION: str=__version__
 VERBYTE: bytes=b'\x00'
 
 DEF_TGBOX_NAME: str='TGBOX'
+REMOTEBOX_PREFIX: str='tgbox: '
 
 DEF_NO_FOLDER:  bytes=b'NO_FOLDER'
 DEF_UNK_FOLDER: bytes=b'UNKNOWN_FOLDER'
@@ -57,13 +62,45 @@ METADATA_MAX:   int=1064639
 FILEDATA_MAX:   int=64584 # IV included
 NAVBYTES_SIZE:  int=32 # IV included
 
+ABSPATH: Path = Path(_MEIPASS) if _MEIPASS is not None\
+    else Path(__file__).parent
 
 # Get path to "other" folder where we store
 # words.txt and tgbox_logo.png files.
-_other = Path(Path(__file__).parent, 'other')
+_other: Path = ABSPATH / 'other'
 
-BOX_IMAGE_PATH: Path=Path(_other, 'tgbox_logo.png')
-WORDS_PATH: Path=Path(_other, 'words.txt')
+# We will use it in subprocess.call
+FFMPEG = 'ffmpeg'
+
+# You can add ffmpeg.exe to 'other' folder
+# before build with PyInstaller on Windows or
+# just if you want TGBOX to make file thumbnails 
+# or extract duration. It will be added to 
+# your resulted executable.
+# 
+# https://www.ffmpeg.org/download.html#build-windows
+#
+for file in _other.iterdir():
+    if file.name == 'ffmpeg.exe':
+        FFMPEG = _other / 'ffmpeg.exe'
+
+# By default, PyInstaller will not grab files
+# from 'other' folder. To resolve this error 
+# you will need to manually add it to .spec file.
+#
+# See 
+#   '.spec file' example:
+#        github.com/NotStatilko/tgbox-cli/blob/main/tgbox_cli.spec
+#
+#   'Installation' in TGBOX docs:
+#       tgbox.readthedocs.io/en/latest/installation.html 
+#
+PYINSTALLER_DATA: dict = {
+    str(Path('other', i.name)): str(i)
+    for i in _other.glob('*')
+}
+BOX_IMAGE_PATH: Path = _other / 'tgbox_logo.png'
+WORDS_PATH: Path = _other / 'words.txt'
 
 # This salt affects basekeys, you can change it to protect your RemoteBox
 # from bruteforcing, but be sure to backup your own salt, because if you
