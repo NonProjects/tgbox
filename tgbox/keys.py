@@ -22,7 +22,7 @@ from ecdsa.ecdh import ECDH
 from ecdsa.curves import SECP256k1
 from ecdsa.keys import SigningKey, VerifyingKey
 
-from .constants import (
+from .defaults import (
     SCRYPT_N, SCRYPT_R, SCRYPT_P, SCRYPT_SALT,
     SCRYPT_DKLEN, WORDS_PATH
 )

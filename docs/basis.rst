@@ -5,7 +5,7 @@ Algorithms
 ----------
 
 - We use `AES CBC <https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Cipher_block_chaining_(CBC)>`_ with **256 bit** key. First 16 bytes of any encrypted by library data is `IV <https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Initialization_vector_(IV)>`_.
-- As PBKDF we use `Scrypt <https://en.wikipedia.org/wiki/Scrypt>`_.
+- As PBKDF we propose *and* use by default `Scrypt <https://en.wikipedia.org/wiki/Scrypt>`_.
 
 
 Abstract Box
@@ -20,16 +20,16 @@ Abstract Box
 
 - *RemoteBox* store encrypted files and their metadata. *LocalBox* store only metadata.
 
-- *LocalBox* can be restored from *RemoteBox* if you have decryption key.
+- *LocalBox* can be fully restored from the *RemoteBox* if you have a decryption key.
 
 Encryption keys 
 ---------------
 
-1. We start from user's ``Phrase``, that can be generated via ``Phrase.generate()``. Then we make the ``BaseKey``, with ``make_basekey``. That's a *Scrypt* function, by default configured to use 1GB of RAM for key creation. We use salt from ``constants.SCRYPT_SALT`` if not specified. If changed, may be reffered as 2FA — obtaining only *Phrase* will be not enough for *Box* decryption.
+1. We start from user's *Phrase* that can be generated via ``Phrase.generate()``. Then we make the ``BaseKey``, with ``make_basekey``. That's a *Scrypt* function, by default configured to use 1GB of RAM for key creation. We use salt from ``defaults.SCRYPT_SALT`` if not specified. If ``SCRYPT_SALT`` is specified, it may be reffered as 2FA — obtaining only *Phrase* will be not enough for *Box* decryption, you should present a scrypt *salt* you chose.
 
-2. Having ``BaseKey``, we make a *RemoteBox* and receive *BoxSalt*. Calling ``make_mainkey(basekey, box_salt)``, we receive the ``MainKey``. With *MainKey* we make *LocalBox* (see :doc:`localbox`).
+2. Having ``BaseKey``, we make a *RemoteBox* and receive *BoxSalt*. Calling ``make_mainkey(basekey, box_salt)``, we receive the ``MainKey``. With *MainKey* we make a *LocalBox* (see :doc:`localbox`).
 
-3. When we want to upload file to the Box, we make a *FileSalt* — random 32 bytes. With ``make_filekey(mainkey, file_salt)`` we receive the ``FileKey``. *FileKey* encrypts file and its metadata.
+3. When we want to upload file into the Box, we make a *FileSalt* — random 32 bytes. With ``make_filekey(mainkey, file_salt)`` we receive the ``FileKey``. *FileKey* encrypts file and its metadata.
 
 So, there is **three** encryption Keys: *BaseKey*, *MainKey*, *FileKey*.
 
@@ -106,84 +106,59 @@ Let's analyze *RemoteBox* sharing, there is no difference with file sharing.
   makes shared secret as 4.1 and decrypts ``eMainKey``. This can be
   done with ``keys.make_importkey`` function. Transfer complete.
 
+A bit about PackedAttributes
+----------------------------
 
-Tgbox File
+In TGBOX protocol we pack metadata and user's custom attributes in a *dictionary* form to bytestring with algorithm called *PackedAttributes*. It is a more than simple: 
+
+0. We define a main bytestring called a ``pattr``, it equals ``b'\xff'``;
+1. User gives us a ``dict``, i.e ``{'type': b'cat', 'color': b'black'}``;
+2. We iterate over ``dict``, obtain next key and value, write it to ``k``,``v``;
+3. Do a ``pattr += int_to_bytes(len(k),3) + k.encode()``;
+4. Do a ``pattr += int_to_bytes(len(v),3) + v``;
+5. If ``dict`` not empty: jump to *2.* else ``return pattr``.
+
+**Result** *(HEX)*: ``FF00000474797065000003636174000005636F6C6F72000005626C61636B``
+
+So we just make a string like ``0xFF<key-length>key<value-length>value<...>``.
+
+.. tip::
+   - Pack: ``tgbox.tools.PackedAttributes.pack`` 
+   - Unpack: ``tgbox.tools.PackedAttributes.unpack``.
+
+TGBOX File
 ----------
 
-Abstract tgbox file has 13 attributes:
+Abstract tgbox file of **v1.X** has **13** attributes:
 
-- ``ID`` *(integer)*
-- ``FOLDER`` *(bytes)* 
-- ``COMMENT`` *(bytes)*
-- ``DURATION`` *(float)*
-- ``FILE_IV`` *(bytes)*
-- ``FILE_KEY`` *(bytes/None)*
-- ``FILE_NAME`` *(bytes)*
-- ``FILE_SALT`` *(bytes)*
-- ``PREVIEW`` *(bytes)*
-- ``SIZE`` *(int)*
-- ``UPLOAD_TIME`` *(int)*
-- ``VERBYTE`` *(byte)*
-- ``FILE_PATH`` *(bytes)*
-
-FILE_KEY
-^^^^^^^^
-
-``FILE_KEY`` is *LocalBox*-only field. It will be non-empty if you imported ``DecryptedRemoteBoxFile`` from other's *RemoteBox*. In this case *FILE_KEY* encrypted with *LocalBox* ``MainKey``.
-
-FOLDER
-^^^^^^
-
-We're always encrypt ``FOLDERNAME`` with *MainKey*, so when you share file, recipient will not know its folder.
-
-FOLDER_ID
-^^^^^^^^^
-
-As we're always encrypt ``FOLDERNAME`` with unique IV, ciphertext will be always different, and iterating over files in specified folder (see ``LocalBoxFolder``) will be *very* painful. To make life easier, Tgbox has a ``FOLDER_ID``. See ``tools.make_folder_id``.
-
-.. code-block:: python
-
-    # Circa func. We only take first 16 bytes from result.
-    folder_id = sha256(sha256(mainkey) + foldername)[:16]
-
-**E.g:**
-
-1. User request all files with folder "Cats"
-2. We're ``make_folder_id(mainkey, b"Cats")``
-3. Select all files with same ``FOLDER_ID``
+- ``ID`` *(integer: required)* -- *Uploaded to Telegram file (message) ID*
+- ``FILE_SALT`` *(bytes: required)* -- *File's salt. Used for FileKey creation*
+- ``FILE_IV`` *(bytes: required)* -- *File's AES Initialization Vector* 
+- ``FILE_NAME`` *(bytes: required)* -- *File's name*
+- ``FILE_PATH`` *(bytes: required)* -- *File's path*
+- ``FILEKEY`` *(bytes: optional, LocalBox only)* -- *FileKey of imported file*
+- ``SIZE`` *(int: required)* -- *Pure file's size, no metadata included*
+- ``UPLOAD_TIME`` *(int: required)* -- *UNIX time when file was uploaded to RemoteBox*
+- ``VERBYTE`` *(bytes: required)* -- *Protocol global version as one byte*
+- ``DURATION`` *(float: optional, FFMPEG required)* -- *File's duration (if video/audio)*
+- ``PREVIEW`` *(bytes: optional, FFMPEG required)* -- *File's preview (if file is media)*
+- ``BOX_SALT`` *(bytes: required)* -- *Box salt. Used for MainKey creation*
+- ``CATTRS`` *(bytes)* -- *User's custom attributes packed with PackedAttributes*
 
 .. note::
-    We're talking only about *LocalBoxFile*, *RemoteBoxFile* doesn't store ``FOLDER_ID``, but encrypted ``FOLDERNAME``.
+    ``FILEKEY`` is a *LocalBox*-only field. It will be non-empty if you imported ``DecryptedRemoteBoxFile`` from other's *RemoteBox*. In this case *FILEKEY* will be encrypted with ``MainKey`` of the recipient *Box*.
 
-It's considered to be secure, as 
-
-- Attacker must have direct access to your ``EncryptedLocalBox``.
-- Attacker will only read that there is *X* unknown files in unknown folder, and their IDs.
-- ``FOLDER_ID`` of same ``FOLDERNAME`` is unique for every *BoxSalt*.
-- Attacker will not have any access to the ``EncryptedRemoteBox``.
-- *RemoteBoxFile* doesn't store ``FOLDER_ID``.
-- Max file size defined in ``constants`` module, and ``~2GB-2MB`` by default.
-
-Other
-^^^^^
-
-- Max bytesize of every property defined in ``constants`` module.
-- We can use ``COMMENT`` for defining file types. See `#4 <https://github.com/NonProjects/tgbox/issues/4>`_.
-- ``ID`` is Telegram message ID.
-- ``DURATION`` stands for media duration, ``PREVIEW`` for media preview.
-- ``VERBYTE`` stands for "Version byte". I.e "\x00" — 0 version.  
+.. note::
+    We pack file attributes into metadata. Its size defined in the ``defaults.METADATA_MAX`` variable. While by default its limited to 1MB, it can be increased up to 256^3-1 bytes. Started from the v1.0 metadata attributes by itself doesn't have any limit (except FILE_PATH, its limit is 4KiB) and even for *CATTRS*. Just together they shouldn't be more than *METADATA_MAX*. Details about how we pack them in :doc:`remotebox`
 
 Versioning
 ----------
 
-We offer **three** Git branches:
+We offer **two** Git branches:
 
 1. **Indev**. This branch used for active developing. Modules almost not tested, not stable, but errors are fixed faster. 
 2. **Main**. This branch has tested bugfixes and new features from *Indev*. Can be still some minor errors.
-3. **Stable**. This branch has well-tested bugfixes and new features. **Zero** errors (at least critical) expected.
 
-``VERBYTE`` define compatibility, while it's not incremented, all new updates **MUST** support previous file formats, functions, etc. Except *Version byte* there can be lower versions, like ``0.1``, ``0.1.1``, ``0.1.1.1``.... let's stop right here.
+The most **stable** releases should be presented **on the PyPi**, and can be installed via ``pip``. This rule doesn't work for releases < 1.0 because early we used a different versioning system.
 
-.. note::
-    The *"Zero"* version *("\x00")* will be there until first "stable" branch wasn't created. The *"First"* version *("\x01")* will be fully compatible with *Zero*, it's an exception from rules.
-
+The ``VERBYTE`` define compatibility. While it's not incremented, all new updates **MUST** support previous file formats, methods, etc. Except *Version byte* there can be lower versions, like ``1.1``, ``1.1.1``, etc. Verbyte=``b'\x00'`` and Verbyte=``b'\x01'`` shouldn't be compatible, otherwise we can use a lower version.

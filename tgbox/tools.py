@@ -19,11 +19,8 @@ from subprocess import (
 )
 from typing import (
     BinaryIO, List, Union, 
-    Optional, Dict
-)
-from struct import (
-    pack as struct_pack, 
-    unpack as struct_unpack
+    Optional, Dict, Generator,
+    AsyncGenerator
 )
 from io import BytesIO
 from os import PathLike
@@ -32,12 +29,6 @@ from functools import partial
 from dataclasses import dataclass
 from os import remove as remove_file
 
-from .constants import (
-    VERBYTE_MAX, FILE_SALT_SIZE, FILE_NAME_MAX,
-    FOLDERNAME_MAX, COMMENT_MAX, PREVIEW_MAX,
-    DURATION_MAX, FILESIZE_MAX, PREFIX, FFMPEG,
-    METADATA_MAX, FILEDATA_MAX, NAVBYTES_SIZE
-)
 from .errors import (
     ConcatError, 
     PreviewImpossible, 
@@ -45,26 +36,20 @@ from .errors import (
 )
 from .keys import FileKey, MainKey
 from .crypto import AESwState as AES
+from .defaults import METADATA_MAX, FFMPEG
 
 
 __all__ = [
     'prbg', 'anext', 
-    'RemoteBoxFileMetadata', 
     'SearchFilter', 
     'OpenPretender', 
-    'make_folder_id', 
     'int_to_bytes', 
     'bytes_to_int', 
-    'float_to_bytes', 
-    'bytes_to_float', 
     'get_media_duration', 
     'make_media_preview', 
     'make_image_preview'
 ]
-try:
-    anext() # Python 3.10+
-except NameError:
-    anext = lambda agen: agen.__anext__()
+anext = lambda agen: agen.__anext__()
 
 class _TypeList:
     """
@@ -131,10 +116,10 @@ class SearchFilter:
     files will be **yielded**, while all matching to
     **exclude** will be **not yielded** (ignored).
 
-    * The ``tgbox.api._search_func`` will firstly check for \
+    * The ``tgbox.tools.search_generator`` will firstly check for \
       **include** filters, so its priority higher.
 
-    * The ``tgbox.api._search_func`` will yield files that \
+    * The ``tgbox.tools.search_generator`` will yield files that \
       match **all** of filters, **not** one of it.
 
     * The ``SearchFilter`` accepts ``list`` as kwargs \
@@ -145,13 +130,23 @@ class SearchFilter:
       & ``SearchFilter.exclude(...)`` methods after initializion.
 
     All filters:
-        * **id** *integer*: File's ID
+        * **id** *integer*: File ID
 
-        * **comment**   *bytes*: File's comment
-        * **folder**    *bytes*: File's foldername
-        * **file_name** *bytes*: File's name
-        * **file_salt** *bytes*: File's salt
-        * **verbyte**   *bytes*: File's version byte
+        * **cattrs** *dict*: File CustomAttributes:
+            To search for CATTRS you need to specify a dict.
+
+            E.g: If *file* ``cattrs={b'comment': b'hi!'}``, then
+            *filter* ``cattrs={b'comment': b'h'}`` will match.
+
+            By default, ``tgbox.tools.search_generator`` will
+            use an ``in``, like ``b'h' in b'hi!'``, but you
+            can set a ``re`` flag to use regular expressions,
+            so *filter* ``cattrs={b'comment': b'hi(.)'}`` will match.
+
+        * **file_path** *pathlib.Path*, *str*
+        * **file_name** *bytes*: File name
+        * **file_salt** *bytes*: File salt
+        * **verbyte**   *bytes*: File version byte
 
         * **min_id** *integer*: File ID should be > min_id
         * **max_id** *integer*: File ID should be < max_id
@@ -162,13 +157,14 @@ class SearchFilter:
         * **min_time** *integer/float*: Upload Time should be > min_time
         * **max_time** *integer/float*: Upload Time should be < max_time
 
+        * **mime**     *str*:  File mime type
         * **exported** *bool*: Yield only exported files
-        * **re**       *bool*: re_search for every ``bytes`` filter
+        * **re**       *bool*: re_search for every ``bytes`` 
     """
     def __init__(self, **kwargs):
         self.in_filters = {
-            'comment':   _TypeList(bytes),
-            'folder':    _TypeList(bytes),
+            'cattrs':    _TypeList(dict),
+            'file_path': _TypeList((Path, str)),
             'file_name': _TypeList(bytes),
             'file_salt': _TypeList(bytes),
             'verbyte':   _TypeList(bytes),   
@@ -179,6 +175,7 @@ class SearchFilter:
             'max_size':  _TypeList(int),
             'min_time':  _TypeList((int,float)),  
             'max_time':  _TypeList((int,float)), 
+            'mime':      _TypeList(str),
             'exported':  _TypeList(bool), 
             're':        _TypeList(bool), 
         }
@@ -208,158 +205,73 @@ class SearchFilter:
                 self.ex_filters[k].append(v)
         return self
 
-class CustomAttributes:
+class PackedAttributes:
     """
-    This class may be used for adding custom
-    attributes to the RemoteBoxFile.
+    This class is used to pack items to
+    bytestring. We use it to pack file
+    metadata as well as pack a user's
+    custom attributes (cattrs), then
+    encrypt it and attach to RBFile.
 
-    You should attach it to the ``comment``
-    kwarg of ``api.make_file`` function.
-
-    This is part of TGBOX standart. If
-    you don't need this, you can insert
-    plain comments in ``api.make_file``.
+    We store key/value length in 3 bytes,
+    so the max key/value length is 256^3-1.
     
-    See issue #4 for more details.
+    <key-length>key<value-length>value<...>
     """
     @staticmethod
-    def make(**kwargs) -> bytes:
+    def pack(**kwargs) -> bytes:
         """
         Will make bytestring from your kwargs. 
-        Please note that max comment size is
-        255 bytes. See ``constants.COMMENT_MAX``.
+        Any kwarg **always** must be ``bytes``.
 
-        Kwarg must **always** be ``bytes``.
+        ``make(x=5)`` will not work; 
+        ``make(x=b'\x05')`` is correct.
 
-        ``make(x=5)`` is not OK, 
-        ``make(x=b'\x05')`` is OK.
         """
-        cattr = bytes([0xFF])
+        pattr = bytes([0xFF])
         for k,v in kwargs.items():
-            cattr += bytes([len(k)]) + k.encode()
-            cattr += bytes([len(v)]) + v
-        return cattr
+            if not isinstance(v, bytes):
+                raise TypeError('Values must be bytes')
+
+            pattr += int_to_bytes(len(k),3) + k.encode()
+            pattr += int_to_bytes(len(v),3) + v
+        return pattr
     
     @staticmethod
-    def parse(cattr: bytes) -> Dict[str, bytes]:
+    def unpack(pattr: bytes) -> Dict[str, bytes]:
         """
-        Will parse CustomAttributes.make
+        Will parse PackedAttributes.pack
         bytestring and convert it to the
         python dictionary.
 
-        Every CustomAttributes bytestring
+        Every PackedAttributes bytestring
         must contain ``0xFF`` as first byte. 
         If not, or if error, will return ``{}``.
         """
+        if not pattr:
+            return {}
         try:
-            assert cattr[0] == 0xFF
-            cattr_d, cattr = {}, cattr[1:]
+            assert pattr[0] == 0xFF
+            pattr_d, pattr = {}, pattr[1:]
 
-            while cattr:
-                key_len = cattr[0] + 1
-                key = cattr[1:key_len]
+            while pattr:
+                key_len = bytes_to_int(pattr[:3])
+                key = pattr[3:key_len+3]
                 
-                value_len = cattr[key_len]
-                cattr = cattr[key_len:]
-                
-                value = cattr[1:value_len+1]
-                cattr = cattr[value_len+1:]
+                value_len = bytes_to_int(pattr[key_len+3:key_len+6])
+                pattr = pattr[key_len+6:]
 
-                cattr_d[key.decode()] = value
+                if value_len:
+                    value = pattr[:value_len]
+                    pattr = pattr[value_len:]
+                else:
+                    value = b''
 
-            return cattr_d
+                pattr_d[key.decode()] = value
+
+            return pattr_d
         except:
             return {}
-
-@dataclass
-class RemoteBoxFileMetadata:
-    """
-    This dataclass represents ``RemoteBox``
-    file metadata. After calling ``.construct()``
-    method, all args will be checked, encrypted
-    and assembled. You will need to add it to
-    the file via ``OpenPretender.concat_metadata``.
-    """
-    file_name: bytes
-    enc_foldername: bytes
-    filekey: FileKey
-    comment: bytes
-    size: int
-    preview: bytes
-    duration: float
-    file_salt: bytes
-    box_salt: bytes
-    file_iv: bytes
-    verbyte: bytes
-    
-    def __len__(self) -> int:
-        if not hasattr(self, '_constructed'):
-            return 0
-        else:
-            return len(self._constructed)
-    
-    def __iadd__(self, other: bytes) -> bytes:
-        if not hasattr(self, '_constructed'):
-            return other
-        else:
-            return self._constructed + other
-
-    @property
-    def constructed(self) -> Union[bytes, None]:
-        """Returns constructed metadata."""
-        if not hasattr(self, '_constructed'):
-            return self.construct()
-        else:
-            return self._constructed
-
-    def construct(self) -> bytes:
-        """Constructs and returns metadata"""
-        assert len(self.verbyte) == VERBYTE_MAX
-        assert len(self.file_salt) == FILE_SALT_SIZE
-        assert len(self.box_salt) == FILE_SALT_SIZE
-        assert len(self.file_iv) == 16 
-        assert len(self.file_name) <= FILE_NAME_MAX
-        assert len(self.enc_foldername) <= FOLDERNAME_MAX
-        assert len(self.comment) <= COMMENT_MAX
-        assert len(self.preview) <= PREVIEW_MAX
-        assert self.size <= FILESIZE_MAX
-        assert self.duration <= DURATION_MAX
-        
-        metadata = (
-            PREFIX         \
-          + self.verbyte   \
-          + self.box_salt  \
-          + self.file_salt
-        )
-        filedata = (
-            int_to_bytes(self.size,4)                              \
-          + float_to_bytes(self.duration)                          \
-          + int_to_bytes(len(self.enc_foldername),2,signed=False)  \
-          + self.enc_foldername                                    \
-          + bytes([len(self.comment)])                             \
-          + self.comment                                           \
-          + int_to_bytes(len(self.file_name),2,signed=False)       \
-          + self.file_name
-        )
-        filedata = AES(self.filekey).encrypt(filedata)
-        assert len(filedata) <= FILEDATA_MAX
-
-        if self.preview:
-            preview = AES(self.filekey).encrypt(self.preview)
-        else:
-            preview = b''
-
-        navbytes = int_to_bytes(len(filedata),3,signed=False) \
-            + int_to_bytes(len(preview),3,signed=False)
-
-        navbytes = AES(self.filekey).encrypt(navbytes)
-        assert len(navbytes) == NAVBYTES_SIZE
-
-        metadata += navbytes + filedata + preview
-        assert len(metadata) <= METADATA_MAX
-        
-        self._constructed = metadata + self.file_iv
-        return self._constructed
 
 class OpenPretender:
     """
@@ -386,14 +298,14 @@ class OpenPretender:
         self._total_size = file_size
         self._position = 0
 
-    def concat_metadata(self, metadata: RemoteBoxFileMetadata) -> None:
+    def concat_metadata(self, metadata: bytes) -> None:
         """Concates metadata to the file as (metadata + file)."""
         assert len(metadata) <= METADATA_MAX
 
         if self._position: 
             raise ConcatError('Concat must be before any usage of object.')
         else:
-            self._buffered_bytes += metadata.constructed 
+            self._buffered_bytes += metadata
     
     async def read(self, size: int=-1) -> bytes: 
         """
@@ -464,76 +376,79 @@ class OpenPretender:
     def close(self) -> None:
         self._stop_iteration = True
 
-def pad_request_size(request_size: int, blocksize: int=4096) -> int:
+def pad_request_size(request_size: int, bsize: int=4096) -> int:
     """
     This function pads ``request_size`` to divisible
-    by 4096 bytes. If ``request_size`` < 4096, then
-    it's not padded. This function designed for 
-    Telethon's ``GetFileRequest``. See issue #3.
+    by BSIZE bytes. If ``request_size`` < BSIZE, then
+    it's not padded. This function designed for Telethon's 
+    ``GetFileRequest``. See issue #3 on TGBOX GitHub.
     
     .. note::
-        You need to strip extra bytes from result.
+        You will need to strip extra bytes from result, as
+        request_size can be bigger than bytecount you want.
     
     Arguments:
         request_size (``int``):
-            Amount of requested bytes.
+            Amount of requested bytes,
+            max is 1048576 (1MiB).
 
-        blocksize (``int``, optional):
+        bsize (``int``, optional):
             Size of block. Typically we
             don't need to change this.
     """
-    # Check amount of blocks
-    block_count = request_size/blocksize
-    
-    if block_count <= 1:
+    assert request_size <= 1048576, 'Max 1MiB'
+
+    if request_size <= bsize:
         return request_size
 
-    # If it's already divisible by 4096
-    elif int(block_count) == block_count:
-        request_size = int(block_count*blocksize)
-    else:
-        # Add 1 block.
-        request_size = int(block_count+1)*blocksize
-    
-    # request_size must be divisible by 1MiB
     while 1048576 % request_size:
-        request_size += 1
+        request_size = ((request_size + bsize) // bsize) * bsize 
     return request_size
 
-def make_folder_id(mainkey: MainKey, foldername: bytes) -> bytes:
+def ppart_id_generator(path: Path, mainkey: MainKey) -> Generator[tuple, None, None]:
     """
-    Returns folder ID. Every folder
-    has unique ID. Case-sensitive.
-    
-    Arguments:
-        mainkey (``MainKey``):
-            Your Box's mainkey.
+    This generator will iterate over path parts and
+    yield their unique IDs. We will use this to better
+    navigate over _abstract_ Folders in the LocalBox.
 
-        foldername (``bytes``):
-            Folder name.
+    Will yield a tuple (PART, PARENT_PART_ID, PART_ID)
     """
-    return sha256(sha256(mainkey.key).digest() + foldername).digest()[:16]
+    parent_part_id = b'' # The root (/ anchor) doesn't have parent
+    for part in path.parts[:-1]: # Omit filename with [:-1]
+        part_id = sha256(
+            mainkey\
+          + sha256(part.encode()).digest()\
+          + parent_part_id
+        )
+        yield (part, parent_part_id, part_id.digest())
+        parent_part_id = part_id.digest()
 
 def prbg(size: int) -> bytes:
     """Will generate ``size`` pseudo-random bytes."""
     return bytes([randrange(256) for _ in range(size)])
 
-def int_to_bytes(int_: int, length: Optional[int] = None, signed: Optional[bool] = True) -> bytes:
+def int_to_bytes(
+        int_: int, length: Optional[int] = None, 
+        signed: Optional[bool] = False) -> bytes:
+
     """Converts int to bytes with Big byteorder."""
-    length = length if length else (int_.bit_length() + 8) // 8
+
+    bit_length = int_.bit_length()
+
+    if not length:
+        if signed and not (int_ >= -128 and int_ <= 127):
+            divide_with = 16
+        else:
+            divide_with = 8
+        
+        bit_length = ((bit_length + divide_with) // divide_with)
+        length = (bit_length * divide_with) // 8
+
     return int.to_bytes(int_, length, 'big', signed=signed)
 
-def bytes_to_int(bytes_: bytes, signed: Optional[bool] = True) -> int:
+def bytes_to_int(bytes_: bytes, signed: Optional[bool] = False) -> int:
     """Converts bytes to int with Big byteorder."""
     return int.from_bytes(bytes_, 'big', signed=signed)
-
-def float_to_bytes(float_: float) -> bytes:
-    """Converts float to bytes."""
-    return struct_pack('!f', float_)
-
-def bytes_to_float(bytes_: bytes) -> float:
-    """Converts bytes to float."""
-    return struct_unpack('!f', bytes_)[0]
 
 async def get_media_duration(file_path: str) -> int:
     """Returns video/audio duration with ffmpeg in seconds."""
@@ -578,3 +493,236 @@ async def make_media_preview(
     except Exception as e:
         # If something goes wrong then file is not created (FileNotFoundError)
         raise PreviewImpossible(f'Can\'t make thumbnail: {e}') from None
+
+async def search_generator(
+        sf: SearchFilter, 
+        ta = None, # Optional[TelegramAccount]
+        mainkey: Optional[MainKey] = None,
+        it_messages: Optional[AsyncGenerator] = None,
+        lb = None) -> AsyncGenerator:
+    """
+    Generator used to search for files in dlb and rb. It's
+    only for internal use, and you shouldn't use it in your
+    own projects. ``ta`` must be specified with ``it_messages``.
+    
+    If file is imported from other RemoteBox and was exported
+    to your LocalBox, then you can specify box as ``lb``. AsyncGenerator
+    will try to get ``FileKey`` and decrypt ``EncryptedRemoteBoxFile``.
+    Otherwise imported file will be ignored.
+    """
+    in_func = re_search if sf.in_filters['re'] else lambda p,s: p in s
+
+    if it_messages:
+        iter_from = it_messages
+    else:
+        min_id = sf.in_filters['min_id'][-1] if sf.in_filters['min_id'] else None
+        max_id = sf.in_filters['max_id'][-1] if sf.in_filters['max_id'] else None
+        iter_from = lb.files(min_id=min_id, max_id=max_id)
+    
+    if not iter_from:
+        raise ValueError('At least it_messages or lb must be specified.')
+    
+    async for file in iter_from:
+        if hasattr(file,'document') and file.document: 
+            try:
+                file = await EncryptedRemoteBoxFile(file, ta).init() 
+
+                if hasattr(lb, '_mainkey') and not mainkey: 
+                    if isinstance(lb._mainkey, EncryptedMainkey):
+                        mainkey = None
+                    else:
+                        mainkey = lb._mainkey
+
+                file = file if not mainkey else await file.decrypt(mainkey)
+
+            except ValueError: # Incorrect padding. Imported file?
+                if lb and isinstance(lb, DecryptedLocalBox):
+                    try:
+                        dlbfi = await lb.get_file(file.id, cache_preview=False)
+                    # Mostly, it's not a Tgbox file, so continue.
+                    except BrokenDatabase: 
+                        continue
+
+                    if not dlbfi: 
+                        continue
+                    else:
+                        file = await file.decrypt(dlbfi._filekey)
+                else:
+                    continue
+        
+        if hasattr(file, '_message'): # *RemoteBoxFile
+            file_size = file.file_size
+        elif hasattr(file, '_tgbox_db'): # *LocalBoxFile
+            file_size = file.size
+        else:
+            continue
+        
+        # We will use it as flags, the first
+        # is for 'include', the second is for
+        # 'exclude'. Both should be True to
+        # match SearchFilter filters.
+        yield_result = [True, True]
+
+        for indx, filter in enumerate((sf.in_filters, sf.ex_filters)):
+            if filter['exported']:
+                if bool(file.exported) != bool(filter['exported']): 
+                    if indx == 0: # O is Include
+                        yield_result[indx] = False
+                        break
+
+                elif bool(file.exported) == bool(filter['exported']): 
+                    if indx == 1: # 1 is Exclude
+                        yield_result[indx] = False
+                        break
+
+            for mime in filter['mime']:
+                print(mime)
+                if in_func(mime, file.mime):
+                    if indx == 1:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['mime']:
+                    if indx == 0:
+                        yield_result[indx] = False
+                        break
+            
+            if filter['min_time']:
+                if file.upload_time < filter['min_time'][-1]:
+                    if indx == 0:
+                        yield_result[indx] = False
+                        break
+
+                elif file.upload_time >= filter['min_time'][-1]:
+                    if indx == 1:
+                        yield_result[indx] = False
+                        break
+
+            if filter['max_time']:
+                if file.upload_time > filter['max_time'][-1]: 
+                    if indx == 0:
+                        yield_result[indx] = False
+                        break
+
+                elif file.upload_time <= filter['max_time'][-1]: 
+                    if indx == 1:
+                        yield_result[indx] = False
+                        break
+
+            if filter['min_size']:
+                if file_size < filter['min_size'][-1]:
+                    if indx == 0:
+                        yield_result[indx] = False
+                        break
+
+                elif file_size >= filter['min_size'][-1]:
+                    if indx == 1:
+                        yield_result[indx] = False
+                        break
+
+            if filter['max_size']:
+                if file_size > filter['max_size'][-1]: 
+                    if indx == 0:
+                        yield_result[indx] = False
+                        break
+
+                elif file_size <= filter['max_size'][-1]: 
+                    if indx == 1:
+                        yield_result[indx] = False
+                        break
+
+            if filter['min_id']:
+                if file.id < filter['min_id'][-1]: 
+                    if indx == 0:
+                        yield_result[indx] = False
+                        break
+
+                elif file.id >= filter['min_id'][-1]: 
+                    if indx == 1:
+                        yield_result[indx] = False
+                        break
+
+            if filter['max_id']:
+                if file.id > filter['max_id'][-1]: 
+                    if indx == 0:
+                        yield_result[indx] = False
+                        break
+
+                elif file.id <= filter['max_id'][-1]: 
+                    if indx == 1:
+                        yield_result[indx] = False
+                        break
+            
+            for id in filter['id']:
+                if file.id == id:
+                    if indx == 1:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['id']:
+                    if indx == 0:
+                        yield_result[indx] = False
+                        break
+            
+            if hasattr(file, '_cattrs'):
+                for cattr in filter['cattrs']:
+                    for k,v in cattr.items():
+                        if k in file.cattrs:
+                            if in_func(v, file.cattrs[k]):
+                                if indx == 1:
+                                    yield_result[indx] = False
+                                break
+                    else:
+                        if filter['cattrs']:
+                            if indx == 0:
+                                yield_result[indx] = False
+                                break
+            
+            for file_path in filter['file_path']:
+                if in_func(str(file_path), str(file.file_path)):
+                    if indx == 1:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['file_path']:
+                    if indx == 0:
+                        yield_result[indx] = False
+                        break
+
+            for file_name in filter['file_name']:
+                if in_func(file_name, file.file_name):
+                    if indx == 1:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['file_name']:
+                    if indx == 0:
+                        yield_result[indx] = False
+                        break
+
+            for file_salt in filter['file_salt']:
+                if in_func(file_salt, file.file_salt):
+                    if indx == 1:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['file_salt']:
+                    if indx == 0:
+                        yield_result[indx] = False
+                        break
+
+            for verbyte in filter['verbyte']:
+                if verbyte == file.verbyte:
+                    if indx == 1:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['verbyte']:
+                    if indx == 0:
+                        yield_result[indx] = False
+                        break
+        
+        if all(yield_result):
+            yield file
+        else:
+            continue

@@ -61,6 +61,9 @@ class RemoteBoxInaccessible(TgboxException):
 class NotEnoughRights(TgboxException):
     """You don't have rigths for this action"""
 
+class NoPlaceLeftForMetadata(TgboxException):
+    """Your edited metadata overflow Telegram caption limit"""
+
 # LocalBox Exceptions
 
 class AlreadyImported(TgboxException):

@@ -13,9 +13,10 @@ Clone from GitHub
 -----------------
 
 .. code-block:: console
-
+   
+   # You can replace --branch=main with --branch=indev
    git clone https://github.com/NonProjects/tgbox --branch=main
-   cd tgbox & python3 -m pip install .[fast]
+   python3 -m pip install ./tgbox/[fast]
 
 Optional dependencies
 ---------------------

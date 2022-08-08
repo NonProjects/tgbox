@@ -10,10 +10,10 @@ tgbox.api module
    :show-inheritance:
    :inherited-members:
 
-tgbox.constants module
+tgbox.defaults module
 ----------------------
 
-.. automodule:: tgbox.constants
+.. automodule:: tgbox.defaults
    :members:
    :undoc-members:
    :show-inheritance:

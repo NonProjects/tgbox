@@ -11,10 +11,6 @@
 import os
 import sys
 
-# RTD have problems with importing scrypt
-# from hashlib. Try to ignore it.
-autodoc_mock_imports = ['hashlib', 'scrypt']
-
 # -- Path setup --------------------------------------------------------------
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -26,11 +22,11 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'tgbox'
-copyright = '2021, NonProjects'
+copyright = '2022, NonProjects'
 author = 'NonProjects'
 
 # The full version, including alpha/beta/rc tags
-release = '0.2'
+release = '1.0'
 
 
 # -- General configuration ---------------------------------------------------
@@ -54,10 +50,4 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-#
 html_theme = "sphinx_rtd_theme"
-
-# Add any paths that contain custom static files (such as style sheets) here,
-# relative to this directory. They are copied after the builtin static files,
-# so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']

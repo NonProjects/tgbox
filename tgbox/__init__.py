@@ -1,20 +1,19 @@
-__version__ = '0.4'
+__version__ = '1.0'
 
 from asyncio import get_event_loop
 from typing import Coroutine
 
 from . import api
-from . import constants
+from . import defaults
 from . import crypto
 from . import db
 from . import errors
 from . import keys
 from . import tools
 
-
 __all__ = [
     'api',
-    'constants',
+    'defaults',
     'crypto',
     'db',
     'errors',
