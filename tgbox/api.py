@@ -3385,26 +3385,6 @@ class EncryptedLocalBoxFile:
         """
         self._cache_preview = True
     
-    async def get_directory(self) -> Union[
-            'EncryptedLocalBoxDirectory', 
-            'DecryptedLocalBoxDirectory']:
-        """
-        Will return ``EncryptedLocalBoxDirectory``
-        from ``EncryptedLocalBoxFile`` or 
-        ``DecryptedLocalBoxDirectory`` from
-        ``DecryptedLocalBoxFile``.
-        """
-        if not self._directory:
-            self.__raise_initialized()
-            if hasattr(self,'_mainkey') and self._mainkey:
-                self._directory = await EncryptedLocalBoxDirectory(
-                    self._tgbox_db, self._ppath_head).decrypt(self._mainkey)
-            else:
-                self._directory = await EncryptedLocalBoxDirectory(
-                    self._tgbox_db, self._ppath_head).init()
-
-        return self._directory
-
     async def decrypt(self, key: Union[FileKey, MainKey]) -> 'DecryptedLocalBoxFile':
         """
         Returns decrypted by ``key`` ``EncryptedLocalBoxFile``
