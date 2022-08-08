@@ -42,7 +42,8 @@ from .defaults import METADATA_MAX, FFMPEG
 __all__ = [
     'prbg', 'anext', 
     'SearchFilter', 
-    'OpenPretender', 
+    'OpenPretender',
+    'PackedAttributes'
     'int_to_bytes', 
     'bytes_to_int', 
     'get_media_duration', 
