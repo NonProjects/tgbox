@@ -96,7 +96,7 @@ We name *"encrypted cloud storage"* as **Box** and the API to it as **Tgbox**. T
 Documentation
 -------------
 
-See `ReadTheDocs <https://tgbox.readthedocs.io/en/indev/>`_ for main information and help.
+See `ReadTheDocs <https://tgbox.readthedocs.io/>`_ for main information and help.
 
 You can also build docs from the source
 
@@ -108,7 +108,7 @@ You can also build docs from the source
 
 Third party & thanks to
 -----------------------
-- ⭐️ **Stargazers**!
+- `⭐️ <https://github.com/NonProjects/tgbox/stargazers>`_ **Stargazers!**
 - `Sphinx_rtd_theme <https://github.com/readthedocs/sphinx_rtd_theme>`_ (`MIT <https://github.com/readthedocs/sphinx_rtd_theme/blob/master/LICENSE>`_)
 - `Regex <https://github.com/mrabarnett/mrab-regex>`_ (`LICENSE <https://github.com/mrabarnett/mrab-regex/blob/hg/LICENSE.txt>`_)
 - `Aiosqlite <https://github.com/omnilib/aiosqlite>`_ (`MIT <https://github.com/omnilib/aiosqlite/blob/main/LICENSE>`_)

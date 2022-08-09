@@ -113,7 +113,7 @@ In TGBOX protocol we pack metadata and user's custom attributes in a *dictionary
 
 0. We define a main bytestring called a ``pattr``, it equals ``b'\xff'``;
 1. User gives us a ``dict``, i.e ``{'type': b'cat', 'color': b'black'}``;
-2. We iterate over ``dict``, obtain next key and value, write it to ``k``,``v``;
+2. We iterate over ``dict``, obtain next key and value, write it to ``k``, ``v``;
 3. Do a ``pattr += int_to_bytes(len(k),3) + k.encode()``;
 4. Do a ``pattr += int_to_bytes(len(v),3) + v``;
 5. If ``dict`` not empty: jump to *2.* else ``return pattr``.
