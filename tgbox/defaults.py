@@ -49,9 +49,8 @@ PREFIX: bytes=b'\x00TGBOX'
 # a METADATA_MAX that >= than yours.
 METADATA_MAX = 1000000 
 
-# TODO: Telegram Premium support
-# files up to 4GB. Investigate it.
-FILESIZE_MAX: int=2000000000 
+# Max FILE_PATH length on Linux
+# is 4096 bytes (4KiB). 
 FILE_PATH_MAX: int=4096
 
 ABSPATH: Path = Path(_MEIPASS) if _MEIPASS is not None \

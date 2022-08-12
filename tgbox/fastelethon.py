@@ -30,6 +30,7 @@ from telethon.tl.functions.auth import (
     ExportAuthorizationRequest, 
     ImportAuthorizationRequest
 )
+from telethon.errors import FilePartsInvalidError
 from telethon import utils, helpers, TelegramClient
 from telethon.tl.custom.file import File
 
@@ -163,7 +164,10 @@ class ParallelTransferrer:
         self.upload_ticker = 0
 
     async def _cleanup(self) -> None:
-        await asyncio.gather(*[sender.disconnect() for sender in self.senders])
+        try:
+            await asyncio.gather(*[sender.disconnect() for sender in self.senders])
+        except FilePartsInvalidError:
+            pass
         self.senders = None
 
     @staticmethod
@@ -351,7 +355,7 @@ async def _internal_transfer_to_telegram(
         part_size = part_size_
     else:
         part_size = part_size_kb*1024
-
+    
     buffer = bytearray()
     async for data in stream_file(response, part_size):
         if progress_callback:
@@ -363,9 +367,13 @@ async def _internal_transfer_to_telegram(
             hash_md5.update(data)
 
         if len(buffer) == 0 and len(data) == part_size:
-            await uploader.upload(data)
-            continue
-        
+            try:
+                await uploader.upload(data)
+                continue
+            except FilePartsInvalidError as e:
+                await uploader.finish_upload()
+                raise e from None
+
         new_len = len(buffer) + len(data)
         if new_len >= part_size:
             cutoff = part_size - len(buffer)
@@ -380,7 +388,7 @@ async def _internal_transfer_to_telegram(
 
     if len(buffer) > 0:
         await uploader.upload(bytes(buffer))
-    
+
     await uploader.finish_upload()
 
     if is_large:

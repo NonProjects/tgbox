@@ -18,7 +18,8 @@ from telethon.errors import (
     ChatAdminRequiredError, 
     MediaCaptionTooLongError,
     AuthKeyUnregisteredError,
-    SessionPasswordNeededError
+    SessionPasswordNeededError,
+    FilePartsInvalidError
 )
 from telethon.tl.functions.channels import (
     CreateChannelRequest, EditPhotoRequest,
@@ -43,8 +44,7 @@ from .keys import (
 from .defaults import (
     REMOTEBOX_PREFIX, DEF_NO_FOLDER, DOWNLOAD_PATH, 
     VERSION, VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME, 
-    FILESIZE_MAX, PREFIX, METADATA_MAX, FILE_PATH_MAX,
-    DEF_UNK_FOLDER
+    PREFIX, METADATA_MAX, FILE_PATH_MAX, DEF_UNK_FOLDER
 )
 from .fastelethon import upload_file, download_file
 from .db import TgboxDB
@@ -938,13 +938,16 @@ class EncryptedRemoteBox:
 
         oe = OpenPretender(pf.file, state, pf.filesize)
         oe.concat_metadata(pf.metadata)
-            
-        ifile = await upload_file(
-            self._ta.TelegramClient, oe,
-            file_name=urlsafe_b64encode(pf.filesalt).decode(), 
-            part_size_kb=512, file_size=pf.filesize,
-            progress_callback=progress_callback
-        )
+        
+        try:
+            ifile = await upload_file(
+                self._ta.TelegramClient, oe,
+                file_name=urlsafe_b64encode(pf.filesalt).decode(), 
+                part_size_kb=512, file_size=pf.filesize,
+                progress_callback=progress_callback
+            )
+        except FilePartsInvalidError:
+            raise LimitExceeded('Your file is too big to upload')
         try:
             file_message = await self._ta.TelegramClient.send_file(
                 self._box_channel, file=ifile, 
@@ -2664,7 +2667,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 method tries to get ``file.read())`` (with load to RAM).
                 
                 Abs file path length must be <= ``defaults.FILE_PATH_MAX``;
-                Filesize must be <= ``defaults.FILESIZE_MAX``;
                 If file has no ``name`` and ``file_path`` is not 
                 specified then it will be ``NO_FOLDER/{prbg(6).hex()}``.
             
@@ -2793,9 +2795,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     else:
                         rb, file_size = file.read(), len(rb)
                         file = BytesIO(rb); del(rb)
-                    
-            if file_size > FILESIZE_MAX:
-                raise LimitExceeded(f'File size limit is {FILESIZE_MAX} bytes.')
         try:
             mime_type = filetype_guess(file).mime
             file_type = mime_type.split('/')[0]
@@ -2861,10 +2860,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
         total_file_size = len(metadata) + file_size +\
             len(PREFIX) + len(VERBYTE) + len(file_iv)
 
-        if total_file_size > FILESIZE_MAX:
-            raise LimitExceeded(
-                f'Total filesize must be <= {FILESIZE_MAX}b'
-            )
         metadata_bytesize = int_to_bytes(len(metadata),3)
         
         constructed_metadata =  PREFIX + VERBYTE
