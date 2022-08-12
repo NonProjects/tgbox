@@ -17,7 +17,6 @@ __all__ = [
     'DEF_UNK_FOLDER', 
     'PREFIX', 
     'FILE_PATH_MAX', 
-    'FILESIZE_MAX', 
     'METADATA_MAX', 
     'BOX_IMAGE_PATH', 
     'WORDS_PATH', 
