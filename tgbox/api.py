@@ -2274,7 +2274,7 @@ class EncryptedLocalBox:
         self.__raise_initialized()
         return make_requestkey(basekey, box_salt=self._box_salt)
     
-    def delete(self) -> None:
+    async def delete(self) -> None:
         """
         This method **WILL DELETE** your *LocalBox* 
         database. It doesn't affect *RemoteBox*,
@@ -2284,6 +2284,9 @@ class EncryptedLocalBox:
         Will raise ``FileNotFoundError`` if
         something goes wrong (i.e DB was moved).
         """
+        if not self._tgbox_db.closed:
+            await self.done()
+
         self._tgbox_db.db_path.unlink()
 
     async def decrypt(self, key: Union[BaseKey, MainKey]) -> 'DecryptedLocalBox':
