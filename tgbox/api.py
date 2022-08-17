@@ -938,7 +938,6 @@ class EncryptedRemoteBox:
 
         oe = OpenPretender(pf.file, state, pf.filesize)
         oe.concat_metadata(pf.metadata)
-        
         try:
             ifile = await upload_file(
                 self._ta.TelegramClient, oe,
@@ -1900,30 +1899,46 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 print(drbf.file_name) # new.txt
         
         .. note::
-            Your LocalBox will NOT know about this update,
-            so you should specify here ``dlb`` (is better way) 
-            or await the ``refresh_metadata`` method on the 
-            ``DecryptedLocalBoxFile`` with the same ID.
+            - Your LocalBox will NOT know about this update,
+              so you should specify here ``dlb`` (is better way) 
+              or await the ``refresh_metadata`` method on the 
+              ``DecryptedLocalBoxFile`` with the same ID.
 
-        .. note::
-            Not a *default* metadata (like file_name, mime, etc)
-            will be placed to the ``residual_metadata`` property dict.
+            - Not a *default* metadata (like file_name, mime, etc)
+              will be placed to the ``residual_metadata`` property dict.
 
-        .. note::
-            There is a file caption (and so updated metadata) 
-            limit: 1KB and 2KB for a Premium Telegram users.
-
-        .. warning::
-            Try **NOT** to change a ``efile_path`` metadata
-            attribute, this may raise some errors. The local 
-            path parts will be **not** reconstructed.
+            - There is a file caption (and so updated metadata) 
+              limit: 1KB and 2KB for a Premium Telegram users.
+            
+            - You can replace file's path by specifying a
+              ``file_path`` key with appropriate value. Also,
+              you **will need** to specify a ``DecryptedLocalBox``
+              as ``dlb`` so we can create a new *LocalBoxDirectory*
+              from your path. Without it you will get a ``ValueError``
         """
+        if 'efile_path' in changes:
+            raise ValueError('The "changes" should not contain efile_path')
+        
+        if 'file_path' in changes and not dlb:
+            raise ValueError('You can\'t change file_path without specifying dlb!')
         try:
             message_caption = urlsafe_b64decode(self._message.message)
             updates = AES(self._filekey).decrypt(message_caption)
             updates = PackedAttributes.unpack(updates)
         except (ValueError, TypeError): 
             updates = {}
+        
+        new_file_path = changes.pop('file_path', None)
+
+        if new_file_path:
+            directory = await dlb._make_local_path(Path(new_file_path))
+
+            await dlb._tgbox_db.FILES.execute((
+                'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
+                (directory.part_id, self._id)
+            ))
+            efile_path = AES(self._mainkey).encrypt(str(new_file_path).encode())
+            changes['efile_path'] = efile_path
 
         updates.update(changes)
 
@@ -1947,7 +1962,12 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         
         for k,v in tuple(updates.items()):
             if k in self.__required_metadata:
-                setattr(self, f'_{k}', v)
+                if k == 'cattrs':
+                    setattr(self, f'_{k}', PackedAttributes.unpack(v))
+                elif k == 'efile_path':
+                    self._file_path = new_file_path
+                else:
+                    setattr(self, f'_{k}', v)
             else:
                 self._residual_metadata[k] = v
 
@@ -2405,6 +2425,32 @@ class DecryptedLocalBox(EncryptedLocalBox):
             """This function was inherited from ``EncryptedLocalBox`` """
             """and cannot be used on ``DecryptedLocalBox``."""
         )
+    async def _make_local_path(self, file_path: Path) -> 'DecryptedLocalBoxDirectory':
+        """
+        Creates abstract LocalBoxDirectory, and returns
+        the ``DecryptedLocalBoxDirectory`` object.
+
+        Arguments:
+            file_path (``Path``):
+                File path. No filename included.
+        """
+        ppidg = ppart_id_generator(file_path, self._mainkey)
+
+        for part, parent_part_id, part_id in ppidg:
+            if not parent_part_id: 
+                parent_part_id = None
+
+            cursor = await self._tgbox_db.PATH_PARTS.execute((
+                'SELECT PART_ID FROM PATH_PARTS WHERE PART_ID=?', (part_id,))
+            )
+            if not await cursor.fetchone():
+                await self._tgbox_db.PATH_PARTS.insert(
+                    AES(self._mainkey).encrypt(part.encode()),
+                    part_id, parent_part_id
+                )
+        elbd = EncryptedLocalBoxDirectory(self._tgbox_db, part_id)
+        return await elbd.decrypt(self._mainkey)
+
     async def _make_local_file(self, pf: 'PreparedFile') -> 'DecryptedLocalBoxFile':
         """
         Creates a LocalBoxFile.
@@ -2435,20 +2481,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
         else:
             efilekey = None
         
-        ppidg = ppart_id_generator(pf.filepath, self._mainkey)
+        part_id = (await self._make_local_path(pf.filepath)).part_id
 
-        for part, parent_part_id, part_id in ppidg:
-            if not parent_part_id: 
-                parent_part_id = None
-
-            cursor = await self._tgbox_db.PATH_PARTS.execute((
-                'SELECT PART_ID FROM PATH_PARTS WHERE PART_ID=?', (part_id,))
-            )
-            if not await cursor.fetchone():
-                await self._tgbox_db.PATH_PARTS.insert(
-                    AES(self._mainkey).encrypt(part.encode()),
-                    part_id, parent_part_id
-                )
         await self._tgbox_db.FILES.insert(
             pf.file_id, eupload_time, part_id, 
             efilekey, pf.metadata, None
@@ -2457,7 +2491,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             pf.file_id, self._tgbox_db).decrypt(pf.filekey)
     
     # TODO: Delete PartID from PATH_PARTS if it links
-    # to only one file that was removed. 
+    # to only one file that was removed.
     async def sync(
             self, drb: DecryptedRemoteBox, 
             start_from: int=0,
@@ -2831,7 +2865,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         # --- Start constructing metadata here --- #
 
         # We should always encrypt FILE_PATH with MainKey.
-        file_path_no_name = str(Path(*file_path.parts[:-1])).encode()
+        file_path_no_name = str(file_path.parent).encode()
         efile_path = AES(self._mainkey).encrypt(file_path_no_name)
         
         cattrs = PackedAttributes.pack(**cattrs) if cattrs else b''
@@ -2908,7 +2942,10 @@ class DecryptedLocalBox(EncryptedLocalBox):
             await drbf._erbf.init()
         
         if not file_path:
-            file_path = DEF_NO_FOLDER / 'filename'
+            file_path = DEF_NO_FOLDER
+
+        if file_path.is_file():
+            file_path = file_path.parent
 
         drbf.set_file_path(file_path)
         
@@ -3178,10 +3215,10 @@ class EncryptedLocalBoxDirectory:
         all your folders by importing files.
         """
         await self._tgbox_db.FILES.execute(
-            ('DELETE FROM FILES WHERE FOLDER_ID=?',(self._folder_id,))
+            ('DELETE FROM FILES WHERE PPATH_HEAD=?',(self._folder_id,))
         )
         await self._tgbox_db.Folders.execute(
-            ('DELETE FROM FOLDERS WHERE FOLDER_ID=?',(self._folder_id,))
+            ('DELETE FROM FOLDERS WHERE PART_ID=?',(self._folder_id,))
         )
     
     async def decrypt(self, key: Union[BaseKey, MainKey]):
@@ -3588,6 +3625,13 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 if k in self.__required_metadata:
                     if k == 'cattrs':
                         setattr(self, f'_{k}', PackedAttributes.unpack(v))
+
+                    elif k == 'efile_path':
+                        if self._mainkey and not self._efilekey:
+                            self._file_path = AES(self._mainkey).decrypt(v)
+                            self._file_path = Path(self._file_path.decode())
+                        else:
+                            self._file_path = None
                     else:
                         setattr(self, f'_{k}', v)
                 else:
@@ -3704,7 +3748,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             drbf = await drb.get_file(self._id)
             _updated_metadata = drbf._message.message
 
-        await self._tgbox_db.BOX_DATA.execute((
+        await self._tgbox_db.FILES.execute((
             'UPDATE FILES SET UPDATED_METADATA=? WHERE ID=?',
             (_updated_metadata, self._id)
         )) 
