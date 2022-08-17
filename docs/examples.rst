@@ -198,10 +198,33 @@ Download file preview
     # but DecryptedLocalBox is recommend and preferable.
     
     # Get a last DecryptedLocalBoxFile from LocalBox
-    last_dlbf = await drb.get_file(await dlb.get_last_file_id())
+    last_dlbf = await dlb.get_file(await dlb.get_last_file_id())
 
     with open(f'{last_dlbf.file_name}_preview.jpg','wb') as f:
         f.write(last_dlbf.preview)
+
+Changing file metadata
+----------------------
+
+.. code-block:: python
+        
+    ... # some code was omitted
+
+    # Get a last DecryptedRemoteBoxFile from RemoteBox
+    last_drbf = await drb.get_file(await drb.get_last_file_id())
+
+    # To change metadata you will need to specify DecryptedLocalBox
+    await last_drbf.update_metadata(
+        changes = {
+            'file_name': b'some_nice_filename',
+            'file_path':  'some/nice/filepath'
+        },
+        dlb = dlb # DecryptedLocalBox
+    )
+    # You can also change cattrs, mime and any other
+    # metadata fields.
+    print(last_drbf.file_name) # some_nice_filename
+    print(last_drbf.file_path) # some/nice/filepath
 
 File search
 -----------
