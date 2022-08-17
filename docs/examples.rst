@@ -157,8 +157,8 @@ Over files
             print(drbf.id, drbf.file_name)
 
         # Iterating over files in LocalBox
-        async for dlbfi in dlb.files():
-            print(dlbfi.id, dlbfi.file_name)
+        async for dlbf in dlb.files():
+            print(dlbf.id, dlbf.file_name)
 
 
 Deep local iteration & Directories
@@ -212,8 +212,12 @@ Changing file metadata
 
     # Get a last DecryptedRemoteBoxFile from RemoteBox
     last_drbf = await drb.get_file(await drb.get_last_file_id())
-
+    #
     # To change metadata you will need to specify DecryptedLocalBox
+    #
+    # You can also change cattrs, mime and any other
+    # metadata fields, not only file path and name.
+    #
     await last_drbf.update_metadata(
         changes = {
             'file_name': b'some_nice_filename',
@@ -221,10 +225,30 @@ Changing file metadata
         },
         dlb = dlb # DecryptedLocalBox
     )
-    # You can also change cattrs, mime and any other
-    # metadata fields.
     print(last_drbf.file_name) # some_nice_filename
     print(last_drbf.file_path) # some/nice/filepath
+
+.. note::
+   You should be able to replace any metadata attribute
+   listed in the ``DecryptedLocalBox.__required_metadata``,
+   however, changing the ``efile_path`` is **forbidden**.
+
+   This behaviour is because of the first "e" letter,
+   it stands for word "encrypted" , so users should have
+   to manually encrypt its file path with the ``MainKey``
+   and only after specify it in ``changes`` dict. As
+   you may see this is a totally discouraged.
+
+   Instead of the specifying the ``efile_path`` we
+   allow user to specify a ``file_path`` key, which
+   is not a part of valid metadata (see :doc:`remotebox`),
+   the value should be file path ``str`` or ``pathlib.Path``.
+
+   The user will also need to specify a ``DecryptedLocalBox``
+   as ``dlb`` *kwarg*, so we can take a ``MainKey`` from it
+   and do all magic tricks without user involve.
+
+   As per v1.0 this works only for ``file_path``.
 
 File search
 -----------
@@ -245,8 +269,8 @@ File search
     sf = SearchFilter(mime='image/', min_size=500000)
 
     # You can also search on RemoteBox
-    async for dlbfi in dlb.search_file(ff):
-        print(dlbfi.id, dlbfi.file_name)
+    async for dlbf in dlb.search_file(ff):
+        print(dlbf.id, dlbf.file_name)
 
 Box clone
 ---------
