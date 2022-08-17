@@ -3215,12 +3215,11 @@ class EncryptedLocalBoxDirectory:
         all your folders by importing files.
         """
         await self._tgbox_db.FILES.execute(
-            ('DELETE FROM FILES WHERE PPATH_HEAD=?',(self._folder_id,))
+            ('DELETE FROM FILES WHERE PPATH_HEAD=?',(self._part_id,))
         )
-        await self._tgbox_db.Folders.execute(
-            ('DELETE FROM FOLDERS WHERE PART_ID=?',(self._folder_id,))
+        await self._tgbox_db.PATH_PARTS.execute(
+            ('DELETE FROM PATH_PARTS WHERE PART_ID=?',(self._part_id,))
         )
-    
     async def decrypt(self, key: Union[BaseKey, MainKey]):
         """Decrypt self and return ``DecryptedLocalBoxDirectory``"""
         if not self._initialized: await self.init()
