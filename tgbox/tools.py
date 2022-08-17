@@ -412,10 +412,16 @@ def ppart_id_generator(path: Path, mainkey: MainKey) -> Generator[tuple, None, N
     yield their unique IDs. We will use this to better
     navigate over _abstract_ Folders in the LocalBox.
 
+    The path **shouldn't** contain a file name,
+    otherwise directory will contain it as folder.
+
+    */home/user/* is **OK**
+    */home/user/file.txt* is **NOT**
+
     Will yield a tuple (PART, PARENT_PART_ID, PART_ID)
     """
     parent_part_id = b'' # The root (/ anchor) doesn't have parent
-    for part in path.parts[:-1]: # Omit filename with [:-1]
+    for part in path.parts:
         part_id = sha256(
             mainkey\
           + sha256(part.encode()).digest()\
