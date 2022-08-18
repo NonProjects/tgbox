@@ -2908,12 +2908,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
             file = file,
             filekey = filekey,
             filesize = total_file_size,
-            filepath = file_path,
+            filepath = Path(file_path_no_name.decode()),
             filesalt = file_salt,
             metadata = constructed_metadata,
             imported = False
         )
-    
     async def import_file( 
             self, drbf: DecryptedRemoteBoxFile,
             file_path: Optional[Path] = None)\
