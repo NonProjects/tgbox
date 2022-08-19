@@ -48,7 +48,8 @@ __all__ = [
     'bytes_to_int', 
     'get_media_duration', 
     'make_media_preview', 
-    'make_image_preview'
+    'make_image_preview',
+    'ppart_id_generator'
 ]
 anext = lambda agen: agen.__anext__()
 
