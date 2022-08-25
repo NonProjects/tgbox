@@ -214,7 +214,6 @@ async def get_remote_box(
 
 async def make_local_box(
         erb: 'EncryptedRemoteBox', 
-        ta: 'TelegramAccount', 
         basekey: BaseKey) -> 'DecryptedLocalBox':
     """
     Makes LocalBox
@@ -223,9 +222,6 @@ async def make_local_box(
         erb (``RemoteBox``):
             ``EncryptedRemoteBox``. You will
             recieve it after ``make_remote_box``.
-
-        ta (``TelegramAccount``):
-            ``TelegramAccount`` connected to Telegram.
 
         basekey (``BaseKey``):
             ``BaseKey`` that will be used 
@@ -243,7 +239,7 @@ async def make_local_box(
         AES(mainkey).encrypt(int_to_bytes(int(time()))),
         box_salt,
         None, # We aren't cloned box, so Mainkey is empty
-        AES(basekey).encrypt(ta.get_session().encode()), 
+        AES(basekey).encrypt(erb._ta.get_session().encode()), 
         AES(mainkey).encrypt(int_to_bytes(erb._ta._api_id)),
         AES(mainkey).encrypt(bytes.fromhex(erb._ta._api_hash)),
     )
