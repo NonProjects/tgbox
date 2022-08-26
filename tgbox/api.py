@@ -539,9 +539,7 @@ class EncryptedRemoteBox:
         after first method call.
         """
         if not self._box_salt:
-            full_rq = await self._tc(
-                GetFullChannelRequest(channel=self._box_channel)
-            )
+            full_rq = await self._tc(GetFullChannelRequest(channel=self._box_channel))
             self._box_salt = urlsafe_b64decode(full_rq.full_chat.about)
             
         return self._box_salt
@@ -973,9 +971,7 @@ class EncryptedRemoteBox:
         You need to have rights for this.
         """
         try:
-            await self._tc(
-                DeleteChannelRequest(self._box_channel)
-            ) 
+            await self._tc(DeleteChannelRequest(self._box_channel)) 
         except ChatAdminRequiredError:
             box_name = await self.get_box_name()
             raise NotEnoughRights(
@@ -1132,7 +1128,7 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
         files_generator = self.files(
             key=self._mainkey, 
             decrypt=True, reverse=True,
-            erase_encrypted_metada=False
+            erase_encrypted_metadata=False
         )
         async for drbf in files_generator:
             if progress_callback:
@@ -1466,7 +1462,7 @@ class EncryptedRemoteBoxFile:
         if not self.initialized:
             await self.init()
         return await DecryptedRemoteBoxFile(self, key).init(
-            erase_encrypted_metada=erase_encrypted_metadata)
+            erase_encrypted_metadata=erase_encrypted_metadata)
 
 class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
     """
@@ -2714,61 +2710,61 @@ class DecryptedLocalBox(EncryptedLocalBox):
         file_salt, file_iv = get_rnd_bytes(32), get_rnd_bytes(16)
         filekey = make_filekey(self._mainkey, file_salt)
 
+        class TelegramVirtualFile:
+            def __init__(self, doc_pic, session):
+                self.downloader = None
+                self.doc_pic = doc_pic
+                
+                self.tc = TelegramClient(
+                    session=session,
+                    api_id=self._api_id,
+                    api_hash=self._api_hash
+                )
+                self.tc = self.tc.connect()
+                self._client_initialized = False
+                
+                file = File(doc_pic)
+                self.name = file.name
+                self.size = file.size
+
+                self.duration = file.duration\
+                    if file.duration else 0
+            
+            async def get_preview(self, quality: int=1) -> bytes:
+                if not self._client_initialized:
+                    self.tc = await self.tc # connect
+                    self._client_initialized = True
+            
+                if hasattr(self.doc_pic,'sizes')\
+                    and not self.doc_pic.sizes:
+                        return b''
+
+                if hasattr(self.doc_pic,'thumbs')\
+                    and not self.doc_pic.thumbs:
+                        return b''
+
+                return await self.tc.download_media(
+                    message = self.doc_pic, 
+                    thumb = quality, file = bytes
+                )
+            async def read(self, size: int) -> bytes:
+                if not self._client_initialized:
+                    self.tc = await self.tc
+                    self._client_initialized = True
+
+                if not self.downloader:
+                    self.downloader = download_file(
+                        self.tc, self.doc_pic
+                    )
+                chunk = await anext(self.downloader)
+                return chunk
+
         if isinstance(file, (Document, Photo)):
             if not self._session:
                 raise NotEnoughRights(
                     '''You need to decrypt LocalBox with BaseKey, '''
                     '''MainKey is not enough. Session is None.'''
                 )
-            class TelegramVirtualFile:
-                def __init__(self, doc_pic, session):
-                    self.downloader = None
-                    self.doc_pic = doc_pic
-                    
-                    self.tc = TelegramClient(
-                        session=session,
-                        api_id=self._api_id,
-                        api_hash=self._api_hash
-                    )
-                    self.tc = self.tc.connect()
-                    self._client_initialized = False
-                    
-                    file = File(doc_pic)
-                    self.name = file.name
-                    self.size = file.size
-
-                    self.duration = file.duration\
-                        if file.duration else 0
-                
-                async def get_preview(self, quality: int=1) -> bytes:
-                    if not self._client_initialized:
-                        self.tc = await self.tc # connect
-                        self._client_initialized = True
-                
-                    if hasattr(self.doc_pic,'sizes')\
-                        and not self.doc_pic.sizes:
-                            return b''
-
-                    if hasattr(self.doc_pic,'thumbs')\
-                        and not self.doc_pic.thumbs:
-                            return b''
-
-                    return await self.tc.download_media(
-                        message = self.doc_pic, 
-                        thumb = quality, file = bytes
-                    )
-                async def read(self, size: int) -> bytes:
-                    if not self._client_initialized:
-                        self.tc = await self.tc
-                        self._client_initialized = True
-
-                    if not self.downloader:
-                        self.downloader = download_file(
-                            self.tc, self.doc_pic
-                        )
-                    chunk = await anext(self.downloader)
-                    return chunk
-                    
             file = TelegramVirtualFile(file, self._session)
             make_preview = False # We will call get_preview
         
