@@ -44,7 +44,7 @@ Logging in & Box creation
             # Make EncryptedRemoteBox
             erb = await make_remote_box(ta)
             # Make DecryptedLocalBox
-            dlb = await make_local_box(erb, ta, basekey)
+            dlb = await make_local_box(erb, basekey)
             
             # Close all connections
             # after work was done
