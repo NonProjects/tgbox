@@ -27,8 +27,8 @@ Optional dependencies
 - With `FFmpeg <https://ffmpeg.org/download.html>`_ library can make previews for media files and extract duration to attach it to the *RemoteBoxFile*.
 
 
-Install last updates to the Telethon
-------------------------------------
+Install last Telethon updates
+-----------------------------
 
 .. warning::
    By default (on ``pip install tgbox``) we download ``telethon`` from the PyPi, but this package on PyPi is often **outdated** and can not support new Telegram features (like sending 4GB files), this can throw you in some strange errors. You recommended to install the Telethon separately, from the v1.24 branch, official GitHub page. Please make sure to **check last commits** before you install from GitHub! The release of the ``telethon`` on PyPi is static, so it's always safe-to-install. GitHub branch is dynamic, so there is a **really little chance** that it will be attacked by some bad commits and your Telegram account will be compromised. A **very little chance**, but **not** zero.
