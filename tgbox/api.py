@@ -87,7 +87,7 @@ __all__ = [
     'get_remote_box', 
     'make_local_box', 
     'get_local_box', 
-    'TelegramAccount', 
+    'TelegramClient', 
     'EncryptedRemoteBox',
     'DecryptedRemoteBox',
     'EncryptedRemoteBoxFile', 
@@ -102,8 +102,151 @@ __all__ = [
 ]
 TelegramClient.__version__ = VERSION
 
+class TelegramClient(TelegramClient):
+    """
+    A little extend to the ``telethon.TelegramClient``.
+
+    This class inherits Telethon's TelegramClient and support
+    all features that has ``telethon.TelegramClient``.
+    
+    Typical usage:
+
+    .. code-block:: python
+
+        from asyncio import run as asyncio_run
+        from tgbox.api import TelegramClient, make_remote_box
+        from getpass import getpass # For hidden input
+        
+        PHONE_NUMBER = '+10000000000' # Your phone number
+        API_ID = 1234567 # Your API_ID: my.telegram.org
+        API_HASH = '00000000000000000000000000000000' # Your API_HASH
+        
+        async def main():
+            tc = TelegramClient(
+                phone_number = PHONE_NUMBER,
+                api_id = API_ID, 
+                api_hash = API_HASH
+            )
+            await tc.connect()
+            await tc.send_code()
+
+            await tc.log_in(
+                code = int(input('Code: ')),
+                password = getpass('Pass: ')
+            )
+            erb = await make_remote_box(tc)
+
+        asyncio_run(main())
+    """
+    def __init__(
+            self, api_id: int, api_hash: str, 
+            phone_number: Optional[str] = None, 
+            session: Optional[Union[str, StringSession]] = None):
+        """
+        Arguments:
+            api_id (``int``):
+                API_ID from https://my.telegram.org.
+
+            api_hash (``int``):
+                API_HASH from https://my.telegram.org.
+            
+            phone_number (``str``, optional):
+                Phone number linked to your Telegram
+                account. You may want to specify it
+                to recieve log-in code. You should
+                specify it if ``session`` is ``None``.
+
+            session (``str``, ``StringSession``, optional):
+                ``StringSession`` that give access to
+                your Telegram account. You can get it
+                after connecting and signing in via
+                ``TelegramClient.session.save()`` method.
+
+            You should specify at least ``session`` or ``phone_number``.
+        """
+        if not session and not phone_number:
+            raise ValueError(
+                'You should specify at least ``session`` or ``phone_number``.'
+            )
+        super().__init__(
+            StringSession(session), 
+            api_id, api_hash
+        )
+        self._api_id, self._api_hash = api_id, api_hash
+        self._phone_number = phone_number
+        
+    async def send_code(self, force_sms: Optional[bool]=False) -> SentCode:
+        """
+        Sends the Telegram code needed to login to the given phone number.
+        
+        Arguments:
+            force_sms (``bool``, optional):
+                Whether to force sending as SMS.
+        """
+        return await self.send_code_request(
+            self._phone_number, force_sms=force_sms
+        )
+    async def log_in(
+            self, password: Optional[str] = None, 
+            code: Optional[Union[int,str]] = None) -> None: 
+        """
+        Logs in to Telegram to an existing user account.
+        You should only use this if you are not signed in yet.
+        
+        Arguments:
+            password (``str``, optional):
+                Your 2FA password. You can ignore 
+                this if you don't enabled it yet.
+
+            code (``int``, optional):
+                The code that Telegram sent you after calling
+                ``TelegramClient.send_code()`` method.
+        """
+        if not await self.is_user_authorized():
+            try:
+                await self.sign_in(self._phone_number, code)
+            except SessionPasswordNeededError:
+                await self.sign_in(password=password)
+
+    async def resend_code(self, sent_code: SentCode) -> SentCode:
+        """
+        Will send you login code again. This can be used to
+        force Telegram send you SMS or Call to dictate code.
+        
+        Arguments:
+            sent_code (``SentCode``):
+                Result of the ``tc.send_code`` or
+                result of the ``tc.resend_code`` method.
+
+        Example:
+
+        .. code-block:: python
+            
+            tc = tgbox.api.TelegramClient(...)
+            sent_code = await tc.send_code()
+            sent_code = await tc.resend_code(sent_code)
+        """
+        return await self(ResendCodeRequest(
+            self._phone_number, sent_code.phone_code_hash)
+        )
+    async def tgboxes(self, yield_with: str=REMOTEBOX_PREFIX) -> AsyncGenerator:
+        """
+        Iterate over all Tgbox Channels in your account.
+        It will return any channel with Tgbox prefix,
+        ``.defaults.REMOTEBOX_PREFIX`` by default, 
+        you can override this with ``yield_with``.
+        
+        Arguments:
+            yield_with (``str``):
+                Any channel that have ``in`` title this
+                string will be returned as ``RemoteBox``. 
+        """
+        async for d in self.iter_dialogs():
+            if yield_with in d.title and d.is_channel: 
+                yield EncryptedRemoteBox(d, self)
+
 async def make_remote_box(
-        ta: 'TelegramAccount', 
+        tc: 'TelegramClient', 
         tgbox_db_name: str=DEF_TGBOX_NAME,
         tgbox_rb_prefix: str=REMOTEBOX_PREFIX,
         box_image_path: Union[PathLike, str] = BOX_IMAGE_PATH,
@@ -112,9 +255,9 @@ async def make_remote_box(
     Function used for making ``RemoteBox``. 
     
     Arguments:
-        ta (``TelegramAccount``):
+        tc (``TelegramClient``):
             Account to make private Telegram channel.
-            You must be signed in via ``sign_in()``.
+            You must be signed in via ``log_in()``.
         
         tgbox_db_name (``TgboxDB``, optional):
             Name of your Local and Remote boxes.
@@ -145,19 +288,19 @@ async def make_remote_box(
     channel_name = tgbox_rb_prefix + tgbox_db.name
     box_salt = urlsafe_b64encode(box_salt if box_salt else get_rnd_bytes())
 
-    channel = (await ta.TelegramClient(
-        CreateChannelRequest(channel_name,'',megagroup=False))).chats[0]
+    channel = (await tc(CreateChannelRequest(
+        channel_name,'',megagroup=False))).chats[0]
     
     if box_image_path:
-        box_image = await ta.TelegramClient.upload_file(open(box_image_path,'rb'))
-        await ta.TelegramClient(EditPhotoRequest(channel, box_image)) 
+        box_image = await tc.upload_file(open(box_image_path,'rb'))
+        await tc(EditPhotoRequest(channel, box_image)) 
 
-    await ta.TelegramClient(EditChatAboutRequest(channel, box_salt.decode()))
-    return EncryptedRemoteBox(channel, ta)
+    await tc(EditChatAboutRequest(channel, box_salt.decode()))
+    return EncryptedRemoteBox(channel, tc)
 
 async def get_remote_box(
         dlb: Optional['DecryptedLocalBox'] = None, 
-        ta: Optional['TelegramAccount'] = None,
+        tc: Optional['TelegramClient'] = None,
         entity: Optional[Union[int, str, PeerChannel]] = None)\
         -> Union['EncryptedRemoteBox', 'DecryptedRemoteBox']:
     """
@@ -165,30 +308,30 @@ async def get_remote_box(
     ``DecryptedRemoteBox`` if you specify ``dlb``.
     
     .. note::
-        Must be specified at least ``dlb`` or ``ta`` with ``entity``. 
+        Must be specified at least ``dlb`` or ``tc`` with ``entity``. 
     
     Arguments:
         dlb (``DecryptedLocalBox``, optional):
-            Should be specified if ``ta`` is ``None``.
+            Should be specified if ``tc`` is ``None``.
 
-        ta (``TelegramAccount``, optional):
+        tc (``TelegramClient``, optional):
             Should be specified if ``dlb`` is ``None``.
-            ``entity`` should be specified with ``ta``.
+            ``entity`` should be specified with ``tc``.
 
-            Note that ``ta`` must be already connected 
-            with Telegram via ``await ta.connect()``.
+            Note that ``tc`` must be already connected 
+            with Telegram via ``await tc.connect()``.
 
         entity (``PeerChannel``, ``int``, ``str``, optional):
             Can be ``Channel`` ID, Username or ``PeerChannel``.
-            Will be used if specified. Must be specified with ``ta``.
+            Will be used if specified. Must be specified with ``tc``.
     """
-    if ta:
-        account = ta
+    if tc:
+        account = tc
 
-    elif ta and not entity:
-        raise ValueError('entity must be specified with ta')
+    elif tc and not entity:
+        raise ValueError('entity must be specified with tc')
     else:
-        account = TelegramAccount(
+        account = TelegramClient(
             session=dlb._session,
             api_id=dlb._api_id,
             api_hash=dlb._api_hash
@@ -196,7 +339,7 @@ async def get_remote_box(
         await account.connect()
     try:
         entity = entity if entity else PeerChannel(dlb._box_channel_id)
-        channel_entity = await account.TelegramClient.get_entity(entity)
+        channel_entity = await account.get_entity(entity)
     except AuthKeyUnregisteredError:
         raise SessionUnregistered(
             '''Session was disconnected. Change it with '''
@@ -239,9 +382,9 @@ async def make_local_box(
         AES(mainkey).encrypt(int_to_bytes(int(time()))),
         box_salt,
         None, # We aren't cloned box, so Mainkey is empty
-        AES(basekey).encrypt(erb._ta.get_session().encode()), 
-        AES(mainkey).encrypt(int_to_bytes(erb._ta._api_id)),
-        AES(mainkey).encrypt(bytes.fromhex(erb._ta._api_hash)),
+        AES(basekey).encrypt(erb._tc.session.save().encode()), 
+        AES(mainkey).encrypt(int_to_bytes(erb._tc._api_id)),
+        AES(mainkey).encrypt(bytes.fromhex(erb._tc._api_hash)),
     )
     return await EncryptedLocalBox(tgbox_db).decrypt(basekey)
 
@@ -274,173 +417,6 @@ async def get_local_box(
     else:
         return await EncryptedLocalBox(tgbox_db).init()
 
-class TelegramAccount:
-    """
-    Wrapper around ``telethon.TelegramClient``
-    
-    Typical usage:
-
-    .. code-block:: python
-
-        from asyncio import run as asyncio_run
-        from tgbox.api import TelegramAccount, make_remote_box
-        from getpass import getpass # For hidden input
-        
-        PHONE_NUMBER = input('Your phone number: ')
-        API_ID = 1234567 # Your own API_ID: my.telegram.org
-        API_HASH = '00000000000000000000000000000000' # Your own API_HASH
-        
-        async def main():
-            ta = TelegramAccount(
-                phone_number = PHONE_NUMBER,
-                api_id = API_ID, 
-                api_hash = API_HASH
-            )
-            await ta.connect()
-            await ta.send_code_request()
-
-            await ta.sign_in(
-                code = int(input('Code: ')),
-                password = getpass('Pass: ')
-            )
-            erb = await make_remote_box(ta)
-
-        asyncio_run(main())
-    """
-    def __init__(
-            self, api_id: int, api_hash: str, 
-            phone_number: Optional[str] = None, 
-            session: Optional[Union[str, StringSession]] = None):
-        """
-        Arguments:
-            api_id (``int``):
-                API_ID from https://my.telegram.org.
-
-            api_hash (``int``):
-                API_HASH from https://my.telegram.org.
-            
-            phone_number (``str``, optional):
-                Phone number linked to your Telegram
-                account. You may want to specify it
-                to recieve log-in code. You should
-                specify it if ``session`` is ``None``.
-
-            session (``str``, ``StringSession``, optional):
-                ``StringSession`` that give access to
-                your Telegram account. You can get it
-                after connecting and signing in via
-                ``TelegramAccount.get_session()`` method.
-
-            You should specify at least ``session`` or ``phone_number``.
-        """
-        if not session and not phone_number:
-            raise ValueError(
-                'You should specify at least ``session`` or ``phone_number``.'
-            )
-        self._api_id, self._api_hash = api_id, api_hash
-        self._phone_number = phone_number
-        
-        self.TelegramClient = TelegramClient(
-            StringSession(session), 
-            self._api_id, self._api_hash
-        )
-    async def signed_in(self) -> bool:
-        """Returns ``True`` if you logged in account"""
-        return await self.TelegramClient.is_user_authorized()
-
-    async def connect(self) -> 'TelegramAccount':
-        """
-        Connects to Telegram. Typically
-        you will use this method if you have
-        ``StringSession`` (``session`` specified).
-        """
-        await self.TelegramClient.connect()
-        return self
-
-    async def disconnect(self):
-        """Disconnects from Telegram"""
-        await self.TelegramClient.disconnect()
-
-    async def send_code_request(self, force_sms: bool=False) -> SentCode:
-        """
-        Sends the Telegram code needed to login to the given phone number.
-        
-        Arguments:
-            force_sms (``bool``, optional):
-                Whether to force sending as SMS.
-        """
-        return await self.TelegramClient.send_code_request(self._phone_number)
-
-    async def sign_in(
-            self, password: Optional[str] = None, 
-            code: Optional[int] = None) -> None: 
-        """
-        Logs in to Telegram to an existing user account.
-        You should only use this if you are not signed in yet.
-        
-        Arguments:
-            password (``str``, optional):
-                Your 2FA password. You can ignore 
-                this if you don't enabled it yet.
-
-            code (``int``, optional):
-                The code that Telegram sent you after calling
-                ``TelegramAccount.send_code_request()`` method.
-        """
-        if not await self.TelegramClient.is_user_authorized():
-            try:
-                await self.TelegramClient.sign_in(self._phone_number, code)
-            except SessionPasswordNeededError:
-                await self.TelegramClient.sign_in(password=password)
-
-    async def log_out(self) -> bool:
-        """
-        Logs out from Telegram. Returns ``True`` 
-        if the operation was successful.
-        """
-        return await self.TelegramClient.log_out()
-
-    async def resend_code(self, phone_code_hash: str) -> SentCode:
-        """
-        Send log-in code again. This can be used to
-        force Telegram send you SMS or Call to dictate code.
-        
-        Arguments:
-            phone_code_hash (``str``):
-                You can get this hash after calling
-                ``TelegramAccount.send_code_request()``.
-
-        Example:
-
-        .. code-block:: python
-
-            sent_code = await tg_account.send_code_request()
-            sent_code = await tg_account.resend_code(sent_code.phone_code_hash)
-        """
-        return await self.TelegramClient(
-            ResendCodeRequest(self._phone_number, phone_code_hash)
-        )
-
-    def get_session(self) -> str:
-        """Returns ``StringSession`` as url safe base64 encoded ``str``"""
-        return self.TelegramClient.session.save()
-    
-    async def tgboxes(self, yield_with: str=REMOTEBOX_PREFIX) -> AsyncGenerator:
-        """
-        Iterate over all Tgbox Channels in your account.
-        It will return any channel with Tgbox prefix,
-        ``.defaults.REMOTEBOX_PREFIX`` by default, 
-        you can override this with ``yield_with``.
-        
-        Arguments:
-            yield_with (``str``):
-                Any channel that have ``in`` title this
-                string will be returned as ``RemoteBox``. 
-        """
-        async for d in self.TelegramClient.iter_dialogs():
-            if yield_with in d.title and d.is_channel: 
-                yield EncryptedRemoteBox(d, self)
-
 class EncryptedRemoteBox:
     """
     *RemoteBox* is a remote cloud storage. You can
@@ -459,37 +435,37 @@ class EncryptedRemoteBox:
     .. code-block:: python
         
         from tgbox.api import (
-            TelegramAccount, 
+            TelegramClient, 
             make_local_box, 
             make_remote_box
         )
         from getpass import getpass
         from asyncio import run as asyncio_run
         
-        PHONE_NUMBER = input('Your phone number: ')
+        PHONE_NUMBER = '+10000000000' # Your phone number
         API_ID = 1234567 # Your own API_ID: my.telegram.org
         API_HASH = '00000000000000000000000000000000' # Your own API_HASH
         
         async def main():
             # Connecting and logging to Telegram
-            ta = TelegramAccount(
+            tc = TelegramClient(
                 phone_number = PHONE_NUMBER,
                 api_id = API_ID, 
                 api_hash = API_HASH
             )
-            await ta.connect()
-            await ta.send_code_request()
+            await tc.connect()
+            await tc.send_code()
 
-            await ta.sign_in(
+            await tc.log_in(
                 code = int(input('Code: ')),
                 password = getpass('Pass: ')
             )
             # Making base RemoteBox (EncryptedRemoteBox)
-            erb = await make_remote_box(ta)
+            erb = await make_remote_box(tc)
 
         asyncio_run(main())
     """
-    def __init__(self, box_channel: Channel, ta: TelegramAccount):
+    def __init__(self, box_channel: Channel, tc: TelegramClient):
         """
         Arguments:
             box_channel (``Channel``):
@@ -499,10 +475,10 @@ class EncryptedRemoteBox:
                 and always encoded by urlsafe
                 b64encode BoxSalt in description.
 
-            ta (``TelegramAccount``):
+            tc (``TelegramClient``):
                 Telegram account that have ``box_channel``.
         """
-        self._ta = ta
+        self._tc = tc
 
         self._box_channel = box_channel
         self._box_channel_id = box_channel.id
@@ -534,9 +510,9 @@ class EncryptedRemoteBox:
         return events.NewMessage(chats=self.box_channel_id)
 
     @property
-    def ta(self) -> TelegramAccount:
-        """Returns ``TelegramAccount``"""
-        return self._ta
+    def tc(self) -> TelegramClient:
+        """Returns ``TelegramClient``"""
+        return self._tc
 
     @property
     def box_channel(self) -> Channel:
@@ -549,8 +525,8 @@ class EncryptedRemoteBox:
         return self._box_channel_id
     
     async def get_last_file_id(self) -> int:
-        """Returns last channel file id"""
-        async for msg in self._ta.TelegramClient.iter_messages(self._box_channel):
+        """Returns last channel file id. If nothing found returns 0"""
+        async for msg in self._tc.iter_messages(self._box_channel):
             if not msg: 
                 continue
             if msg.document: 
@@ -563,7 +539,7 @@ class EncryptedRemoteBox:
         after first method call.
         """
         if not self._box_salt:
-            full_rq = await self._ta.TelegramClient(
+            full_rq = await self._tc(
                 GetFullChannelRequest(channel=self._box_channel)
             )
             self._box_salt = urlsafe_b64decode(full_rq.full_chat.about)
@@ -576,7 +552,7 @@ class EncryptedRemoteBox:
         Will be cached after first method call.
         """
         if not self._box_name:
-            entity = await self._ta.TelegramClient.get_entity(self._box_channel_id)
+            entity = await self._tc.get_entity(self._box_channel_id)
             self._box_name = entity.title.split(': ')[1]
         return self._box_name
 
@@ -808,7 +784,7 @@ class EncryptedRemoteBox:
             )
         key = key if (key or not dlb) else dlb._mainkey
         
-        it_messages = self._ta.TelegramClient.iter_messages(
+        it_messages = self._tc.iter_messages(
             self._box_channel, limit=limit, offset_id=offset_id,
             max_id=max_id, min_id=min_id, add_offset=add_offset,
             search=search, from_user=from_user, wait_time=wait_time,
@@ -824,16 +800,16 @@ class EncryptedRemoteBox:
             if m.document: 
                 if not decrypt:
                     rbf = await EncryptedRemoteBoxFile(
-                        m, self._ta, cache_preview=cache_preview).init()
+                        m, self._tc, cache_preview=cache_preview).init()
                 else:
                     try:
                         rbf = await EncryptedRemoteBoxFile(
-                            m, self._ta, cache_preview=cache_preview).decrypt(
+                            m, self._tc, cache_preview=cache_preview).decrypt(
                                 key, erase_encrypted_metadata)
                     except Exception as e: # In case of imported file
                         if return_imported_as_erbf and not dlb:
                             rbf = await EncryptedRemoteBoxFile(
-                                m, self._ta, cache_preview=cache_preview).init()
+                                m, self._tc, cache_preview=cache_preview).init()
 
                         elif ignore_errors and not dlb:
                             continue
@@ -849,7 +825,7 @@ class EncryptedRemoteBox:
                             if not dlb_file:
                                 if return_imported_as_erbf: 
                                     rbf = await EncryptedRemoteBoxFile(
-                                        m, self._ta, cache_preview=cache_preview).init()
+                                        m, self._tc, cache_preview=cache_preview).init()
                                 elif ignore_errors:
                                     continue
                                 else:
@@ -860,7 +836,7 @@ class EncryptedRemoteBox:
                             else:
                                 # We already imported file, so have FileKey
                                 rbf = await EncryptedRemoteBoxFile(
-                                    m, self._ta, cache_preview=cache_preview
+                                    m, self._tc, cache_preview=cache_preview
                                 ).decrypt(dlb_file._filekey)
                         else: 
                             raise e # Unknown Exception
@@ -901,14 +877,14 @@ class EncryptedRemoteBox:
         min_id = sf.in_filters['min_id'][-1] if sf.in_filters['min_id'] else 0
         max_id = sf.in_filters['max_id'][-1] if sf.in_filters['max_id'] else 0
 
-        it_messages = self._ta.TelegramClient.iter_messages(
+        it_messages = self._tc.iter_messages(
             self._box_channel, min_id=min_id, 
             max_id=max_id, reverse=True
         )
         sgen = search_generator(
             sf, mainkey=mainkey, 
             it_messages=it_messages, 
-            lb=dlb, ta=self._ta
+            lb=dlb, tc=self._tc
         )
         async for file in sgen:
             yield file
@@ -936,7 +912,7 @@ class EncryptedRemoteBox:
         oe.concat_metadata(pf.metadata)
         try:
             ifile = await upload_file(
-                self._ta.TelegramClient, oe,
+                self._tc, oe,
                 file_name=urlsafe_b64encode(pf.filesalt).decode(), 
                 part_size_kb=512, file_size=pf.filesize,
                 progress_callback=progress_callback
@@ -944,7 +920,7 @@ class EncryptedRemoteBox:
         except FilePartsInvalidError:
             raise LimitExceeded('Your file is too big to upload')
         try:
-            file_message = await self._ta.TelegramClient.send_file(
+            file_message = await self._tc.send_file(
                 self._box_channel, file=ifile, 
                 silent=False, force_document=True
             )
@@ -961,8 +937,7 @@ class EncryptedRemoteBox:
 
         await pf.dlb._make_local_file(pf)
         
-        erbf = await EncryptedRemoteBoxFile(
-            file_message, self._ta).init()
+        erbf = await EncryptedRemoteBoxFile(file_message, self._tc).init()
         return await erbf.decrypt(pf.dlb._mainkey)
 
     async def get_requestkey(self, basekey: BaseKey) -> RequestKey:
@@ -985,7 +960,7 @@ class EncryptedRemoteBox:
         With calling this method you will left
         *RemoteBox* ``Channel``.
         """
-        await self._ta.TelegramClient.delete_dialog(
+        await self._tc.delete_dialog(
             self._box_channel)
 
     async def delete(self) -> None:
@@ -998,7 +973,7 @@ class EncryptedRemoteBox:
         You need to have rights for this.
         """
         try:
-            await self._ta.TelegramClient(
+            await self._tc(
                 DeleteChannelRequest(self._box_channel)
             ) 
         except ChatAdminRequiredError:
@@ -1027,7 +1002,7 @@ class EncryptedRemoteBox:
         work with RemoteBox, so we will
         clean up & close connections.
         """
-        await self._ta.disconnect()
+        await self._tc.disconnect()
 
 class DecryptedRemoteBox(EncryptedRemoteBox):
     """
@@ -1087,7 +1062,7 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
                 Must be specified if ``key`` is ``None``.
         """
         self._erb = erb
-        self._ta = erb._ta
+        self._tc = erb._tc
 
         self._box_channel = erb._box_channel
         self._box_channel_id = erb._box_channel_id
@@ -1148,16 +1123,16 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
             AES(self._mainkey).encrypt(int_to_bytes(int(time()))),
             await self.get_box_salt(),
             AES(basekey).encrypt(self._mainkey.key),
-            AES(basekey).encrypt(self._ta.get_session().encode()),
-            AES(self._mainkey).encrypt(int_to_bytes(self._ta._api_id)),
-            AES(self._mainkey).encrypt(bytes.fromhex(self._ta._api_hash)),
+            AES(basekey).encrypt(self._tc.session.save().encode()),
+            AES(self._mainkey).encrypt(int_to_bytes(self._tc._api_id)),
+            AES(self._mainkey).encrypt(bytes.fromhex(self._tc._api_hash)),
         )
         dlb = await EncryptedLocalBox(tgbox_db).decrypt(basekey)
         
         files_generator = self.files(
             key=self._mainkey, 
             decrypt=True, reverse=True,
-            erase_encrypted_metadata=False
+            erase_encrypted_metada=False
         )
         async for drbf in files_generator:
             if progress_callback:
@@ -1225,7 +1200,7 @@ class EncryptedRemoteBoxFile:
     """
     def __init__(
             self, sended_file: Message, 
-            ta: TelegramAccount, 
+            tc: TelegramClient, 
             cache_preview: bool=True):
         """
         Arguments:
@@ -1233,7 +1208,7 @@ class EncryptedRemoteBoxFile:
                 A ``Telethon``'s message object. This
                 message should contain ``File``.
 
-            ta (``TelegramAccount``):
+            tc (``TelegramClient``):
                 Your Telegram account.
 
             cache_preview (``bool``, optional):
@@ -1253,7 +1228,7 @@ class EncryptedRemoteBoxFile:
 
         self._sender = sended_file.post_author
         
-        self._ta = ta
+        self._tc = tc
         self._cache_preview = cache_preview
         
         self._upload_time = int(self._message.date.timestamp()) 
@@ -1290,6 +1265,11 @@ class EncryptedRemoteBoxFile:
     def initialized(self) -> bool:
         """Returns ``True`` if class was initialized."""
         return self._initialized
+
+    @property
+    def tc(self) -> TelegramClient:
+        """Returns ``TelegramClient``"""
+        return self._tc
     
     @property
     def sender(self) -> Union[str, None]:
@@ -1383,7 +1363,7 @@ class EncryptedRemoteBoxFile:
         # 3 is amount of bytes to which we pack metadata length
         request_amount = len(PREFIX) + len(VERBYTE) + 3
 
-        async for base_data in self._ta.TelegramClient.iter_download(
+        async for base_data in self._tc.iter_download(
             self._message.document, request_size=pad_request_size(request_amount)):
                 base_data = base_data[:request_amount]
 
@@ -1409,7 +1389,7 @@ class EncryptedRemoteBoxFile:
         if metadata_size > METADATA_MAX:
             raise LimitExceeded(f'{metadata_size=} > {METADATA_MAX=}')
         
-        iter_down = self._ta.TelegramClient.iter_download(
+        iter_down = self._tc.iter_download(
             file = self._message.document, 
             offset = request_amount, 
             request_size = pad_request_size(metadata_size)
@@ -1441,7 +1421,7 @@ class EncryptedRemoteBoxFile:
             your LocalBox then you can use the
             same ``delete()`` method on your LocalBoxFile.
         """
-        rm_result = await self._ta.TelegramClient.delete_messages(
+        rm_result = await self._tc.delete_messages(
             self._box_channel_id, [self._id]
         )
         if not rm_result[0].pts_count:
@@ -1486,7 +1466,7 @@ class EncryptedRemoteBoxFile:
         if not self.initialized:
             await self.init()
         return await DecryptedRemoteBoxFile(self, key).init(
-            erase_encrypted_metadata=erase_encrypted_metadata)
+            erase_encrypted_metada=erase_encrypted_metadata)
 
 class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
     """
@@ -1550,7 +1530,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._file = erbf._file
         self._sender = erbf._sender
         
-        self._ta = erbf._ta
+        self._tc = erbf._tc
         self._cache_preview = erbf._cache_preview
         
         self._box_salt = erbf._box_salt
@@ -1824,7 +1804,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             raise TypeError('outfile not Union[BinaryIO, str, PathLike].')
         
         iter_down = download_file(
-            client = self._ta.TelegramClient,
+            client = self._tc,
             location = self._message.document,
             request_size = request_size,
         )
@@ -1969,7 +1949,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         if dlb:
             dlbfi = await dlb.get_file(self._id)
-            await dlbfi.refresh_metadata(_updated_metadata=updates_encrypted)
+            await dlbfi.refresh_metadata(_updated_metada=updates_encrypted)
 
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """
@@ -2635,17 +2615,17 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 break
 
     async def replace_session(
-            self, basekey: BaseKey, ta: TelegramAccount) -> None:
+            self, basekey: BaseKey, tc: TelegramClient) -> None:
         """
         This method will replace LocalBox session to
-        session of specified ``TelegramAccount``.
+        session of specified ``TelegramClient``.
 
         Arguments:
             basekey (``BaseKey``):
                 ``BaseKey`` of this *LocalBox*.
 
-            ta (``TelegramAccount``):
-                ``TelegramAccount`` from which we
+            tc (``TelegramClient``):
+                ``TelegramClient`` from which we
                 will extract new session. 
         """
         try:
@@ -2654,7 +2634,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             raise IncorrectKey(
                 'BaseKey doesn\'t match with BaseKey of LocalBox') from None
         else:
-            self._session = ta.get_session()
+            self._session = tc.session.save()
             
             session = AES(basekey).encrypt(self._session.encode())
             self._elb._session = session
@@ -2742,18 +2722,15 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 )
             class TelegramVirtualFile:
                 def __init__(self, doc_pic, session):
-                    # Will be used for if conditions
-                    self.telegram_vf = None
-
                     self.downloader = None
                     self.doc_pic = doc_pic
-
-                    self.ta = TelegramAccount(
+                    
+                    self.tc = TelegramClient(
                         session=session,
                         api_id=self._api_id,
                         api_hash=self._api_hash
                     )
-                    self.ta = self.ta.connect()
+                    self.tc = self.tc.connect()
                     self._client_initialized = False
                     
                     file = File(doc_pic)
@@ -2765,7 +2742,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 
                 async def get_preview(self, quality: int=1) -> bytes:
                     if not self._client_initialized:
-                        self.ta = await self.ta
+                        self.tc = await self.tc # connect
                         self._client_initialized = True
                 
                     if hasattr(self.doc_pic,'sizes')\
@@ -2776,18 +2753,18 @@ class DecryptedLocalBox(EncryptedLocalBox):
                         and not self.doc_pic.thumbs:
                             return b''
 
-                    return await self.ta.TelegramClient.download_media(
+                    return await self.tc.download_media(
                         message = self.doc_pic, 
                         thumb = quality, file = bytes
                     )
                 async def read(self, size: int) -> bytes:
                     if not self._client_initialized:
-                        self.ta = await self.ta
+                        self.tc = await self.tc
                         self._client_initialized = True
 
                     if not self.downloader:
                         self.downloader = download_file(
-                            self.ta.TelegramClient, self.doc_pic
+                            self.tc, self.doc_pic
                         )
                     chunk = await anext(self.downloader)
                     return chunk
@@ -2808,7 +2785,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             raise LimitExceeded(f'File path must be <= {FILE_PATH_MAX} bytes.')
         
         if not file_size:
-            if hasattr(file, 'telegram_vf'):
+            if isinstance(file, TelegramVirtualFile):
                 file_size = file.size 
             else:
                 try:
@@ -2842,7 +2819,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         preview, duration = b'', 0
         
-        if hasattr(file, 'telegram_vf'):
+        if isinstance(file, TelegramVirtualFile):
             preview = await file.get_preview()
             duration = file.duration
         

@@ -5,29 +5,30 @@ TGBOX: encrypted cloud storage based on Telegram
 .. code-block:: python
 
         from tgbox.api import (
-            TelegramAccount, 
+            TelegramClient, 
             make_remote_box,
             make_local_box
         )
         from asyncio import run as asyncio_run
         from tgbox.keys import Phrase, make_basekey
         from getpass import getpass # Hidden input
-        
-        phone_number = input('Your phone number: ')
-        
+
+        # Phone number linked to your Telegram account
+        PHONE_NUMBER = '+10000000000' 
+
         # This two will not work. Get your own at https://my.telegram.org 
         API_ID, API_HASH = 1234567, '00000000000000000000000000000000' 
 
         async def main():
-            ta = TelegramAccount(
-                phone_number = phone_number,
+            tc = TelegramClient(
+                phone_number = PHONE_NUMBER,
                 api_id = API_ID, 
                 api_hash = API_HASH
             )
-            await ta.connect() # Connecting with Telegram
-            await ta.send_code_request() # Requesting login code
+            await tc.connect() # Connecting with Telegram
+            await tc.send_code() # Requesting login code
 
-            await ta.sign_in(
+            await tc.log_in(
                 code = int(input('Code: ')),
                 password = getpass('Pass: ')
             )
@@ -40,7 +41,7 @@ TGBOX: encrypted cloud storage based on Telegram
             basekey = make_basekey(p)
 
             # Make EncryptedRemoteBox
-            erb = await make_remote_box(ta)
+            erb = await make_remote_box(tc)
             # Make DecryptedLocalBox
             dlb = await make_local_box(erb, basekey)
             
@@ -57,7 +58,6 @@ TGBOX: encrypted cloud storage based on Telegram
             drbf = await drb.push_file(pf)
 
             # Retrieving some info from the RemoteBoxFile 
-
             print('File size:', drbf.size, 'bytes')
             print('File name:', drbf.file_name.decode())
 

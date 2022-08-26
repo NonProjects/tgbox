@@ -7,29 +7,30 @@ Logging in & Box creation
 .. code-block:: python
 
         from tgbox.api import (
-            TelegramAccount, 
+            TelegramClient, 
             make_remote_box,
             make_local_box
         )
         from asyncio import run as asyncio_run
         from tgbox.keys import Phrase, make_basekey
         from getpass import getpass # Hidden input
-        
-        phone_number = input('Your phone number: ')
-        
+
+        # Phone number linked to your Telegram account
+        PHONE_NUMBER = '+10000000000' 
+
         # This two will not work. Get your own at https://my.telegram.org 
         API_ID, API_HASH = 1234567, '00000000000000000000000000000000' 
 
         async def main():
-            ta = TelegramAccount(
-                phone_number = phone_number,
+            tc = TelegramClient(
+                phone_number = PHONE_NUMBER,
                 api_id = API_ID, 
                 api_hash = API_HASH
             )
-            await ta.connect() # Connecting with Telegram
-            await ta.send_code_request() # Requesting login code
+            await tc.connect() # Connecting with Telegram
+            await tc.send_code() # Requesting login code
 
-            await ta.sign_in(
+            await tc.log_in(
                 code = int(input('Code: ')),
                 password = getpass('Pass: ')
             )
@@ -42,10 +43,36 @@ Logging in & Box creation
             basekey = make_basekey(p)
 
             # Make EncryptedRemoteBox
-            erb = await make_remote_box(ta)
+            erb = await make_remote_box(tc)
             # Make DecryptedLocalBox
             dlb = await make_local_box(erb, basekey)
             
+            # CATTRS is a File's CustomAttributes. You
+            # can specify any you want. Here we will add
+            # a "comment" attr with a true statement :^)
+            cattrs = {'comment': b'Cats are cool B-)'}
+
+            # Preparing file for upload. This will return a PreparedFile object
+            pf = await dlb.prepare_file(open('cats.png','rb'), cattrs=cattrs)
+
+            # Uploading PreparedFile to the RemoteBox
+            # and return DecryptedRemoteBoxFile
+            drbf = await drb.push_file(pf)
+
+            # Retrieving some info from the RemoteBoxFile 
+            print('File size:', drbf.size, 'bytes')
+            print('File name:', drbf.file_name.decode())
+
+            # You can also access all information about
+            # the RemoteBoxFile you need from the LocalBox
+            dlbf = await dlb.get_file(drb.id)
+
+            print('File path:', dlbf.file_path)
+            print('Custom Attributes:', dlbf.cattrs)
+
+            # Downloading file back.
+            await drbf.download()
+
             # Close all connections
             # after work was done
             await erb.done()
@@ -277,30 +304,28 @@ Box clone
 
 .. code-block:: python
 
-    from tgbox.api import (
-        TelegramAccount,
-        get_remote_box
-    )
-
+    from tgbox.api import TelegramClient, get_remote_box
     from tgbox.keys import make_basekey, Key
+
     from asyncio import run as asyncio_run
     from getpass import getpass
 
-    phone_number = input('Your phone number: ')
+    # Phone number linked to your Telegram account
+    PHONE_NUMBER = '+10000000000' 
 
     # This two is example. Get your own at https://my.telegram.org 
     API_ID, API_HASH = 1234567, '00000000000000000000000000000000' 
 
     async def main():
-        ta = TelegramAccount(
-            phone_number = phone_number,
+        tc = TelegramClient(
+            phone_number = PHONE_NUMBER,
             api_id = API_ID, 
             api_hash = API_HASH
         )
-        await ta.connect() # Connecting with Telegram
-        await ta.send_code_request() # Requesting login code
+        await tc.connect() # Connecting with Telegram
+        await tc.send_code() # Requesting login code
 
-        await ta.sign_in(
+        await tc.log_in(
             code = int(input('Code: ')),
             password = getpass('Pass: ')
         )
@@ -308,7 +333,7 @@ Box clone
         # Please, use strength Phrase, we
         # encrypt with it your Telegram session.
         # See keys.Phrase.generate method.
-        basekey = make_basekey(b'very bad phrase')
+        basekey = make_basekey(b'example phrase here')
 
         # Retreive RemoteBox by username (entity),
         # you may also use here invite link.
@@ -322,7 +347,7 @@ Box clone
         #
         # Retreiving MainKey will give
         # FULL R/O ACCESS to your files.
-        erb = await get_remote_box(ta=ta, entity='@nontgbox_non')
+        erb = await get_remote_box(tc=tc, entity='@nontgbox_non')
 
         # Disclosed MainKey of the @nontgbox_non
         # RemoteBox. See t.me/nontgbox_non/67
@@ -339,16 +364,27 @@ Box clone
     
     asyncio_run(main())
 
-Telethon
---------
+Accessing Telegram methods
+--------------------------
 
-As Tgbox built on `Telethon <https://github.com/LonamiWebs/Telethon>`_, you can access full power of this beautiful library.
+As TGBOX built on `Telethon <https://github.com/LonamiWebs/Telethon>`_, you can access full power of this beautiful library. The ``tgbox.api.TelegramClient`` inherits from the ``telethon.TelegramClient`` and supports all of its features, adding a little more. 
 
 .. code-block:: python
         
     ... # some code was omitted
     
-    my_account = await drb.ta.TelegramClient.get_me()
-    print(my_account.first_name, my_account.id) 
+    # You can get TelegramClient object from the
+    # *RemoteBox or even from the *RemoteBoxFile
 
-- See a `Telethon documentation <https://docs.telethon.dev/>`_.
+    me = await drb.tc.get_me() # Getting your account
+    print(me.first_name, me.id) # Printing base info
+    
+    lfid = await drb.get_last_file_id() # Getting last RemoteBoxFile ID
+    drbf = await drb.get_file(drb.last_file_id()) # Getting last file by ID
+    
+    # Sending message to your SavedMessages chat!
+    await drbf.tc.send_message('me','Hello from TGBOX!')
+
+.. tip::
+    - See a `Telethon documentation <https://docs.telethon.dev/>`_.
+    - You can find a ``TelegramClient`` object in the ``tc`` property
