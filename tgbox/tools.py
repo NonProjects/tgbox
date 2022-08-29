@@ -298,6 +298,7 @@ class OpenPretender:
 
         self._buffered_bytes = b''
         self._total_size = file_size
+
         self._position = 0
 
     def concat_metadata(self, metadata: bytes) -> None:
@@ -584,7 +585,6 @@ async def search_generator(
                         break
 
             for mime in filter['mime']:
-                print(mime)
                 if in_func(mime, file.mime):
                     if indx == 1:
                         yield_result[indx] = False
