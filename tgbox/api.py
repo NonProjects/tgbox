@@ -2112,10 +2112,9 @@ class EncryptedLocalBox:
             lfi = await self._tgbox_db.FILES.select_once((
                 'SELECT ID FROM FILES ORDER BY ID DESC LIMIT 1', ()
             ))
-        except StopAsyncIteration:
-            lfi = (0,)
-        finally:
             return lfi[0]
+        except StopAsyncIteration:
+            return 0
 
     async def init(self) -> 'EncryptedLocalBox':
         """Will fetch and parse data from Database."""
