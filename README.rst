@@ -44,6 +44,8 @@ TGBOX: encrypted cloud storage based on Telegram
             erb = await make_remote_box(tc)
             # Make DecryptedLocalBox
             dlb = await make_local_box(erb, basekey)
+            # Obtain DecryptedRemoteBox
+            drb = await erb.decrypt(dlb=dlb) 
             
             # CATTRS is a File's CustomAttributes. You
             # can specify any you want. Here we will add
