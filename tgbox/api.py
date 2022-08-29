@@ -905,7 +905,7 @@ class EncryptedRemoteBox:
         """
         # Last 16 bytes of metadata is IV
         state = AES(pf.filekey, pf.metadata[-16:])
-
+        
         oe = OpenPretender(pf.file, state, pf.filesize)
         oe.concat_metadata(pf.metadata)
         try:
@@ -1657,7 +1657,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         unpacked_metadata = PackedAttributes.unpack(
             bytes(self._erbf._metadata[pattr_offset:-16])
         )
-        self._file_pos = pattr_offset + len(self._erbf._metadata)
+        self._file_pos = len(self._erbf._metadata)
         
         secret_metadata = AES(self._filekey).decrypt(
             unpacked_metadata['secret_metadata']
@@ -2862,15 +2862,14 @@ class DecryptedLocalBox(EncryptedLocalBox):
             raise LimitExceeded(
                 'Total len(metadata) must be <= 256^3-1'
             )
-        total_file_size = len(metadata) + file_size +\
-            len(PREFIX) + len(VERBYTE) + len(file_iv)
-
         metadata_bytesize = int_to_bytes(len(metadata),3)
         
         constructed_metadata =  PREFIX + VERBYTE
         constructed_metadata += metadata_bytesize 
         constructed_metadata += metadata + file_iv
 
+        total_file_size = len(constructed_metadata) + file_size
+        
         return PreparedFile(
             dlb = self, 
             file = file,
