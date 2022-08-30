@@ -98,6 +98,7 @@ __all__ = [
     'DecryptedLocalBoxDirectory',
     'EncryptedLocalBoxFile', 
     'DecryptedLocalBoxFile', 
+    'DirectoryRoot',
     'PreparedFile'
 ]
 TelegramClient.__version__ = VERSION
@@ -2952,6 +2953,15 @@ class DecryptedLocalBox(EncryptedLocalBox):
         else:
             return make_sharekey(mainkey=self._mainkey)
 
+class DirectoryRoot:
+    """
+    Type used to specify that you want to
+    access absolute local directory root.
+
+    This class doesn't have any methods,
+    please use it only for ``lbd.iterdir``
+    """
+
 class EncryptedLocalBoxDirectory:
     """
     Class that represents abstract tgbox directory. You
@@ -3023,7 +3033,7 @@ class EncryptedLocalBoxDirectory:
             return self.__repr__()
 
     def __repr__(self) -> str:
-        c = 'ELBD' if 'Enc' in self.__class__.__name__ else 'DLBD'
+        c = 'ELBD' if 'Encrypted' in self.__class__.__name__ else 'DLBD'
         return f'{c}[{self.part.decode() if c == "DLBD" else self.part}]'
     
     def __getitem__(self, _slice: slice):
@@ -3127,7 +3137,8 @@ class EncryptedLocalBoxDirectory:
         self, 
         ignore_dirs: bool=False, 
         ignore_files: bool=False, 
-        cache_preview: bool=True) -> Union[
+        cache_preview: bool=True,
+        ppid: Optional[Union[bytes, DirectoryRoot]] = None) -> Union[
             'EncryptedLocalBoxFile',
             'DecryptedLocalBoxFile',
             'EncryptedLocalBoxDirectory',
@@ -3150,30 +3161,44 @@ class EncryptedLocalBoxDirectory:
             cache_preview (``bool``, optional):
                 Cache preview in class or not. 
                 ``True`` by default.
+
+            ppid (``bytes``, ``DirectoryRoot``):
+                Path PartID to iterate in. Will iterate over
+                absolute LocalBox directory root if it's 
+                ``DirectoryRoot``. Will use ``self.part_id``
+                if not specified (by default).
         """
         assert not all((ignore_files, ignore_dirs)), 'Specify at least one'
 
+        if isinstance(ppid, DirectoryRoot) or ppid is DirectoryRoot:
+            part_id = None
+        elif ppid:
+            part_id = ppid
+        else:
+            part_id = self._part_id
+
         if not ignore_dirs:
             folders = await self._tgbox_db.PATH_PARTS.execute((
-                'SELECT * FROM PATH_PARTS WHERE PARENT_PART_ID=?', 
-                (self._part_id,)
+                'SELECT * FROM PATH_PARTS WHERE PARENT_PART_ID IS ?', 
+                (part_id,)
             ))
             async for folder_row in folders:
                 if isinstance(self._lb, DecryptedLocalBox):
                     yield await EncryptedLocalBoxDirectory(self._tgbox_db,
                         folder_row[1]).decrypt(self._lb._mainkey)
                 else:
-                    yield await EncryptedLocalBoxDirectory(folders[1]).init()
+                    yield await EncryptedLocalBoxDirectory(self._tgbox_db,
+                        folder_row[1]).init()
         
         if not ignore_files:
             files = await self._tgbox_db.FILES.execute((
-                'SELECT * FROM FILES WHERE PPATH_HEAD = ?', 
-                (self._part_id,)
+                'SELECT * FROM FILES WHERE PPATH_HEAD IS ?', 
+                (part_id,)
             ))
             async for file_row in files:
                 yield await self._lb.get_file(
                     file_row[0], cache_preview=cache_preview)
-    
+
     async def delete(self) -> None: 
         """
         Will delete this folder with all files from your LocalBox.
