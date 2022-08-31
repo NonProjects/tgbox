@@ -3198,6 +3198,29 @@ class EncryptedLocalBoxDirectory:
             async for file_row in files:
                 yield await self._lb.get_file(
                     file_row[0], cache_preview=cache_preview)
+    
+    async def get_files_total(self) -> int:
+        """Will return a total number of files in this directory"""
+        cursor = await self._tgbox_db.FILES.execute((
+            f'SELECT count(*) FROM FILES WHERE PPATH_HEAD IS ?',
+            (self.part_id,))
+        )
+        return (await cursor.fetchone())[0]
+
+    async def get_folders_total(self) -> int:
+        """Will return a total number of folders in this directory"""
+        cursor = await self._tgbox_db.PATH_PARTS.execute((
+            f'SELECT count(*) FROM PATH_PARTS WHERE PARENT_PART_ID IS ?',
+            (self.part_id,))
+        )
+        return (await cursor.fetchone())[0]
+
+    async def get_contents_total(self) -> int:
+        """Will return a total number of contents in this directory"""
+        total_files = await self.get_files_total()
+        total_folders = await self.get_folders_total()
+        
+        return total_files + total_folders
 
     async def delete(self) -> None: 
         """
