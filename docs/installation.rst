@@ -22,18 +22,19 @@ Optional dependencies
 ---------------------
 
 - Library can work without ``pycryptodome``, with ``pyaes``, but this will be **much** slower.
-- `ECDSA <https://github.com/tlsfuzzer/python-ecdsa>`_ will be faster with ``gmpy2``. You can install it with `pip <https://pip.pypa.io/en/stable/installation/>`_.
-- `Telethon <https://github.com/LonamiWebs/Telethon>`_ may need `LibSSL <https://github.com/openssl/openssl>`_ to work faster. 
 - With `FFmpeg <https://ffmpeg.org/download.html>`_ library can make previews for media files and extract duration to attach it to the *RemoteBoxFile*.
 
 
 Install last Telethon updates
 -----------------------------
-.. epigraph::
+
+.. note::
    Updates for v1.24 was released on PyPi as *v1.25.0* at Aug 30, 2022. We already include it in our requirements, so you may **ignore** this chapter if this version is enough for you.
 
+By default (on ``pip install tgbox``) we download ``telethon`` from the PyPi, but this package on PyPi is often **outdated** and can not support new Telegram features (like sending 4GB files), this can throw you in some strange errors. You recommended to install the Telethon separately, from the v1.24 branch, official GitHub page.
+
 .. warning::
-   By default (on ``pip install tgbox``) we download ``telethon`` from the PyPi, but this package on PyPi is often **outdated** and can not support new Telegram features (like sending 4GB files), this can throw you in some strange errors. You recommended to install the Telethon separately, from the v1.24 branch, official GitHub page. Please make sure to **check last commits** before you install from GitHub! The release of the ``telethon`` on PyPi is static, so it's always safe-to-install. GitHub branch is dynamic, so there is a **really little chance** that it will be attacked by some bad commits and your Telegram account will be compromised. A **very little chance**, but **not** zero.
+   Please make sure to **check last commits** before you install from GitHub! The release of the ``telethon`` on PyPi is static, so it's always safe-to-install. GitHub branch is dynamic, so there is a **really little chance** that it will be attacked by some bad commits and your Telegram account will be compromised. A **very little chance**, but **not** zero.
 
 .. code-block:: console
    
