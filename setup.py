@@ -33,8 +33,8 @@ setup(
     extras_require = {
         'fast': [
             'pycryptodome==3.12.0',
-            'cryptg==0.2.post4',
-            'regex==2021.11.10'
+            'cryptg==0.3.1',
+            'regex==2022.8.17'
         ]
     },
     classifiers = [
