@@ -24,7 +24,6 @@ setup(
         'telethon==1.25.0',
         'ecdsa==0.16.1',
         'filetype==1.0.8',
-        'sphinx-rtd-theme==1.0.0'
     ],
     keywords = [
         'Telegram', 'Cloud-Storage', 'Cloud',
@@ -35,7 +34,8 @@ setup(
             'cryptography',
             'cryptg==0.3.1',
             'regex==2022.8.17'
-        ]
+        ],
+        'doc': ['sphinx-rtd-theme==1.0.0']
     },
     classifiers = [
         'Development Status :: 4 - Beta',

@@ -105,7 +105,7 @@ You can also build docs from the source
 .. code-block:: console
 
    git clone https://github.com/NonProject/tgbox --branch=indev
-   cd tgbox && python3 -m pip install .[fast] # Install TGBOX
+   cd tgbox && python3 -m pip install .[doc] # Install with doc 
    cd docs && make html && firefox _build/html/index.html
 
 Third party & thanks to
