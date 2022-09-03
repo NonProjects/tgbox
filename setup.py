@@ -21,7 +21,7 @@ setup(
     
     install_requires = [
         'aiosqlite==0.17.0',
-        'telethon==1.24.0',
+        'telethon==1.25.0',
         'ecdsa==0.16.1',
         'filetype==1.0.8',
         'sphinx-rtd-theme==1.0.0'
