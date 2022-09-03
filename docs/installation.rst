@@ -21,8 +21,8 @@ Clone from GitHub
 Optional dependencies
 ---------------------
 
-- Library can work without ``pycryptodome``, with ``pyaes``, but this will be **much** slower.
-- With `FFmpeg <https://ffmpeg.org/download.html>`_ library can make previews for media files and extract duration to attach it to the *RemoteBoxFile*.
+- Library can work without `cryptography <https://github.com/pyca/cryptography>`_, with ``pyaes`` and ``ecdsa`` but this will be **much** slower and **not** so secure. Pure Python is **not recommended** for use by end-users, but test-only is OK!
+- With `FFmpeg <https://ffmpeg.org/download.html>`_ library can make previews for media files and extract duration to attach it to the *RemoteBoxFile*. You should add it to your system's ``PATH``, (if the OS didn't do it for you) we will call it as ``ffmpeg`` (``tgbox.defaults.FFMPEG``) via ``subprocess``.
 
 
 Install last Telethon updates
