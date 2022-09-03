@@ -32,7 +32,7 @@ setup(
     ],
     extras_require = {
         'fast': [
-            'pycryptodome==3.12.0',
+            'cryptography',
             'cryptg==0.3.1',
             'regex==2022.8.17'
         ]

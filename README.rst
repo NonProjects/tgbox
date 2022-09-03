@@ -118,7 +118,7 @@ Third party & thanks to
 - `Ecdsa <https://github.com/tlsfuzzer/python-ecdsa>`_ (`LICENSE <https://github.com/tlsfuzzer/python-ecdsa/blob/master/LICENSE>`_)
 - `Filetype <https://github.com/h2non/filetype.py>`_ (`MIT <https://github.com/h2non/filetype.py/blob/master/LICENSE>`_)
 - `Cryptg <https://github.com/cher-nov/cryptg>`_ (`LICENSE <https://github.com/cher-nov/cryptg/blob/master/LICENSE.txt>`_)
-- `Pycryptodome <https://github.com/Legrandin/pycryptodome>`_ (`LICENSE <https://github.com/Legrandin/pycryptodome/blob/master/LICENSE.rst>`_)
+- `Cryptography <https://github.com/pyca/cryptography>`_ (`LICENSE <https://github.com/pyca/cryptography/blob/main/LICENSE>`_)
 
 Resources
 ---------
