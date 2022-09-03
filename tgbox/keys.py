@@ -7,8 +7,7 @@ from hashlib import sha256
 try:
     from hashlib import scrypt
 except ImportError:
-    # This is for ReadTheDocs. Maybe TODO.
-    from Crypto.Protocol.KDF import scrypt
+    pass # This is for ReadTheDocs. Ignore it.
 
 from typing import (
     AsyncGenerator, 
@@ -18,16 +17,21 @@ from base64 import (
     urlsafe_b64encode,
     urlsafe_b64decode 
 )
-from ecdsa.ecdh import ECDH
-from ecdsa.curves import SECP256k1
-from ecdsa.keys import SigningKey, VerifyingKey
+from .errors import IncorrectKey
+from .crypto import AESwState as AES, FAST_ENCRYPTION
 
 from .defaults import (
     SCRYPT_N, SCRYPT_R, SCRYPT_P, SCRYPT_SALT,
     SCRYPT_DKLEN, WORDS_PATH
 )
-from .crypto import AESwState as AES
-from .errors import IncorrectKey
+if FAST_ENCRYPTION: # Is faster and more secure
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.serialization import PublicFormat
+    from cryptography.hazmat.primitives.serialization import Encoding
+else:
+    from ecdsa.ecdh import ECDH
+    from ecdsa.curves import SECP256k1
+    from ecdsa.keys import SigningKey, VerifyingKey
 
 __all__ = [
     'Phrase', 
@@ -346,13 +350,13 @@ def make_requestkey(
     
     Alice has file in her Box which she wants to send to Bob.
     Then: A sends file to B. B forwards file to his Box, takes
-    FileSalt from A File and ``mainkey`` of his Box and (i.e) calls
-    ``make_requestkey(mainkey=mainkey, file_salt=file_salt)``.
+    FileSalt from A File and ``mainkey`` of his Box and calls
+    ``make_requestkey(key=mainkey, file_salt=file_salt)``.
     
     RequestKeys is compressed pubkeys of ECDH on secp256k1, 
     B makes privkey with ``sha256(mainkey + salt)`` & exports pubkey
-    to make a shared secret bytes (key, with which A will be
-    encrypt her filekey/mainkey, encrypted (file/main)key 
+    to make a shared secret bytes (key, with which A will
+    encrypt her filekey/mainkey. The encrypted (file/main)key 
     is called ``ShareKey``. Use help on ``make_sharekey``.).
     
     B sends received ``RequestKey`` to A. A makes ``ShareKey``
@@ -361,7 +365,7 @@ def make_requestkey(
     No one except Alice and Bob will have filekey. If Alice want
     to share entire Box (mainkey) with Bob, then Bob creates
     slightly different ``RequestKey`` with same function:
-    ``make_requestkey(basekey=basekey, box_salt=box_salt)``.
+    ``make_requestkey(key=basekey, box_salt=box_salt)``.
     
     To get BoxSalt Alice should only add Bob to her Box(``Channel``).
     
@@ -391,11 +395,20 @@ def make_requestkey(
         )
     salt = file_salt if file_salt else box_salt
     
-    skey = SigningKey.from_string(
-        sha256(key + salt).digest(),
-        curve=SECP256k1, hashfunc=sha256
-    )
-    vkey = skey.get_verifying_key()._compressed_encode()
+    if FAST_ENCRYPTION:
+        skey_data = int.from_bytes(sha256(key + salt).digest(), 'big')
+        skey = ec.derive_private_key(skey_data, ec.SECP256K1())
+
+        vkey = skey.public_key().public_bytes(
+            encoding=Encoding.X962, 
+            format=PublicFormat.CompressedPoint)
+    else:
+        skey = SigningKey.from_string(
+            sha256(key + salt).digest(),
+            curve=SECP256k1, hashfunc=sha256
+        )
+        vkey = skey.get_verifying_key()._compressed_encode()
+
     return RequestKey(vkey)
 
 def make_sharekey(
@@ -471,30 +484,48 @@ def make_sharekey(
     else:
         salt, key = file_salt, filekey
     
-    skey = SigningKey.from_string(
-        sha256(key + salt).digest(),
-        curve=SECP256k1, hashfunc=sha256
-    )
-    b_point = VerifyingKey._from_compressed(
-        requestkey.key, curve=SECP256k1
-    )
-    b_pubkey = VerifyingKey.from_public_point(
-        b_point, curve=SECP256k1, hashfunc=sha256
-    )
-    ecdh = ECDH(
-        curve=SECP256k1, 
-        private_key=skey, 
-        public_key=b_pubkey
-    )
-    enc_key = ecdh.generate_sharedsecret_bytes()
+    if FAST_ENCRYPTION:
+        skey_data = int.from_bytes(sha256(key + salt).digest(), 'big')
+        skey = ec.derive_private_key(skey_data, ec.SECP256K1())
+        
+        vkey = skey.public_key().public_bytes(
+            encoding=Encoding.X962, 
+            format=PublicFormat.CompressedPoint
+        )
+        b_pubkey = ec.EllipticCurvePublicKey.from_encoded_point(
+            curve=ec.SECP256K1(), 
+            data=requestkey.key
+        )
+        enc_key = skey.exchange(
+            algorithm=ec.ECDH(),
+            peer_public_key=b_pubkey)
+    else:
+        skey = SigningKey.from_string(
+            sha256(key + salt).digest(),
+            curve=SECP256k1, hashfunc=sha256
+        )
+        vkey = skey.get_verifying_key()._compressed_encode()
+
+        b_point = VerifyingKey._from_compressed(
+            requestkey.key, curve=SECP256k1
+        )
+        b_pubkey = VerifyingKey.from_public_point(
+            b_point, curve=SECP256k1, hashfunc=sha256
+        )
+        ecdh = ECDH(
+            curve=SECP256k1, 
+            private_key=skey, 
+            public_key=b_pubkey
+        )
+        enc_key = ecdh.generate_sharedsecret_bytes()
+
     iv = sha256(requestkey.key).digest()[:16]
 
     encrypted_key = AES(enc_key, iv).encrypt(
         key.key, pad=False, concat_iv=False
     )
-    return ShareKey(encrypted_key +\
-        skey.get_verifying_key()._compressed_encode()
-    )
+    return ShareKey(encrypted_key + vkey)
+
 def make_importkey(
         key: Union[MainKey, BaseKey], 
         sharekey: ShareKey, *,
@@ -546,22 +577,35 @@ def make_importkey(
             requestkey = make_requestkey(
                 key, box_salt=box_salt, file_salt=file_salt
             )
-            skey = SigningKey.from_string(
-                sha256(key + salt).digest(),
-                curve=SECP256k1, hashfunc=sha256
-            )
-            a_point = VerifyingKey._from_compressed(
-                sharekey[32:], curve=SECP256k1
-            )
-            a_pubkey = VerifyingKey.from_public_point(
-                a_point, curve=SECP256k1, hashfunc=sha256
-            )
-            ecdh = ECDH(
-                curve=SECP256k1, 
-                private_key=skey, 
-                public_key=a_pubkey
-            )
-            dec_key = ecdh.generate_sharedsecret_bytes()
+            if FAST_ENCRYPTION:
+                skey_data = int.from_bytes(sha256(key + salt).digest(), 'big')
+                skey = ec.derive_private_key(skey_data, ec.SECP256K1())
+                
+                a_pubkey = ec.EllipticCurvePublicKey.from_encoded_point(
+                    curve=ec.SECP256K1(), 
+                    data=sharekey[32:]
+                )
+                dec_key = skey.exchange(
+                    algorithm=ec.ECDH(),
+                    peer_public_key=a_pubkey)
+            else:
+                skey = SigningKey.from_string(
+                    sha256(key + salt).digest(),
+                    curve=SECP256k1, hashfunc=sha256
+                )
+                a_point = VerifyingKey._from_compressed(
+                    sharekey[32:], curve=SECP256k1
+                )
+                a_pubkey = VerifyingKey.from_public_point(
+                    a_point, curve=SECP256k1, hashfunc=sha256
+                )
+                ecdh = ECDH(
+                    curve=SECP256k1, 
+                    private_key=skey, 
+                    public_key=a_pubkey
+                )
+                dec_key = ecdh.generate_sharedsecret_bytes()
+
             iv = sha256(requestkey.key).digest()[:16]
 
             decrypted_key = AES(dec_key, iv).decrypt(
