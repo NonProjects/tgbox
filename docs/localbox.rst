@@ -7,12 +7,12 @@ The *LocalBox* store **metadata** of the uploaded to the :doc:`remotebox` *Remot
    ``DecryptedLocalBox`` can be fully restored from ``DecryptedRemoteBox``.
 
 Tables
-======
+------
 
 *LocalBox* have 3 tables: *BOX_DATA*, *FILES*, *PATH_PARTS*.
 
 BOX_DATA
---------
+^^^^^^^^
 
 *BOX_DATA* store information about *Box*, *Session*, etc.
 
@@ -31,7 +31,7 @@ BLOB           BLOB        BLOB     BLOB|NULL BLOB    BLOB   BLOB
 - ``API_HASH`` -- *Encrypted by MainKey your API_HASH from the my.telegram.org site*
 
 FILES
------
+^^^^^
 
 *FILES* store information about uploaded to the *RemoteBox* files.
 
@@ -49,7 +49,7 @@ INT              BLOB        BLOB       BLOB|NULL BLOB     BLOB|NULL
     - ``UPDATED_METADATA`` is a user changes of ``METADATA``, encrypted and packed with the *PackedAttributes* algorithm
 
 PATH_PARTS
-----------
+^^^^^^^^^^
 
 *PATH_PARTS* store every path part in encrypted form with their IDs.
 
@@ -60,7 +60,7 @@ BLOB     BLOB    BLOB|NULL
 ======== ======= ==============
 
 How does we store file paths
-============================
+----------------------------
 
 Every file in TGBOX (as well as in any OS) must have a *file path*. TGBOX *should* accept any path that ``pathlib.Path`` can support: the UNIX-like and Windows-like. So, let's imagine that we have an abstract file called *file.txt*. It's absolute (Unix-like) path will be ``/home/user/Documents``. The *RemoteBoxFile* will store its path in a file metadata as is. However, in the *LocalBox* we will store it more efficiently. See a schema below
 

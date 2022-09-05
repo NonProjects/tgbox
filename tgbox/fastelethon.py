@@ -1,13 +1,12 @@
 """
-Copied from github.com/tulir/mautrix-telegram/
+Copied from Mautrix-Telegram
+    github.com/tulir/mautrix-telegram/
 
-Copyright (C) 2021 Tulir Asokan.
+Copied again from Painor GitHub
+    gist.github.com/painor/7e74de80ae0c819d3e9abcf9989a8dd6
 
-Copied again from gist.github.com/painor/7e74de80ae0c819d3e9abcf9989a8dd6
-
-This file was patched for TGBOX project (github.com/NonProjects/tgbox)
-
-and may not work as you expected in your libraries.
+| This file was patched for TGBOX project (github.com/NonProjects/tgbox)
+| and may not work as you expected in your libraries.
 
 Big thanks to all contributors of this module.
 """

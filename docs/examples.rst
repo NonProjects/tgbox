@@ -382,11 +382,11 @@ As TGBOX built on `Telethon <https://github.com/LonamiWebs/Telethon>`_, you can 
     print(me.first_name, me.id) # Printing base info
     
     lfid = await drb.get_last_file_id() # Getting last RemoteBoxFile ID
-    drbf = await drb.get_file(drb.last_file_id()) # Getting last file by ID
+    drbf = await drb.get_file(lfid) # Getting last file by ID
     
     # Sending message to your SavedMessages chat!
     await drbf.tc.send_message('me','Hello from TGBOX!')
 
 .. tip::
     - See a `Telethon documentation <https://docs.telethon.dev/>`_.
-    - You can find a ``TelegramClient`` object in the ``tc`` property
+    - You can find a ``TelegramClient`` object in the ``tc`` property.

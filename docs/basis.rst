@@ -14,28 +14,32 @@ Abstract Box
 .. note::
     More detailed in :doc:`remotebox` and :doc:`localbox`
 
-- The *Box* is something that have *BoxSalt* — 32 (usually random) bytes. With this salt and user phrase we make encryption key (see :ref:`Encryption keys`). 
+- The *Box* is something that have *BoxSalt* — 32 (usually random) bytes. With this salt and user phrase we make encryption key (see :ref:`Encryption keys hierarchy`). 
 
 - *Box* splits into two types, — the *Remote* and *Local*. They have a two states, — the *Encrypted* and *Decrypted*. 
 
 - *RemoteBox* store encrypted files and their metadata. *LocalBox* store only metadata.
 
-- *LocalBox* can be fully restored from the *RemoteBox* if you have a decryption key.
+- *LocalBox* can be fully restored from the *RemoteBox* if you have a decryption key (but this will be slow if you uploaded a big amount of files).
 
-Encryption keys 
----------------
+Encryption keys hierarchy
+-------------------------
 
-1. We start from user's *Phrase* that can be generated via ``Phrase.generate()``. Then we make the ``BaseKey``, with ``make_basekey``. That's a *Scrypt* function, by default configured to use 1GB of RAM for key creation. We use salt from ``defaults.SCRYPT_SALT`` if not specified. If ``SCRYPT_SALT`` is specified, it may be reffered as 2FA — obtaining only *Phrase* will be not enough for *Box* decryption, you should present a scrypt *salt* you chose.
+0. The user should provide a password to his Box. We can recommend him to use inbuilt in TGBOX *Phrase*, which is 12 random mnemonic words that can be generated via ``tgbox.keys.Phrase.generate()``. With the user's phrase (or password) we make the first encryption Key, – ``BaseKey``;
 
-2. Having ``BaseKey``, we make a *RemoteBox* and receive *BoxSalt*. Calling ``make_mainkey(basekey, box_salt)``, we receive the ``MainKey``. With *MainKey* we make a *LocalBox* (see :doc:`localbox`).
+1. By default in API for ``BaseKey`` creation we use the ``tgbox.keys.make_basekey`` function, which utilize a *Scrypt* KDF under the hood. It's configured to use a **1GB** of RAM for key creation for a couple of seconds. We use such configuration for purpose of making user's phrase bruteforce **a lot** harder. The Scrypt KDF requires *salt*, and we use the one defined in the ``defaults.SCRYPT_SALT``. Specifying different scrypt_salt on ``BaseKey`` creation will make bruteforce impossible if you will keep it secret. In the end we hash a Scrypt result with a ``sha256``. Please note that you can use any KDF you want, we don't force developers to use Scrypt, just make sure that resulted key is 32-byte long and wrapped in the ``tgbox.keys.BaseKey`` class. We see a Scrypt and our configuration as a safe and good standart. We use ``BaseKey`` for encrypting Telegram session and making the next key: ``MainKey``;
 
-3. When we want to upload file into the Box, we make a *FileSalt* — random 32 bytes. With ``make_filekey(mainkey, file_salt)`` we receive the ``FileKey``. *FileKey* encrypts file and its metadata.
+2. In the next step user starts a process of the *Box* creation. Every *Box* contains a so-called *BoxSalt* – 32 random (or specified by user) bytes. We concatenate ``BaseKey`` with the *BoxSalt* and make a SHA256: ``sha256(basekey + box_salt)``, the result of this operation is ``MainKey``. We use this key to encrypt a basic data of :doc:`localbox` as well as ``file_path`` attribute of *RemoteBoxFile* on pushing to the :doc:`remotebox`. With the ``MainKey`` we create a ``FileKey``;
+
+3. When user wants to upload file to the :doc:`remotebox` he prepares it with the ``DecryptedLocalBox.prepare_file`` and then uses ``DecryptedRemoteBox.push_file`` with resulted ``PreparedFile`` object. While preparing, the code generates a *FileSalt* – 32 random bytes. Then (as with ``MainKey`` creation) we concatenate the ``MainKey`` and *FileSalt* and make the SHA256 hash of result: ``sha256(mainkey + file_salt)``. This is ``FileKey``. We use it to encrypt all of the *RemoteBoxFile* metadata attributes (except ``file_path``).
 
 So, there is **three** encryption Keys: *BaseKey*, *MainKey*, *FileKey*.
 
 .. note::
     - We're always encrypt Telegram session with ``BaseKey``, so attacker can't decrypt it even with ``MainKey``.
-    - It's impossible to restore *MainKey* from *FileKey*, so exposing it will **only** give access to file, with which this key is associated.
+    - The *MainKey* is used to generate (and restore) a unique ``FileKey`` for each candidate file.
+    - It's impossible to extract *MainKey* from *FileKey*, so exposing it will **only** give access to file, with which this key is associated.
+    - See also ``make_basekey``, ``make_mainkey`` and ``make_filekey`` functions in the ``tgbox.keys`` module.
 
 Transfer keys & File sharing
 ----------------------------
@@ -149,7 +153,7 @@ Abstract tgbox file of **v1.X** has **13** attributes:
     ``FILEKEY`` is a *LocalBox*-only field. It will be non-empty if you imported ``DecryptedRemoteBoxFile`` from other's *RemoteBox*. In this case *FILEKEY* will be encrypted with ``MainKey`` of the recipient *Box*.
 
 .. note::
-    We pack file attributes into metadata. Its size defined in the ``defaults.METADATA_MAX`` variable. While by default its limited to 1MB, it can be increased up to 256^3-1 bytes. Started from the v1.0 metadata attributes by itself doesn't have any limit (except FILE_PATH, its limit is 4KiB) and even for *CATTRS*. Just together they shouldn't be more than *METADATA_MAX*. Details about how we pack them in :doc:`remotebox`
+   We pack file attributes into the *metadata*. The max metadata bytelength is defined in the ``defaults.METADATA_MAX`` variable. By default *METADATA_MAX* is limited to 1MB, however, it can be increased up to 256^3-1 bytes (16MiB). Prior to v1.0 attributes have had own limits, but this isn't the case for the new version. Started from the v1.0 only ``FILE_PATH`` have separate limit defined in the ``defaults.FILE_PATH_MAX``, - 4096 bytes by default. Packed file attributes bytelength **shouldn't** be more than *METADATA_MAX*. See also :doc:`remotebox`.
 
 Versioning
 ----------
@@ -161,4 +165,4 @@ We offer **two** Git branches:
 
 The most **stable** releases should be presented **on the PyPi**, and can be installed via ``pip``. This rule doesn't work for releases < 1.0 because early we used a different versioning system.
 
-The ``VERBYTE`` define compatibility. While it's not incremented, all new updates **MUST** support previous file formats, methods, etc. Except *Version byte* there can be lower versions, like ``1.1``, ``1.1.1``, etc. Verbyte=``b'\x00'`` and Verbyte=``b'\x01'`` shouldn't be compatible, otherwise we can use a lower version.
+The ``VERBYTE`` define compatibility. While it's not incremented, all new updates **MUST** support previous file formats, methods, etc. Except *Version byte* there can be lower versions, like ``1.1``, ``1.1.1``, etc. Verbyte= ``b'\x00'`` and Verbyte= ``b'\x01'`` **shouldn't** be compatible, otherwise we can use a lower version, i.e ``1.1``.

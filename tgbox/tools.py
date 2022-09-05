@@ -314,9 +314,9 @@ class OpenPretender:
         """
         Returns ``size`` bytes from async Generator.
 
-        This function is async only because of 
-        Telegram ``File`` uploading feature. You
-        can use ``tgbox.sync`` in your code for reading.
+        This method is async only because we use
+        ``File`` uploading from the async library. You
+        can use ``tgbox.sync`` in your sync code for reading.
         
         Arguments:
             size (``int``):
@@ -412,7 +412,7 @@ def ppart_id_generator(path: Path, mainkey: MainKey) -> Generator[tuple, None, N
     """
     This generator will iterate over path parts and
     yield their unique IDs. We will use this to better
-    navigate over _abstract_ Folders in the LocalBox.
+    navigate over *abstract* Folders in the LocalBox.
 
     The path **shouldn't** contain a file name,
     otherwise directory will contain it as folder.

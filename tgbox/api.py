@@ -2182,8 +2182,8 @@ class EncryptedLocalBox:
                 else will start from "root" PIDs.
 
             ignore_files (``bool``, optional):
-                Will return LocalBoxFile associated 
-                with LocalBoxDirectory if ``False``.
+                Will **not** return LocalBoxFile associated 
+                with the *LocalBoxDirectory* if ``False``.
         """
         sfpid = (sfpid,) if sfpid else []
 
