@@ -365,7 +365,7 @@ def make_requestkey(
     No one except Alice and Bob will have filekey. If Alice want
     to share entire Box (mainkey) with Bob, then Bob creates
     slightly different ``RequestKey`` with same function:
-    ``make_requestkey(key=basekey, box_salt=box_salt)``.
+    ``make_requestkey(key=mainkey, box_salt=box_salt)``.
     
     To get BoxSalt Alice should only add Bob to her Box(``Channel``).
     
