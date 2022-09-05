@@ -166,7 +166,7 @@ class SearchFilter:
     def __init__(self, **kwargs):
         self.in_filters = {
             'cattrs':    _TypeList(dict),
-            'file_path': _TypeList((Path, str)),
+            'file_path': _TypeList(str),
             'file_name': _TypeList(bytes),
             'file_salt': _TypeList(bytes),
             'verbyte':   _TypeList(bytes),   
