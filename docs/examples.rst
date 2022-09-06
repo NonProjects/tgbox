@@ -63,7 +63,7 @@ Logging in & Box creation
 
             # Retrieving some info from the RemoteBoxFile 
             print('File size:', drbf.size, 'bytes')
-            print('File name:', drbf.file_name.decode())
+            print('File name:', drbf.file_name)
 
             # You can also access all information about
             # the RemoteBoxFile you need from the LocalBox
@@ -127,7 +127,7 @@ One upload
             # Retrieving some info from the RemoteBoxFile 
 
             print('File size:', drbf.size, 'bytes')
-            print('File name:', drbf.file_name.decode())
+            print('File name:', drbf.file_name)
 
             # You can also access all information about
             # the RemoteBoxFile you need from the LocalBox

@@ -1248,10 +1248,7 @@ class EncryptedRemoteBoxFile:
             raise NotInitializedError(
                 'Must be initialized before hashing'
             )
-        if isinstance(self, DecryptedRemoteBoxFile): 
-            return hash((self._id, self._file_name))
-        else:
-            return hash((self._id, self._file_file_name))
+        return hash((self._id, self._file_file_name))
     
     def __eq__(self, other) -> bool:
         return all((
@@ -1338,7 +1335,7 @@ class EncryptedRemoteBoxFile:
     @property
     def prefix(self) -> Union[bytes, None]:
         """Returns file prefix or ``None`` if not initialized"""
-        return self._file_name
+        return self._prefix
     
     def __raise_initialized(self) -> NoReturn:
         if not self.initialized:
@@ -1597,7 +1594,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._file_path = file_path
 
     @property
-    def file_name(self) -> Union[bytes, None]:
+    def file_name(self) -> Union[str, None]:
         """Returns file name or ``None`` if not initialized."""
         return self._file_name
 
@@ -1676,7 +1673,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         self._duration = bytes_to_int(secret_metadata['duration'])
         self._size = bytes_to_int(secret_metadata['file_size'])
-        self._file_name = secret_metadata['file_name']
+        self._file_name = secret_metadata['file_name'].decode()
         self._cattrs = PackedAttributes.unpack(secret_metadata['cattrs'])
         self._mime = secret_metadata['mime'].decode()
 
@@ -1787,9 +1784,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 path = str(Path('@', path.lstrip('/')))
             #
             if hide_name:
-                name = prbg(16).hex() + Path(self._file_name.decode()).suffix
+                name = prbg(16).hex() + Path(self._file_name).suffix
             else:
-                name = self._file_name.decode()
+                name = self._file_name
             
             outfile = Path(outfile, path, name.lstrip('/'))
             outfile.parent.mkdir(exist_ok=True, parents=True)
@@ -3596,6 +3593,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         for attr in self.__required_metadata:
             setattr(self, f'_{attr}', secret_metadata[attr])
 
+        self._file_name = self._file_name.decode()
+
         if not cache_preview:
             self._preview = b''
 
@@ -3638,6 +3637,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 if k in self.__required_metadata:
                     if k == 'cattrs':
                         setattr(self, f'_{k}', PackedAttributes.unpack(v))
+            
+                    elif k == 'file_name':
+                        setattr(self, f'_{k}', v.decode())
 
                     elif k == 'efile_path':
                         if self._mainkey and not self._efilekey:
@@ -3682,7 +3684,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         return self._file_path
 
     @property 
-    def file_name(self) -> bytes:
+    def file_name(self) -> str:
         """Returns file name."""
         return self._file_name
 
