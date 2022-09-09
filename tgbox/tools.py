@@ -13,42 +13,33 @@ from pprint import pformat
 from hashlib import sha256
 from random import randrange
 
-from subprocess import (
-    PIPE, STDOUT, 
-    run as subprocess_run
-)
-from typing import (
-    BinaryIO, List, Union, 
-    Optional, Dict, Generator,
-    AsyncGenerator
-)
+from subprocess import PIPE, run as subprocess_run
+from typing import BinaryIO, Optional, Dict, Generator
+
 from io import BytesIO
 from os import PathLike
 from pathlib import Path
 from functools import partial
-from dataclasses import dataclass
 from os import remove as remove_file
 
 from .errors import (
-    ConcatError, 
-    PreviewImpossible, 
+    ConcatError,
+    PreviewImpossible,
     DurationImpossible
 )
+from .defaults import FFMPEG
 from .keys import FileKey, MainKey
 from .crypto import AESwState as AES
-from .defaults import METADATA_MAX, FFMPEG
-
 
 __all__ = [
-    'prbg', 'anext', 
-    'SearchFilter', 
+    'prbg', 'anext',
+    'SearchFilter',
     'OpenPretender',
-    'PackedAttributes'
-    'int_to_bytes', 
-    'bytes_to_int', 
-    'get_media_duration', 
-    'make_media_preview', 
-    'make_image_preview',
+    'PackedAttributes',
+    'int_to_bytes',
+    'bytes_to_int',
+    'get_media_duration',
+    'make_media_preview',
     'ppart_id_generator'
 ]
 anext = lambda agen: agen.__anext__()
@@ -60,7 +51,7 @@ class _TypeList:
 
     You can specify multiply types with
     ``tuple``, e.g: ``_TypeList((int, float))``
-    
+
     * The list will try to change value type if \
       ``isinstance(value, type_) is False`` to \
       ``value = type_(value)``. Otherwise ``TypeError``.
@@ -68,14 +59,14 @@ class _TypeList:
     def __init__(self, type_, *args):
         self.type = type_ if isinstance(type_, tuple) else (type_,)
         self.list = [self.__check_type(i) for i in args]
-    
+
     def __bool__(self):
         return bool(self.list)
 
     def __iter__(self):
         for i in self.list:
             yield i
-    
+
     def __getitem__(self, sl):
         return self.list[sl]
 
@@ -110,7 +101,7 @@ class _TypeList:
 
 class SearchFilter:
     """
-    Container that filters search in ``DecryptedRemoteBox`` or     
+    Container that filters search in ``DecryptedRemoteBox`` or
     ``DecryptedLocalBox``.
 
     The ``SearchFilter`` has **two** filters: the **Include**
@@ -161,7 +152,7 @@ class SearchFilter:
 
         * **mime**     *str*:  File mime type
         * **exported** *bool*: Yield only exported files
-        * **re**       *bool*: re_search for every ``bytes`` 
+        * **re**       *bool*: re_search for every ``bytes``
     """
     def __init__(self, **kwargs):
         self.in_filters = {
@@ -169,21 +160,21 @@ class SearchFilter:
             'file_path': _TypeList(str),
             'file_name': _TypeList(bytes),
             'file_salt': _TypeList(bytes),
-            'verbyte':   _TypeList(bytes),   
+            'verbyte':   _TypeList(bytes),
             'id':        _TypeList(int),
-            'min_id':    _TypeList(int),   
-            'max_id':    _TypeList(int),  
-            'min_size':  _TypeList(int), 
+            'min_id':    _TypeList(int),
+            'max_id':    _TypeList(int),
+            'min_size':  _TypeList(int),
             'max_size':  _TypeList(int),
-            'min_time':  _TypeList((int,float)),  
-            'max_time':  _TypeList((int,float)), 
+            'min_time':  _TypeList((int,float)),
+            'max_time':  _TypeList((int,float)),
             'mime':      _TypeList(str),
-            'exported':  _TypeList(bool), 
-            're':        _TypeList(bool), 
+            'exported':  _TypeList(bool),
+            're':        _TypeList(bool),
         }
         self.ex_filters = deepcopy(self.in_filters)
         self.include(**kwargs)
-    
+
     def __repr__(self) -> str:
         return pformat({
             'include': self.in_filters,
@@ -197,7 +188,7 @@ class SearchFilter:
             else:
                 self.in_filters[k].append(v)
         return self
-    
+
     def exclude(self, **kwargs) -> 'SearchFilter':
         """Will extend excluded filters"""
         for k,v in kwargs.items():
@@ -217,16 +208,16 @@ class PackedAttributes:
 
     We store key/value length in 3 bytes,
     so the max key/value length is 256^3-1.
-    
+
     <key-length>key<value-length>value<...>
     """
     @staticmethod
     def pack(**kwargs) -> bytes:
         """
-        Will make bytestring from your kwargs. 
+        Will make bytestring from your kwargs.
         Any kwarg **always** must be ``bytes``.
 
-        ``make(x=5)`` will not work; 
+        ``make(x=5)`` will not work;
         ``make(x=b'\x05')`` is correct.
 
         """
@@ -238,7 +229,7 @@ class PackedAttributes:
             pattr += int_to_bytes(len(k),3) + k.encode()
             pattr += int_to_bytes(len(v),3) + v
         return pattr
-    
+
     @staticmethod
     def unpack(pattr: bytes) -> Dict[str, bytes]:
         """
@@ -247,7 +238,7 @@ class PackedAttributes:
         python dictionary.
 
         Every PackedAttributes bytestring
-        must contain ``0xFF`` as first byte. 
+        must contain ``0xFF`` as first byte.
         If not, or if error, will return ``{}``.
         """
         if not pattr:
@@ -259,7 +250,7 @@ class PackedAttributes:
             while pattr:
                 key_len = bytes_to_int(pattr[:3])
                 key = pattr[3:key_len+3]
-                
+
                 value_len = bytes_to_int(pattr[key_len+3:key_len+6])
                 pattr = pattr[key_len+6:]
 
@@ -278,11 +269,11 @@ class PackedAttributes:
 class OpenPretender:
     """
     Class to wrap Tgbox AES Generators and make it look
-    like opened to "rb"-read file. 
+    like opened to "rb"-read file.
     """
     def __init__(
-            self, flo: BinaryIO, 
-            aes_state: AES, 
+            self, flo: BinaryIO,
+            aes_state: AES,
             file_size: Optional[int] = None
         ):
         """
@@ -298,38 +289,40 @@ class OpenPretender:
 
         self._buffered_bytes = b''
         self._total_size = file_size
+        self._stop_iteration = False
 
         self._position = 0
 
     def concat_metadata(self, metadata: bytes) -> None:
         """Concates metadata to the file as (metadata + file)."""
-        assert len(metadata) <= METADATA_MAX
-
-        if self._position: 
+        if self._position:
             raise ConcatError('Concat must be before any usage of object.')
         else:
             self._buffered_bytes += metadata
-    
-    async def read(self, size: int=-1) -> bytes: 
+
+    async def read(self, size: int=-1) -> bytes:
         """
         Returns ``size`` bytes from async Generator.
 
         This method is async only because we use
         ``File`` uploading from the async library. You
         can use ``tgbox.sync`` in your sync code for reading.
-        
+
         Arguments:
             size (``int``):
-                Amount of bytes to return. By 
-                default is negative (return all). 
+                Amount of bytes to return. By
+                default is negative (return all).
         """
+        if self._stop_iteration:
+            raise Exception('Stream was closed')
+
         if size % 16 and not size == -1:
             raise ValueError('size must be divisible by 16 or -1 (return all)')
 
         if self._total_size is None:
             self._total_size = self._flo.seek(0,2) # Move to file end
             self._flo.seek(0,0) # Move to file start
-            
+
         if self._total_size <= 0 or size <= len(self._buffered_bytes) and size != -1:
             block = self._buffered_bytes[:size]
             self._buffered_bytes = self._buffered_bytes[size:]
@@ -351,31 +344,31 @@ class OpenPretender:
                     shift = int(-(len(chunk) % 16))
                 else:
                     shift = None
-                
+
                 if self._total_size <= 0 or size > self._total_size or shift != None:
                     chunk = buffered + self._aes_state.encrypt(
                         chunk, pad=True, concat_iv=False)
                 else:
                     chunk = buffered + self._aes_state.encrypt(
                         chunk, pad=False, concat_iv=False)
-                
+
                 shift = size if len(chunk) > size else None
-                
+
                 if shift is not None:
                     self._buffered_bytes = chunk[shift:]
 
                 self._total_size -= size
                 block = chunk[:shift]
-        
+
         self._position += len(block)
         return block
-    
+
     def tell(self) -> int:
         return self._position
 
     def seekable(*args, **kwargs) -> bool:
         return False
-    
+
     def close(self) -> None:
         self._stop_iteration = True
 
@@ -383,13 +376,13 @@ def pad_request_size(request_size: int, bsize: int=4096) -> int:
     """
     This function pads ``request_size`` to divisible
     by BSIZE bytes. If ``request_size`` < BSIZE, then
-    it's not padded. This function designed for Telethon's 
+    it's not padded. This function designed for Telethon's
     ``GetFileRequest``. See issue #3 on TGBOX GitHub.
-    
+
     .. note::
         You will need to strip extra bytes from result, as
         request_size can be bigger than bytecount you want.
-    
+
     Arguments:
         request_size (``int``):
             Amount of requested bytes,
@@ -405,7 +398,7 @@ def pad_request_size(request_size: int, bsize: int=4096) -> int:
         return request_size
 
     while 1048576 % request_size:
-        request_size = ((request_size + bsize) // bsize) * bsize 
+        request_size = ((request_size + bsize) // bsize) * bsize
     return request_size
 
 def ppart_id_generator(path: Path, mainkey: MainKey) -> Generator[tuple, None, None]:
@@ -437,7 +430,7 @@ def prbg(size: int) -> bytes:
     return bytes([randrange(256) for _ in range(size)])
 
 def int_to_bytes(
-        int_: int, length: Optional[int] = None, 
+        int_: int, length: Optional[int] = None,
         signed: Optional[bool] = False) -> bytes:
 
     """Converts int to bytes with Big byteorder."""
@@ -449,7 +442,7 @@ def int_to_bytes(
             divide_with = 16
         else:
             divide_with = 8
-        
+
         bit_length = ((bit_length + divide_with) // divide_with)
         length = (bit_length * divide_with) // 8
 
@@ -472,26 +465,26 @@ async def get_media_duration(file_path: str) -> int:
         d = duration.decode().split('.')[0].split(': ')[1].split(':')
         return int(d[0]) * 60**2 + int(d[1]) * 60 + int(d[2])
     except Exception as e:
-        raise DurationImpossible(f'Can\'t get media duration: {e}') from None 
+        raise DurationImpossible(f'Can\'t get media duration: {e}') from None
 
 async def make_media_preview(
-        file_path: PathLike, 
+        file_path: PathLike,
         temp_path: Optional[PathLike] = None,
         x: int=128, y: int=-1) -> BinaryIO:
     """
-    Makes x:y sized thumbnail of the 
+    Makes x:y sized thumbnail of the
     video/audio with ffmpeg. "-1"
     preserves one of side size.
     """
     temp_path = Path() if not temp_path else temp_path
     thumbnail_path = Path(temp_path, prbg(4).hex()+'.jpg')
-    
+
     func = partial(subprocess_run,
         args=[
             FFMPEG, '-i', file_path, '-filter:v', f'scale={x}:{y}', '-an',
             '-loglevel', 'quiet', '-q:v', '2', thumbnail_path
         ],
-        stdout=PIPE, 
+        stdout=PIPE,
         stderr=None
     )
     try:
@@ -502,235 +495,3 @@ async def make_media_preview(
     except Exception as e:
         # If something goes wrong then file is not created (FileNotFoundError)
         raise PreviewImpossible(f'Can\'t make thumbnail: {e}') from None
-
-async def search_generator(
-        sf: SearchFilter, 
-        ta = None, # Optional[TelegramAccount]
-        mainkey: Optional[MainKey] = None,
-        it_messages: Optional[AsyncGenerator] = None,
-        lb = None) -> AsyncGenerator:
-    """
-    Generator used to search for files in dlb and rb. It's
-    only for internal use, and you shouldn't use it in your
-    own projects. ``ta`` must be specified with ``it_messages``.
-    
-    If file is imported from other RemoteBox and was exported
-    to your LocalBox, then you can specify box as ``lb``. AsyncGenerator
-    will try to get ``FileKey`` and decrypt ``EncryptedRemoteBoxFile``.
-    Otherwise imported file will be ignored.
-    """
-    in_func = re_search if sf.in_filters['re'] else lambda p,s: p in s
-
-    if it_messages:
-        iter_from = it_messages
-    else:
-        min_id = sf.in_filters['min_id'][-1] if sf.in_filters['min_id'] else None
-        max_id = sf.in_filters['max_id'][-1] if sf.in_filters['max_id'] else None
-        iter_from = lb.files(min_id=min_id, max_id=max_id)
-    
-    if not iter_from:
-        raise ValueError('At least it_messages or lb must be specified.')
-    
-    async for file in iter_from:
-        if hasattr(file,'document') and file.document: 
-            try:
-                file = await EncryptedRemoteBoxFile(file, ta).init() 
-
-                if hasattr(lb, '_mainkey') and not mainkey: 
-                    if isinstance(lb._mainkey, EncryptedMainkey):
-                        mainkey = None
-                    else:
-                        mainkey = lb._mainkey
-
-                file = file if not mainkey else await file.decrypt(mainkey)
-
-            except ValueError: # Incorrect padding. Imported file?
-                if lb and isinstance(lb, DecryptedLocalBox):
-                    try:
-                        dlbfi = await lb.get_file(file.id, cache_preview=False)
-                    # Mostly, it's not a Tgbox file, so continue.
-                    except BrokenDatabase: 
-                        continue
-
-                    if not dlbfi: 
-                        continue
-                    else:
-                        file = await file.decrypt(dlbfi._filekey)
-                else:
-                    continue
-        
-        if hasattr(file, '_message'): # *RemoteBoxFile
-            file_size = file.file_size
-        elif hasattr(file, '_tgbox_db'): # *LocalBoxFile
-            file_size = file.size
-        else:
-            continue
-        
-        # We will use it as flags, the first
-        # is for 'include', the second is for
-        # 'exclude'. Both should be True to
-        # match SearchFilter filters.
-        yield_result = [True, True]
-
-        for indx, filter in enumerate((sf.in_filters, sf.ex_filters)):
-            if filter['exported']:
-                if bool(file.exported) != bool(filter['exported']): 
-                    if indx == 0: # O is Include
-                        yield_result[indx] = False
-                        break
-
-                elif bool(file.exported) == bool(filter['exported']): 
-                    if indx == 1: # 1 is Exclude
-                        yield_result[indx] = False
-                        break
-
-            for mime in filter['mime']:
-                if in_func(mime, file.mime):
-                    if indx == 1:
-                        yield_result[indx] = False
-                    break
-            else:
-                if filter['mime']:
-                    if indx == 0:
-                        yield_result[indx] = False
-                        break
-            
-            if filter['min_time']:
-                if file.upload_time < filter['min_time'][-1]:
-                    if indx == 0:
-                        yield_result[indx] = False
-                        break
-
-                elif file.upload_time >= filter['min_time'][-1]:
-                    if indx == 1:
-                        yield_result[indx] = False
-                        break
-
-            if filter['max_time']:
-                if file.upload_time > filter['max_time'][-1]: 
-                    if indx == 0:
-                        yield_result[indx] = False
-                        break
-
-                elif file.upload_time <= filter['max_time'][-1]: 
-                    if indx == 1:
-                        yield_result[indx] = False
-                        break
-
-            if filter['min_size']:
-                if file_size < filter['min_size'][-1]:
-                    if indx == 0:
-                        yield_result[indx] = False
-                        break
-
-                elif file_size >= filter['min_size'][-1]:
-                    if indx == 1:
-                        yield_result[indx] = False
-                        break
-
-            if filter['max_size']:
-                if file_size > filter['max_size'][-1]: 
-                    if indx == 0:
-                        yield_result[indx] = False
-                        break
-
-                elif file_size <= filter['max_size'][-1]: 
-                    if indx == 1:
-                        yield_result[indx] = False
-                        break
-
-            if filter['min_id']:
-                if file.id < filter['min_id'][-1]: 
-                    if indx == 0:
-                        yield_result[indx] = False
-                        break
-
-                elif file.id >= filter['min_id'][-1]: 
-                    if indx == 1:
-                        yield_result[indx] = False
-                        break
-
-            if filter['max_id']:
-                if file.id > filter['max_id'][-1]: 
-                    if indx == 0:
-                        yield_result[indx] = False
-                        break
-
-                elif file.id <= filter['max_id'][-1]: 
-                    if indx == 1:
-                        yield_result[indx] = False
-                        break
-            
-            for id in filter['id']:
-                if file.id == id:
-                    if indx == 1:
-                        yield_result[indx] = False
-                    break
-            else:
-                if filter['id']:
-                    if indx == 0:
-                        yield_result[indx] = False
-                        break
-            
-            if hasattr(file, '_cattrs'):
-                for cattr in filter['cattrs']:
-                    for k,v in cattr.items():
-                        if k in file.cattrs:
-                            if in_func(v, file.cattrs[k]):
-                                if indx == 1:
-                                    yield_result[indx] = False
-                                break
-                    else:
-                        if filter['cattrs']:
-                            if indx == 0:
-                                yield_result[indx] = False
-                                break
-            
-            for file_path in filter['file_path']:
-                if in_func(str(file_path), str(file.file_path)):
-                    if indx == 1:
-                        yield_result[indx] = False
-                    break
-            else:
-                if filter['file_path']:
-                    if indx == 0:
-                        yield_result[indx] = False
-                        break
-
-            for file_name in filter['file_name']:
-                if in_func(file_name, file.file_name):
-                    if indx == 1:
-                        yield_result[indx] = False
-                    break
-            else:
-                if filter['file_name']:
-                    if indx == 0:
-                        yield_result[indx] = False
-                        break
-
-            for file_salt in filter['file_salt']:
-                if in_func(file_salt, file.file_salt):
-                    if indx == 1:
-                        yield_result[indx] = False
-                    break
-            else:
-                if filter['file_salt']:
-                    if indx == 0:
-                        yield_result[indx] = False
-                        break
-
-            for verbyte in filter['verbyte']:
-                if verbyte == file.verbyte:
-                    if indx == 1:
-                        yield_result[indx] = False
-                    break
-            else:
-                if filter['verbyte']:
-                    if indx == 0:
-                        yield_result[indx] = False
-                        break
-        
-        if all(yield_result):
-            yield file
-        else:
-            continue

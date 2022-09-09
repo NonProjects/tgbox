@@ -1,3 +1,8 @@
+"""
+Encrypted cloud storage API based on Telegram
+https://github.com/NonProjects/tgbox
+"""
+
 __version__ = '1.0'
 
 from asyncio import get_event_loop

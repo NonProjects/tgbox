@@ -1,21 +1,18 @@
 """This module stores all cryptography used in API."""
 
 from os import urandom
-from .errors import ModeInvalid, AESError
+from typing import Union, Optional
 
-from typing import (
-    BinaryIO, AsyncGenerator, 
-    Union, Optional, Callable
+from pyaes.util import (
+    append_PKCS7_padding,
+    strip_PKCS7_padding
 )
-from pyaes.util import ( 
-    append_PKCS7_padding, 
-    strip_PKCS7_padding 
-)
+from .errors import ModeInvalid
 try:
     from cryptography.hazmat.primitives.ciphers\
         import Cipher, algorithms, modes
     FAST_ENCRYPTION = True
-except ModuleNotFoundError: 
+except ModuleNotFoundError:
     # We can use PyAES if there is no cryptography library.
     # PyAES is much slower. You can use it for quick tests.
     from pyaes import AESModeOfOperationCBC
@@ -29,7 +26,7 @@ except ModuleNotFoundError:
     FAST_TELETHON = False
 
 __all__ = [
-    'AESwState', 
+    'AESwState',
     'get_rnd_bytes',
     'FAST_TELETHON',
     'FAST_ENCRYPTION'
@@ -37,17 +34,17 @@ __all__ = [
 class _PyaesState:
     def __init__(self, key: Union[bytes, 'Key'], iv: Union[bytes, memoryview]):
         """
-        Class to wrap ``pyaes.AESModeOfOperationCBC`` 
+        Class to wrap ``pyaes.AESModeOfOperationCBC``
         if there is no ``FAST_ENCRYPTION``.
-        
+
         .. note::
-            You should use only ``encrypt()`` or 
+            You should use only ``encrypt()`` or
             ``decrypt()`` method per one object.
-        
+
         Arguments:
             key (``bytes``, ``Key``):
                 AES encryption/decryption Key.
-            
+
             iv (``bytes``):
                 AES Initialization Vector.
         """
@@ -57,7 +54,7 @@ class _PyaesState:
             key = bytes(key), iv = bytes(iv)
         )
         self.__mode = None # encrypt mode is 1 and decrypt is 2
-    
+
     @staticmethod
     def __convert_memoryview(data: Union[bytes, memoryview]) -> bytes:
         # PyAES doesn't support memoryview, convert to bytes
@@ -72,16 +69,16 @@ class _PyaesState:
         else:
             if self.__mode != 1:
                 raise ModeInvalid('You should use only decrypt function.')
-        
+
         data = self.__convert_memoryview(data)
         assert not len(data) % 16; total = b''
-        
+
         for _ in range(len(data) // 16):
             total += self._aes_state.encrypt(data[:16])
             data = data[16:]
-        
+
         return total
-    
+
     def decrypt(self, data: Union[bytes, memoryview]) -> bytes:
         """``data`` length must be divisible by 16."""
         if not self.__mode:
@@ -89,34 +86,34 @@ class _PyaesState:
         else:
             if self.__mode != 2:
                 raise ModeInvalid('You should use only encrypt function.')
-        
+
         data = self.__convert_memoryview(data)
         assert not len(data) % 16; total = b''
-        
+
         for _ in range(len(data) // 16):
             total += self._aes_state.decrypt(data[:16])
             data = data[16:]
-        
+
         return total
 
 class AESwState:
     def __init__(
-            self, key: Union[bytes, 'Key'], 
+            self, key: Union[bytes, 'Key'],
             iv: Optional[bytes] = None
         ):
         """
         Wrap around AES CBC which saves state.
-        
+
         .. note::
-            You should use only ``encrypt()`` or 
+            You should use only ``encrypt()`` or
             ``decrypt()`` method per one object.
-        
+
         Arguments:
             key (``bytes``, ``Key``):
                 AES encryption/decryption Key.
-            
+
             iv (``bytes``, optional):
-                AES Initialization Vector. 
+                AES Initialization Vector.
 
                 If mode is *Encryption*, and
                 isn't specified, will be used
@@ -129,7 +126,7 @@ class AESwState:
         self.key = key.key if hasattr(key, 'key') else key
         self.iv, self.__mode, self._aes_cbc = iv, None, None
         self.__iv_concated = False
-        
+
     def __init_aes_state(self, mode: int) -> None:
         if FAST_ENCRYPTION:
             self._aes_cbc = Cipher(algorithms.AES(self.key), modes.CBC(self.iv))
@@ -146,53 +143,53 @@ class AESwState:
     @property
     def mode(self) -> int:
         """
-        Returns ``1`` if mode is encryption 
-        and ``2`` if decryption. 
+        Returns ``1`` if mode is encryption
+        and ``2`` if decryption.
         """
         return self.__mode
-    
+
     def encrypt(self, data: bytes, pad: bool=True, concat_iv: bool=True) -> bytes:
         """
-        Encrypts ``data`` with AES CBC. 
+        Encrypts ``data`` with AES CBC.
 
         If ``concat_iv`` is ``True``, then
         first 16 bytes of result will be IV.
         """
         if not self.__mode:
             self.__mode = 1
-            
+
             if not self.iv: self.iv = urandom(16)
             self.__init_aes_state(self.__mode)
         else:
             if self.__mode != 1:
                 raise ModeInvalid('You should use only decrypt method.')
-        
+
         if pad: data = append_PKCS7_padding(data)
         data = self._aes_cbc.encrypt(data)
-        
+
         if concat_iv and not self.__iv_concated:
             self.__iv_concated = True
             return self.iv + data
-        else:
-            return data
-    
+
+        return data
+
     def decrypt(self, data: bytes, unpad: bool=True) -> bytes:
         """
-        Decrypts ``data`` with AES CBC. 
-        
-        ``data`` length must must 
+        Decrypts ``data`` with AES CBC.
+
+        ``data`` length must must
         be evenly divisible by 16.
         """
         if not self.__mode:
             self.__mode = 2
-            
+
             if not self.iv:
                 self.iv, data = data[:16], data[16:]
             self.__init_aes_state(self.__mode)
         else:
             if self.__mode != 2:
                 raise ModeInvalid('You should use only encrypt method.')
-        
+
         data = self._aes_cbc.decrypt(data)
         if unpad: data = strip_PKCS7_padding(data)
         return data

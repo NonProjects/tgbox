@@ -1,28 +1,28 @@
-TGBOX: encrypted cloud storage based on Telegram 
+TGBOX: encrypted cloud storage based on Telegram
 ================================================
 .. image:: https://readthedocs.org/projects/tgbox/badge/?version=latest
 
 .. code-block:: python
 
         from tgbox.api import (
-            TelegramClient, 
-            make_remote_box,
-            make_local_box
+            TelegramClient,
+            make_remotebox,
+            make_localbox
         )
         from asyncio import run as asyncio_run
         from tgbox.keys import Phrase, make_basekey
         from getpass import getpass # Hidden input
 
         # Phone number linked to your Telegram account
-        PHONE_NUMBER = '+10000000000' 
+        PHONE_NUMBER = '+10000000000'
 
-        # This two will not work. Get your own at https://my.telegram.org 
-        API_ID, API_HASH = 1234567, '00000000000000000000000000000000' 
+        # This two will not work. Get your own at https://my.telegram.org
+        API_ID, API_HASH = 1234567, '00000000000000000000000000000000'
 
         async def main():
             tc = TelegramClient(
                 phone_number = PHONE_NUMBER,
-                api_id = API_ID, 
+                api_id = API_ID,
                 api_hash = API_HASH
             )
             await tc.connect() # Connecting with Telegram
@@ -35,18 +35,18 @@ TGBOX: encrypted cloud storage based on Telegram
             # Generating your passphrase
             p = Phrase.generate()
             print(p.phrase.decode())
-            
+
             # WARNING: This will use 1GB of RAM for a
             # couple of seconds. See help(make_basekey)
             basekey = make_basekey(p)
 
             # Make EncryptedRemoteBox
-            erb = await make_remote_box(tc)
+            erb = await make_remotebox(tc)
             # Make DecryptedLocalBox
-            dlb = await make_local_box(erb, basekey)
+            dlb = await make_localbox(erb, basekey)
             # Obtain DecryptedRemoteBox
-            drb = await erb.decrypt(dlb=dlb) 
-            
+            drb = await erb.decrypt(dlb=dlb)
+
             # CATTRS is a File's CustomAttributes. You
             # can specify any you want. Here we will add
             # a "comment" attr with a true statement :^)
@@ -59,7 +59,7 @@ TGBOX: encrypted cloud storage based on Telegram
             # and return DecryptedRemoteBoxFile
             drbf = await drb.push_file(pf)
 
-            # Retrieving some info from the RemoteBoxFile 
+            # Retrieving some info from the RemoteBoxFile
             print('File size:', drbf.size, 'bytes')
             print('File name:', drbf.file_name)
 
@@ -77,13 +77,13 @@ TGBOX: encrypted cloud storage based on Telegram
             # after work was done
             await erb.done()
             await dlb.done()
-        
+
         asyncio_run(main())
 
 Motivation
 ----------
 
-The Telegram is beautiful app. Not only by mean of features and Client API, but it's also good in cryptography and secure messaging. In the last years, core and client devs of Telegram mostly work for "social-network features", i.e video chats and message reactions which is OK, but there also can be plenty of "crypto-related" things. 
+The Telegram is beautiful app. Not only by mean of features and Client API, but it's also good in cryptography and secure messaging. In the last years, core and client devs of Telegram mostly work for "social-network features", i.e video chats and message reactions which is OK, but there also can be plenty of "crypto-related" things.
 
 Target
 ------
@@ -105,7 +105,7 @@ You can also build docs from the source
 .. code-block:: console
 
    git clone https://github.com/NonProject/tgbox --branch=indev
-   cd tgbox && python3 -m pip install .[doc] # Install with doc 
+   cd tgbox && python3 -m pip install .[doc] # Install with doc
    cd docs && make html && firefox _build/html/index.html
 
 Third party & thanks to

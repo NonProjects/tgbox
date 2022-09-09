@@ -19,14 +19,14 @@ import inspect
 import logging
 
 from typing import (
-    Optional, List, AsyncGenerator, 
+    Optional, List, AsyncGenerator,
     Union, Awaitable, BinaryIO,
     DefaultDict, Tuple
 )
 from collections import defaultdict
 
 from telethon.tl.functions.auth import (
-    ExportAuthorizationRequest, 
+    ExportAuthorizationRequest,
     ImportAuthorizationRequest
 )
 from telethon.errors import FilePartsInvalidError
@@ -40,22 +40,22 @@ from telethon.tl.alltlobjects import LAYER
 from telethon.tl.functions import InvokeWithLayerRequest
 
 from telethon.tl.types import (
-    Document, InputFileLocation, 
+    Document, InputFileLocation,
     InputDocumentFileLocation,
-    InputPhotoFileLocation, 
-    InputPeerPhotoFileLocation, 
+    InputPhotoFileLocation,
+    InputPeerPhotoFileLocation,
     TypeInputFile, Photo,
     InputFileBig, InputFile
 )
 from telethon.tl.functions.upload import (
-    GetFileRequest, 
+    GetFileRequest,
     SaveFilePartRequest,
     SaveBigFilePartRequest
 )
 log: logging.Logger = logging.getLogger("telethon")
 
 TypeLocation = Union[
-    Document, Photo, InputDocumentFileLocation, 
+    Document, Photo, InputDocumentFileLocation,
     InputPeerPhotoFileLocation,
     InputFileLocation, InputPhotoFileLocation
 ]
@@ -67,12 +67,12 @@ class DownloadSender:
     stride: int
 
     def __init__(
-            self, client: TelegramClient, 
-            sender: MTProtoSender, 
-            file: TypeLocation, 
+            self, client: TelegramClient,
+            sender: MTProtoSender,
+            file: TypeLocation,
             offset: int, limit: int,
             stride: int, count: int) -> None:
-        
+
         # TODO: Add left bytes to buffer and return.
         self.offset = offset
         # Offset must be divisible by 4096, otherwise
@@ -83,7 +83,7 @@ class DownloadSender:
         self.client = client
         self.stride = stride
         self.remaining = count
-        
+
         self.request = GetFileRequest(
             file, offset=self.safe_offset, limit=limit
         )
@@ -93,10 +93,10 @@ class DownloadSender:
             return None
 
         result = await self.client._call(self.sender, self.request)
-        
+
         self.remaining -= 1
         self.request.offset += self.stride
-        
+
         result_bytes = result.bytes[self.offset - self.safe_offset:]
         return result_bytes
 
@@ -177,12 +177,12 @@ class ParallelTransferrer:
         return math.ceil((file_size / full_size) * max_count)
 
     async def _init_download(
-            self, connections: int, 
-            file: TypeLocation, 
+            self, connections: int,
+            file: TypeLocation,
             part_count: int,
             part_size: int,
             offset: int) -> None:
-       
+
         minimum, remainder = divmod(part_count, connections)
 
         def get_part_count() -> int:
@@ -192,38 +192,38 @@ class ParallelTransferrer:
                 return minimum + 1
             return minimum
 
-        # The first cross-DC sender will export+import the authorization, so 
+        # The first cross-DC sender will export+import the authorization, so
         # we always create it before creating any other senders.
         self.senders = [
             await self._create_download_sender(
-                file, 0, part_size, connections * part_size, 
+                file, 0, part_size, connections * part_size,
                 get_part_count(), offset=offset
             ),
             *await asyncio.gather(
                 *[
                     self._create_download_sender(
-                        file, i, part_size, 
-                        connections * part_size, 
+                        file, i, part_size,
+                        connections * part_size,
                         get_part_count(),
                         offset=offset
-                    ) 
+                    )
                     for i in range(1, connections)
                 ])
         ]
     async def _create_download_sender(
-            self, file: TypeLocation, 
-            index: int, 
+            self, file: TypeLocation,
+            index: int,
             part_size: int,
-            stride: int, 
-            part_count: int, 
+            stride: int,
+            part_count: int,
             offset: int = None) -> DownloadSender:
-        
+
         offset = offset if offset else index * part_size
 
         return DownloadSender(
-            self.client, 
-            await self._create_sender(), 
-            file, offset, part_size, 
+            self.client,
+            await self._create_sender(),
+            file, offset, part_size,
             stride, part_count
         )
 
@@ -283,13 +283,13 @@ class ParallelTransferrer:
         connection_count = connection_count or self._get_connection_count(file_size)
         part_size = (part_size_kb or utils.get_appropriated_part_size(file_size)) * 1024
         part_count = math.ceil(file_size / part_size)
-        
+
         log.debug("Starting parallel download: "
                   f"{connection_count} {part_size} {part_count} {file!s}")
 
         await self._init_download(
-            connection_count, 
-            file, part_count, 
+            connection_count,
+            file, part_count,
             part_size, offset=offset
         )
         part = 0
@@ -313,7 +313,7 @@ parallel_transfer_locks: DefaultDict[int, asyncio.Lock] =\
     defaultdict(lambda: asyncio.Lock())
 
 async def stream_file(
-        file_to_stream: BinaryIO, 
+        file_to_stream: BinaryIO,
         chunk_size = 1024
     ):
     """``file_to_stream.read`` can be coroutine."""
@@ -325,7 +325,7 @@ async def stream_file(
 
         if data_read:
             yield data_read
-        else: 
+        else:
             break
 
 async def _internal_transfer_to_telegram(
@@ -338,7 +338,7 @@ async def _internal_transfer_to_telegram(
     ) -> Tuple[TypeInputFile, int]:
 
     file_id = helpers.generate_random_long()
-    
+
     if not file_size:
         file_size = os.path.getsize(response.name)
 
@@ -347,14 +347,14 @@ async def _internal_transfer_to_telegram(
 
     part_size_, part_count, is_large =\
         await uploader.init_upload(
-            file_id, file_size, 
+            file_id, file_size,
             part_size_kb=part_size_kb
         )
     if not part_size_kb:
         part_size = part_size_
     else:
         part_size = part_size_kb*1024
-    
+
     buffer = bytearray()
     async for data in stream_file(response, part_size):
         if progress_callback:
@@ -402,7 +402,7 @@ async def download_file(
         offset: int=None,
         progress_callback: callable = None
         ) -> AsyncGenerator[bytes, None]:
-    
+
     if isinstance(location, Photo):
         size = File(location).size
     else:

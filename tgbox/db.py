@@ -1,13 +1,13 @@
 """This module stores wrappers around Tgbox SQL DB."""
 
-import aiosqlite
-
 from typing import (
-    Optional, Union, 
+    Optional, Union,
     AsyncGenerator
 )
 from os import PathLike
 from pathlib import Path
+
+import aiosqlite
 
 from .errors import PathIsDirectory
 from .tools import anext
@@ -20,12 +20,12 @@ class SqlTableWrapper:
     def __init__(self, aiosql_conn, table_name: str):
         self._table_name = table_name
         self._aiosql_conn = aiosql_conn
-    
+
     async def __aiter__(self) -> tuple:
         """Will yield rows as self.select without ``sql_statement``"""
         async for row in self.select():
             yield row
-   
+
     @property
     def table_name(self) -> str:
         """Returns table name"""
@@ -44,11 +44,11 @@ class SqlTableWrapper:
         ``(SELECT * FROM TABLE_NAME, ())`` statement.
         """
         if not sql_tuple:
-            sql_tuple = (f'SELECT * FROM {self._table_name}',()) 
-        
-        cursor = await self._aiosql_conn.execute(*sql_tuple) 
+            sql_tuple = (f'SELECT * FROM {self._table_name}',())
+
+        cursor = await self._aiosql_conn.execute(*sql_tuple)
         async for row in cursor: yield row
-    
+
     async def select_once(self, sql_tuple: Optional[tuple] = None) -> tuple:
         """
         Will return first row which match the ``sql_tuple``,
@@ -57,7 +57,7 @@ class SqlTableWrapper:
         return await anext(self.select(sql_tuple=sql_tuple))
 
     async def insert(
-            self, *args, sql_statement: Optional[str] = None, 
+            self, *args, sql_statement: Optional[str] = None,
             commit: bool=True) -> None:
         """
         If ``sql_statement`` isn't specified, then will be used
@@ -73,7 +73,7 @@ class SqlTableWrapper:
             )
         await self._aiosql_conn.execute(sql_statement, args)
         if commit: await self._aiosql_conn.commit()
-    
+
     async def execute(self, sql_tuple: tuple, commit: bool=True):
         result = await self._aiosql_conn.execute(*sql_tuple)
         if commit: await self._aiosql_conn.commit()
@@ -100,7 +100,7 @@ class TgboxDB:
 
         if self._db_path.is_dir():
             raise PathIsDirectory('Path is directory.')
-    
+
     @property
     def name(self) -> str:
         return self._name
@@ -108,7 +108,7 @@ class TgboxDB:
     @property
     def db_path(self) -> PathLike:
         return self._db_path
-    
+
     @property
     def closed(self) -> bool:
         """
@@ -116,7 +116,7 @@ class TgboxDB:
         False if it's still opened, True if it's was closed.
         """
         return self._aiosql_db_is_closed
-    
+
     @staticmethod
     async def create(db_path: Union[str, PathLike]) -> 'TgboxDB':
         return await TgboxDB(db_path).init()
@@ -131,8 +131,8 @@ class TgboxDB:
         await self._aiosql_db.execute(
             """CREATE TABLE IF NOT EXISTS BOX_DATA ("""
             """BOX_CHANNEL_ID blob NOT NULL, BOX_CR_TIME blob NOT NULL, """
-            """BOX_SALT blob NOT NULL, MAINKEY blob, SESSION blob NOT NULL, """ 
-            """API_ID blob NOT NULL, API_HASH blob NOT NULL);""" 
+            """BOX_SALT blob NOT NULL, MAINKEY blob, SESSION blob NOT NULL, """
+            """API_ID blob NOT NULL, API_HASH blob NOT NULL);"""
         )
         await self._aiosql_db.execute(
             """CREATE TABLE IF NOT EXISTS FILES (ID integer PRIMARY KEY, """
@@ -145,7 +145,7 @@ class TgboxDB:
         )
         await self._aiosql_db.commit()
         self._aiosql_db_is_closed = False
-        
+
         tables = await self._aiosql_db.execute(
             "SELECT name FROM sqlite_schema WHERE type='table'"
         )
