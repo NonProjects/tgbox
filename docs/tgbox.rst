@@ -28,6 +28,15 @@ tgbox.api.db module
    :show-inheritance:
    :inherited-members:
 
+tgbox.api.utils module
+----------------------
+
+.. automodule:: tgbox.api.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+
 tgbox.crypto module
 -------------------
 
