@@ -16,11 +16,6 @@ from asyncio import iscoroutinefunction
 from filetype import guess as filetype_guess
 from telethon.tl.types import Photo, Document
 
-from .utils import (
-    _TelegramVirtualFile,
-    PreparedFile, DirectoryRoot,
-    TelegramClient, search_generator
-)
 from ..crypto import get_rnd_bytes
 from ..crypto import AESwState as AES
 
@@ -34,8 +29,6 @@ from ..defaults import (
     Limits, PREFIX, DEF_NO_FOLDER,
     DOWNLOAD_PATH, VERBYTE, DEF_TGBOX_NAME
 )
-from ..db import TgboxDB
-
 from ..errors import (
     NotEnoughRights, IncorrectKey,
     LimitExceeded, DurationImpossible,
@@ -47,6 +40,12 @@ from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter,
     get_media_duration, prbg, make_media_preview
 )
+from .utils import (
+    _TelegramVirtualFile,
+    PreparedFile, DirectoryRoot,
+    TelegramClient, search_generator
+)
+from .db import TgboxDB
 
 __all__ = [
     'make_localbox',
@@ -75,9 +74,14 @@ async def make_localbox(
             for ``MainKey`` creation.
     """
     tgbox_db = await TgboxDB.create(await erb.get_box_name())
-    if (await tgbox_db.BOX_DATA.count_rows()):
-        raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
 
+    if (await tgbox_db.BOX_DATA.count_rows()):
+        raise InUseException(
+           f'''"{tgbox_db.name}" was found on current path. '''
+            '''Please move old file or create RemoteBox with '''
+            '''the different box name (see help(tgbox.api.re'''
+            '''mote.make_remotebox) and use kwarg "box_name")'''
+        )
     box_salt = await erb.get_box_salt()
     mainkey = make_mainkey(basekey, box_salt)
 
