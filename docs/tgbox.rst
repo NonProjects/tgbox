@@ -19,19 +19,19 @@ tgbox.api.remote module
    :show-inheritance:
    :inherited-members:
 
-tgbox.crypto module
+tgbox.api.db module
 -------------------
 
-.. automodule:: tgbox.crypto
+.. automodule:: tgbox.api.db
    :members:
    :undoc-members:
    :show-inheritance:
    :inherited-members:
 
-tgbox.db module
----------------
+tgbox.crypto module
+-------------------
 
-.. automodule:: tgbox.db
+.. automodule:: tgbox.crypto
    :members:
    :undoc-members:
    :show-inheritance:
