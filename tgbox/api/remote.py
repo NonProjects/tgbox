@@ -46,15 +46,12 @@ from ..defaults import (
     REMOTEBOX_PREFIX, DEF_NO_FOLDER, DOWNLOAD_PATH
 )
 from ..fastelethon import upload_file, download_file
-from ..db import TgboxDB
 
 from ..errors import (
-    NoPlaceLeftForMetadata,
-    NotEnoughRights, NotATgboxFile,
-    IncorrectKey, NotInitializedError,
-    RemoteBoxInaccessible, LimitExceeded,
-    NotImported, AESError, InUseException,
-    RemoteFileNotFound, SessionUnregistered
+    NotEnoughRights, NotATgboxFile, IncorrectKey,
+    NotInitializedError, RemoteBoxInaccessible,
+    LimitExceeded, NotImported, AESError, RemoteFileNotFound,
+    NoPlaceLeftForMetadata, SessionUnregistered
 )
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter, OpenPretender,
@@ -72,9 +69,9 @@ __all__ = [
 ]
 async def make_remotebox(
         tc: TelegramClient,
-        tgbox_db_name: str=DEF_TGBOX_NAME,
-        tgbox_rb_prefix: str=REMOTEBOX_PREFIX,
-        box_image_path: Union[PathLike, str] = BOX_IMAGE_PATH,
+        box_name: Optional[str] = DEF_TGBOX_NAME,
+        rb_prefix: Optional[str] = REMOTEBOX_PREFIX,
+        box_image: Optional[Union[PathLike, str]] = BOX_IMAGE_PATH,
         box_salt: Optional[bytes] = None) -> 'EncryptedRemoteBox':
     """
     Function used for making ``RemoteBox``.
@@ -84,15 +81,15 @@ async def make_remotebox(
             Account to make private Telegram channel.
             You must be signed in via ``log_in()``.
 
-        tgbox_db_name (``TgboxDB``, optional):
+        box_name (``str``, optional):
             Name of your Local and Remote boxes.
             ``defaults.DEF_TGBOX_NAME`` by default.
 
-        tgbox_rb_prefix (``str``, optional):
+        rb_prefix (``str``, optional):
             Prefix of your RemoteBox.
             ``defaults.REMOTEBOX_PREFIX`` by default.
 
-        box_image_path (``PathLike``, optional):
+        box_image (``PathLike``, optional):
             ``PathLike`` to image that will be used as
             ``Channel`` photo of your ``RemoteBox``.
 
@@ -104,20 +101,18 @@ async def make_remotebox(
             creation. Default is ``crypto.get_rnd_bytes()``.
     """
     if box_salt and len(box_salt) != 32:
-        raise ValueError('Box salt len != 32')
+        raise ValueError('BoxSalt bytelength != 32')
 
-    tgbox_db = await TgboxDB.create(tgbox_db_name)
-    if (await tgbox_db.BOX_DATA.count_rows()):
-        raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
-
-    channel_name = tgbox_rb_prefix + tgbox_db.name
-    box_salt = urlsafe_b64encode(box_salt if box_salt else get_rnd_bytes())
+    box_salt = urlsafe_b64encode(
+        box_salt if box_salt else get_rnd_bytes()
+    )
+    channel_name = rb_prefix + box_name
 
     channel = (await tc(CreateChannelRequest(
-        channel_name,'',megagroup=False))).chats[0]
+        channel_name, '', megagroup=False))).chats[0]
 
-    if box_image_path:
-        box_image = await tc.upload_file(open(box_image_path,'rb'))
+    if box_image:
+        box_image = await tc.upload_file(open(box_image,'rb'))
         await tc(EditPhotoRequest(channel, box_image))
 
     await tc(EditChatAboutRequest(channel, box_salt.decode()))
