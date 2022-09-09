@@ -14,7 +14,7 @@ To decrypt file and its attributes, we need to go through some steps:
 
 0. Sum length of ``PREFIX``, ``VERBYTE`` and ``METADA_SIZE`` (*10 by default*), get a ``fixed_bytes_size``
 1. Download fixed bytes: ``from=0``, ``to=fixed_bytes_size``; get a ``PREFIX``, ``VERBYTE`` and ``METADA_SIZE``
-2. Convert ``METADA_SIZE`` to ``int`` and verify that ``METADATA_SIZE <= defaults.METADATA_MAX``
+2. Convert ``METADA_SIZE`` to ``int`` and verify that ``METADATA_SIZE <= defaults.Limits.METADATA_MAX``
 3. Download the metadata: ``from=fixed_bytes_size``, ``to=METADA_SIZE``, receive a ``metadata``
 4. Unpack ``metadata`` with the ``tools.PackedAttributes.unpack(metadata)``, receive a ``metadata_dict``
 5. If ``BaseKey`` isn't presented, take a user's password/phrase and call ``keys.make_basekey(phrase)``
@@ -28,6 +28,6 @@ To decrypt file and its attributes, we need to go through some steps:
     - Unpacked *metadata* is a ``{'box_salt': ..., 'file_salt': ..., 'secret_metadata': ...}``
     - We need to decrypt *secret_metadata* with the ``FileKey`` and unpack it to access attributes
     - We **always** encrypt *efile_path* attribute with the ``MainKey``
-    - Max bytesize of *metadata* is defined in the ``defaults.METADATA_MAX`` variable
+    - Max bytesize of *metadata* is defined in the ``defaults.Limits.METADATA_MAX`` variable
     - *RemoteBox* Telegram channel **doesn't** store any sensitive information. You can leave it public if you want but beware, if you're using weak or predictable password then you can still be brute-forced.
     - *RemoteBox* store all information that store :doc:`localbox`.

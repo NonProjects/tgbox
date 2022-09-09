@@ -14,9 +14,9 @@ Abstract Box
 .. note::
     More detailed in :doc:`remotebox` and :doc:`localbox`
 
-- The *Box* is something that have *BoxSalt* — 32 (usually random) bytes. With this salt and user phrase we make encryption key (see :ref:`Encryption keys hierarchy`). 
+- The *Box* is something that have *BoxSalt* — 32 (usually random) bytes. With this salt and user phrase we make encryption key (see :ref:`Encryption keys hierarchy`).
 
-- *Box* splits into two types, — the *Remote* and *Local*. They have a two states, — the *Encrypted* and *Decrypted*. 
+- *Box* splits into two types, — the *Remote* and *Local*. They have a two states, — the *Encrypted* and *Decrypted*.
 
 - *RemoteBox* store encrypted files and their metadata. *LocalBox* store only metadata.
 
@@ -27,7 +27,7 @@ Encryption keys hierarchy
 
 0. The user should provide a password to his Box. We can recommend him to use inbuilt in TGBOX *Phrase*, which is 12 random mnemonic words that can be generated via ``tgbox.keys.Phrase.generate()``. With the user's phrase (or password) we make the first encryption Key, – ``BaseKey``;
 
-1. By default in API for ``BaseKey`` creation we use the ``tgbox.keys.make_basekey`` function, which utilize a *Scrypt* KDF under the hood. It's configured to use a **1GB** of RAM for key creation for a couple of seconds. We use such configuration for purpose of making user's phrase bruteforce **a lot** harder. The Scrypt KDF requires *salt*, and we use the one defined in the ``defaults.SCRYPT_SALT``. Specifying different scrypt_salt on ``BaseKey`` creation will make bruteforce impossible if you will keep it secret. In the end we hash a Scrypt result with a ``sha256``. Please note that you can use any KDF you want, we don't force developers to use Scrypt, just make sure that resulted key is 32-byte long and wrapped in the ``tgbox.keys.BaseKey`` class. We see a Scrypt and our configuration as a safe and good standart. We use ``BaseKey`` for encrypting Telegram session and making the next key: ``MainKey``;
+1. By default in API for ``BaseKey`` creation we use the ``tgbox.keys.make_basekey`` function, which utilize a *Scrypt* KDF under the hood. It's configured to use a **1GB** of RAM for key creation for a couple of seconds. We use such configuration for purpose of making user's phrase bruteforce **a lot** harder. The Scrypt KDF requires *salt*, and we use the one defined in the ``defaults.Scrypt.SALT``. Specifying different scrypt_salt on ``BaseKey`` creation will make bruteforce impossible if you will keep it secret. In the end we hash a Scrypt result with a ``sha256``. Please note that you can use any KDF you want, we don't force developers to use Scrypt, just make sure that resulted key is 32-byte long and wrapped in the ``tgbox.keys.BaseKey`` class. We see a Scrypt and our configuration as a safe and good standart. We use ``BaseKey`` for encrypting Telegram session and making the next key: ``MainKey``;
 
 2. In the next step user starts a process of the *Box* creation. Every *Box* contains a so-called *BoxSalt* – 32 random (or specified by user) bytes. We concatenate ``BaseKey`` with the *BoxSalt* and make a SHA256: ``sha256(basekey + box_salt)``, the result of this operation is ``MainKey``. We use this key to encrypt a basic data of :doc:`localbox` as well as ``file_path`` attribute of *RemoteBoxFile* on pushing to the :doc:`remotebox`. With the ``MainKey`` we create a ``FileKey``;
 
@@ -76,7 +76,7 @@ Let's analyze *RemoteBox* sharing, there is no difference with file sharing.
 - **2. B gets EncryptedRemoteBox and calls get_requestkey on it**
 
   Every *RemoteBox* has *BoxSalt*. The *RemoteBox* store it in
-  channel description, encoded by url safe base64. From concated 
+  channel description, encoded by url safe base64. From concated
   *BoxSalt* and B's new ``BaseKey`` we make a `sha256 hash <https://en.wikipedia.org/wiki/SHA-2#Test_vectors>`_. This
   hash acts as *private key* for ECDH on `secp256k1 curve <https://en.bitcoin.it/wiki/Secp256k1>`_. We
   create *public key* from this *private key*, `compress it <https://bitcoin.stackexchange.com/a/69322>`_,
@@ -90,22 +90,22 @@ Let's analyze *RemoteBox* sharing, there is no difference with file sharing.
 
 - **4. A makes ShareKey with B's RequestKey and sends it to B**
 
-  1. A makes own *private key* similarly to B, with 
+  1. A makes own *private key* similarly to B, with
      ``sha256(a_mainkey + box_salt)``, extracts B's pubkey from
-     ``RequestKey`` and makes a shared 32byte-secret with 
+     ``RequestKey`` and makes a shared 32byte-secret with
      ``ECDH(a_privkey, b_pubkey, secp256k1)``. This is
      encryption key for AES CBC;
 
-  2. A makes sha256 hash from B's ``RequestKey`` and takes 
+  2. A makes sha256 hash from B's ``RequestKey`` and takes
      first 16 bytes from result, this is IV.
 
   3. A encrypts her ``MainKey`` with shared secret and IV. Let's call
-     result as *eMainKey*. After this she constructs ``ShareKey`` as 
+     result as *eMainKey*. After this she constructs ``ShareKey`` as
      follows: ``ShareKey(e_mainkey + a_pubkey)``. We don't concat
      IV to the ``ShareKey`` because Bob can extract it from ``RequestKey``.
 
 - **5. B makes ImportKey with A's ShareKey, decrypts EncryptedRemoteBox and clones it.**
-  
+
   Bob repeats second step, extracts IV and receives b_privkey. After,
   makes shared secret as 4.1 and decrypts ``eMainKey``. This can be
   done with ``keys.make_importkey`` function. Transfer complete.
@@ -113,7 +113,7 @@ Let's analyze *RemoteBox* sharing, there is no difference with file sharing.
 A bit about PackedAttributes
 ----------------------------
 
-In TGBOX protocol we pack metadata and user's custom attributes in a *dictionary* form to bytestring with algorithm called *PackedAttributes*. It is a more than simple: 
+In TGBOX protocol we pack metadata and user's custom attributes in a *dictionary* form to bytestring with algorithm called *PackedAttributes*. It is a more than simple:
 
 0. We define a main bytestring called a ``pattr``, it equals ``b'\xff'``;
 1. User gives us a ``dict``, i.e ``{'type': b'cat', 'color': b'black'}``;
@@ -127,7 +127,7 @@ In TGBOX protocol we pack metadata and user's custom attributes in a *dictionary
 So we just make a string like ``0xFF<key-length>key<value-length>value<...>``.
 
 .. tip::
-   - Pack: ``tgbox.tools.PackedAttributes.pack`` 
+   - Pack: ``tgbox.tools.PackedAttributes.pack``
    - Unpack: ``tgbox.tools.PackedAttributes.unpack``.
 
 TGBOX File
@@ -137,7 +137,7 @@ Abstract tgbox file of **v1.X** has **13** attributes:
 
 - ``ID`` *(integer: required)* -- *Uploaded to Telegram file (message) ID*
 - ``FILE_SALT`` *(bytes: required)* -- *File's salt. Used for FileKey creation*
-- ``FILE_IV`` *(bytes: required)* -- *File's AES Initialization Vector* 
+- ``FILE_IV`` *(bytes: required)* -- *File's AES Initialization Vector*
 - ``FILE_NAME`` *(bytes: required)* -- *File's name*
 - ``FILE_PATH`` *(bytes: required)* -- *File's path*
 - ``FILEKEY`` *(bytes: optional, LocalBox only)* -- *FileKey of imported file*
@@ -153,14 +153,14 @@ Abstract tgbox file of **v1.X** has **13** attributes:
     ``FILEKEY`` is a *LocalBox*-only field. It will be non-empty if you imported ``DecryptedRemoteBoxFile`` from other's *RemoteBox*. In this case *FILEKEY* will be encrypted with ``MainKey`` of the recipient *Box*.
 
 .. note::
-   We pack file attributes into the *metadata*. The max metadata bytelength is defined in the ``defaults.METADATA_MAX`` variable. By default *METADATA_MAX* is limited to 1MB, however, it can be increased up to 256^3-1 bytes (16MiB). Prior to v1.0 attributes have had own limits, but this isn't the case for the new version. Started from the v1.0 only ``FILE_PATH`` have separate limit defined in the ``defaults.FILE_PATH_MAX``, - 4096 bytes by default. Packed file attributes bytelength **shouldn't** be more than *METADATA_MAX*. See also :doc:`remotebox`.
+   We pack file attributes into the *metadata*. The max metadata bytelength is defined in the ``defaults.Limits.METADATA_MAX`` variable. By default *METADATA_MAX* is limited to 1MB, however, it can be increased up to 256^3-1 bytes (16MiB). Prior to v1.0 attributes have had own limits, but this isn't the case for the new version. Started from the v1.0 only ``FILE_PATH`` have separate limit defined in the ``defaults.Limits.FILE_PATH_MAX``, - 4096 bytes by default. Packed file attributes bytelength **shouldn't** be more than *METADATA_MAX*. See also :doc:`remotebox`.
 
 Versioning
 ----------
 
 We offer **two** Git branches:
 
-1. **Indev**. This branch used for active developing. Modules almost not tested, not stable, but errors are fixed faster. 
+1. **Indev**. This branch used for active developing. Modules almost not tested, not stable, but errors are fixed faster.
 2. **Main**. This branch has tested bugfixes and new features from *Indev*. Can be still some minor errors.
 
 The most **stable** releases should be presented **on the PyPi**, and can be installed via ``pip``. This rule doesn't work for releases < 1.0 because early we used a different versioning system.

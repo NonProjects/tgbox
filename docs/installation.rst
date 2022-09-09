@@ -13,7 +13,7 @@ Clone from GitHub
 -----------------
 
 .. code-block:: console
-   
+
    # You can replace --branch=indev with --branch=main
    git clone https://github.com/NonProjects/tgbox --branch=indev
    python3 -m pip install ./tgbox/[fast]
@@ -37,7 +37,7 @@ By default (on ``pip install tgbox``) we download ``telethon`` from the PyPi, bu
    Please make sure to **check last commits** before you install from GitHub! The release of the ``telethon`` on PyPi is static, so it's always safe-to-install. GitHub branch is dynamic, so there is a **really little chance** that it will be attacked by some bad commits and your Telegram account will be compromised. A **very little chance**, but **not** zero.
 
 .. code-block:: console
-   
+
    # (Way 1: PIP) You can reinstall it on every new huge update on GitHub
    pip install https://github.com/LonamiWebs/Telethon/archive/v1.24.zip
 
