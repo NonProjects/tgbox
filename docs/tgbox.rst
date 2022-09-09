@@ -1,19 +1,19 @@
 tgbox package
 =============
 
-tgbox.api module
-----------------
+tgbox.api.local module
+----------------------
 
-.. automodule:: tgbox.api
+.. automodule:: tgbox.api.local
    :members:
    :undoc-members:
    :show-inheritance:
    :inherited-members:
 
-tgbox.defaults module
-----------------------
+tgbox.api.remote module
+-----------------------
 
-.. automodule:: tgbox.defaults
+.. automodule:: tgbox.api.remote
    :members:
    :undoc-members:
    :show-inheritance:
@@ -72,3 +72,13 @@ tgbox.tools module
    :undoc-members:
    :show-inheritance:
    :inherited-members:
+
+tgbox.defaults module
+----------------------
+
+.. automodule:: tgbox.defaults
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+
