@@ -24,6 +24,7 @@ setup(
         'telethon==1.25.4',
         'ecdsa==0.16.1',
         'filetype==1.0.8',
+        'pysocks==1.7.1'
     ],
     keywords = [
         'Telegram', 'Cloud-Storage', 'Cloud',
