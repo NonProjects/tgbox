@@ -18,10 +18,10 @@ setup(
         'tgbox': ['tgbox/other'],
     },
     include_package_data = True,
-    
+
     install_requires = [
         'aiosqlite==0.17.0',
-        'telethon==1.25.0',
+        'telethon==1.25.4',
         'ecdsa==0.16.1',
         'filetype==1.0.8',
     ],
