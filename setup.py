@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name             = 'tgbox',
-    packages         = ['tgbox'],
+    packages         = ['tgbox', 'tgbox.api'],
     version          = '1.0',
     license          = 'LGPL-2.1',
     description      = 'Encrypted cloud storage API based on a Telegram API',
