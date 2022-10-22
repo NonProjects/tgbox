@@ -26,11 +26,14 @@ from ..defaults import VERSION
 from ..tools import anext, SearchFilter
 from ..fastelethon import download_file
 
+from .db import TABLES, TgboxDB
+
 __all__ = [
     'search_generator',
     'DirectoryRoot',
     'PreparedFile',
     'TelegramClient',
+    'DefaultsTableWrapper'
 ]
 class TelegramClient(TTelegramClient):
     """
@@ -71,8 +74,12 @@ class TelegramClient(TTelegramClient):
     def __init__(
             self, api_id: int, api_hash: str,
             phone_number: Optional[str] = None,
-            session: Optional[Union[str, StringSession]] = None):
+            session: Optional[Union[str, StringSession]] = None,
+            **kwargs) -> None:
         """
+        .. note::
+            You should specify at least ``session`` or ``phone_number``.
+
         Arguments:
             api_id (``int``):
                 API_ID from https://my.telegram.org.
@@ -92,7 +99,10 @@ class TelegramClient(TTelegramClient):
                 after connecting and signing in via
                 ``TelegramClient.session.save()`` method.
 
-            You should specify at least ``session`` or ``phone_number``.
+        ..tip::
+            This ``TelegramClient`` support all keywoard
+            arguments (**kwargs) that support parent
+            ``telethon.TelegramClient`` object.
         """
         if not session and not phone_number:
             raise ValueError(
@@ -100,7 +110,7 @@ class TelegramClient(TTelegramClient):
             )
         super().__init__(
             StringSession(session),
-            api_id, api_hash
+            api_id, api_hash, **kwargs
         )
         self.__version__ = VERSION
         self._api_id, self._api_hash = api_id, api_hash
@@ -174,6 +184,7 @@ class PreparedFile:
     filesize: int
     filepath: PathLike
     filesalt: bytes
+    fingerprint: bytes
     metadata: bytes
     imported: bool
 
@@ -194,7 +205,6 @@ class DirectoryRoot:
     please use it only for ``lbd.iterdir``
     """
 
-# TODO: Test with imported file
 # TODO: Improve SearchFilter
 async def search_generator(
         sf: SearchFilter, it_messages: Optional[AsyncGenerator] = None,
@@ -457,3 +467,94 @@ class _TelegramVirtualFile:
             )
         chunk = await anext(self.downloader)
         return chunk
+
+class DefaultsTableWrapper:
+    """
+    This little class will wrap around the
+    DEFAULTS table of TGBOX DB and will
+    fetch all contents of it.
+
+    You can call
+    """
+    def __init__(self, tgbox_db: TgboxDB):
+        """
+        Arguments:
+            tgbox_db (``TgboxDB``):
+                An initialized ``TgboxDB``.
+        """
+        self._tgbox_db = tgbox_db
+        self._initialized = False
+
+    @property
+    def initialized(self) -> bool:
+        return self._initialized
+
+    async def init(self) -> 'DefaultsTableWrapper':
+        """Fetch the defaults and initialize"""
+        if self._tgbox_db.closed:
+            await self._tgbox_db.init()
+
+        defaults = await self._tgbox_db.DEFAULTS.select_once()
+        for default, value in zip(TABLES['DEFAULTS'], defaults):
+            setattr(self, default[0], value)
+
+        self._initialized = True
+        return self
+
+    async def change(self, key: str, value) -> None:
+        """
+        This method can change the defaults values
+
+        Arguments:
+            key (``str``):
+                Key to change, i.e METADATA_MAX.
+
+            value:
+                Key's new value.
+
+        .. warning::
+            We **don't** verify here that value
+            type corresponds to real type of Key
+            or that value doesn't overflow the
+            allowed value maximum. Be sure to
+            specify the correct Key values.
+
+        Example:
+
+        .. code-block:: python
+
+        from asyncio import run as asyncio_run
+
+        from tgbox.defaults import DEF_TGBOX_NAME
+        from tgbox.api.db import TgboxDB
+        from tgbox.api.utils import DefaultsTableWrapper
+
+        async def main():
+            # Make a DefaultsTableWrapper object
+            tdb = await TgboxDB(DEF_TGBOX_NAME).init()
+            dtw = await DefaultsTableWrapper(tdb).init()
+
+            # Change METADATA_MAX to the max allowed size
+            dtw.change('METADATA_MAX', 256**3-1)
+
+            # Access DTW from the DecryptedLocalBox
+            ... # Some code was omited here
+            # Disable making file hash on preparing
+            dlb.defaults.change('HASH_FILE', 0)
+            # Change the default download path
+            dlb.defaults.change('DOWNLOAD_PATH', 'Downloads')
+
+        asyncio_run(main())
+        """
+        getattr(self, key) # Vetrify that Key exist
+        await self._tgbox_db.DEFAULTS.execute((
+            f'UPDATE DEFAULTS SET {key}=?', (value,)
+        ))
+
+@dataclass
+class RemoteBoxDefaults:
+    METADATA_MAX: int
+    FILE_PATH_MAX: int
+    DEF_UNK_FOLDER: Union[str, PathLike]
+    DEF_NO_FOLDER: Union[str, PathLike]
+    DOWNLOAD_PATH: Union[str, PathLike]

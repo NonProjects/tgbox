@@ -11,6 +11,7 @@ from os import PathLike
 from io import BytesIO
 from time import time
 
+from hashlib import sha256
 from asyncio import iscoroutinefunction
 
 from filetype import guess as filetype_guess
@@ -25,15 +26,13 @@ from ..keys import (
     make_sharekey, MainKey, RequestKey,
     ShareKey, ImportKey, FileKey, BaseKey
 )
-from ..defaults import (
-    Limits, PREFIX, DEF_NO_FOLDER,
-    DOWNLOAD_PATH, VERBYTE, DEF_TGBOX_NAME
-)
+from ..defaults import PREFIX, VERBYTE, DEF_TGBOX_NAME
+
 from ..errors import (
-    NotEnoughRights, IncorrectKey,
-    LimitExceeded, DurationImpossible,
     NotInitializedError, AlreadyImported,
-    InUseException, AESError, PreviewImpossible
+    InUseException, AESError, PreviewImpossible,
+    LimitExceeded, DurationImpossible, InvalidFile,
+    NotEnoughRights, IncorrectKey, FingerprintExists
 )
 from ..tools import (
     PackedAttributes, ppart_id_generator,
@@ -41,9 +40,9 @@ from ..tools import (
     get_media_duration, prbg, make_media_preview
 )
 from .utils import (
-    _TelegramVirtualFile,
-    PreparedFile, DirectoryRoot,
-    TelegramClient, search_generator
+    DirectoryRoot, search_generator, PreparedFile,
+    _TelegramVirtualFile, TelegramClient,
+    DefaultsTableWrapper, RemoteBoxDefaults
 )
 from .db import TgboxDB
 
@@ -234,13 +233,24 @@ class EncryptedLocalBox:
 
         asyncio_run(main())
     """
-    def __init__(self, tgbox_db: TgboxDB):
+    def __init__(
+            self, tgbox_db: TgboxDB,
+            defaults: Optional[Union[DefaultsTableWrapper,
+                RemoteBoxDefaults]] = None):
         """
         Arguments:
             tgbox_db (``TgboxDB``):
                 Initialized Tgbox Database.
+
+            defaults (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
+                Class with a default values/constants we will use.
         """
         self._tgbox_db = tgbox_db
+
+        if defaults is None:
+            self._defaults = DefaultsTableWrapper(self._tgbox_db)
+        else:
+            self._defaults = defaults
 
         self._api_id = None
         self._api_hash = None
@@ -285,6 +295,11 @@ class EncryptedLocalBox:
     def tgbox_db(self) -> TgboxDB:
         """Returns ``TgboxDB``."""
         return self._tgbox_db
+
+    @property
+    def defaults(self) -> Union[DefaultsTableWrapper, RemoteBoxDefaults]:
+        """Returns ``DefaultsTableWrapper`` or ``RemoteBoxDefaults``."""
+        return self._defaults
 
     @property
     def initialized(self) -> bool:
@@ -351,6 +366,10 @@ class EncryptedLocalBox:
             if self._mainkey:
                 self._mainkey = EncryptedMainkey(self._mainkey)
 
+            if isinstance(self._defaults, DefaultsTableWrapper):
+                if not self._defaults.initialized:
+                    await self._defaults.init()
+
         return self
 
     async def get_file(
@@ -375,7 +394,8 @@ class EncryptedLocalBox:
             self.__raise_initialized()
             elbf = EncryptedLocalBoxFile(
                 id, self._tgbox_db,
-                cache_preview=cache_preview
+                cache_preview=cache_preview,
+                defaults=self._defaults
             )
             if decrypt and self._mainkey and not\
                 isinstance(self._mainkey, EncryptedMainkey):
@@ -567,7 +587,10 @@ class DecryptedLocalBox(EncryptedLocalBox):
             raise NotInitializedError('Parent class isn\'t initialized.')
 
         self._elb = elb
+
         self._tgbox_db = elb._tgbox_db
+        self._defaults = elb._defaults
+
         self._initialized = True
 
         if isinstance(key, BaseKey):
@@ -673,11 +696,35 @@ class DecryptedLocalBox(EncryptedLocalBox):
         part_id = (await self._make_local_path(pf.filepath)).part_id
 
         await self._tgbox_db.FILES.insert(
-            pf.file_id, eupload_time, part_id,
-            efilekey, pf.metadata, None
+            pf.file_id, eupload_time,
+            part_id, efilekey, pf.fingerprint,
+            pf.metadata, None
         )
         return await EncryptedLocalBoxFile(
-            pf.file_id, self._tgbox_db).decrypt(pf.filekey)
+            pf.file_id, self._tgbox_db,
+            defaults=self._defaults).decrypt(pf.filekey)
+
+    async def _check_fingerprint(self, fingerprint: bytes):
+        """
+        Will check that file path is unique, and if not
+        then will raise a ``FingerprintExists`` error.
+
+        This is mostly for internal use.
+
+        Arguments:
+            fingerprint (``bytes``):
+                BoxFile fingerprint.
+        """
+        try:
+            # Verify that there is no file with the same fingerprint
+            await self._tgbox_db.FILES.select_once(sql_tuple=(
+                'SELECT ID FROM FILES WHERE FINGERPRINT=?',
+                (fingerprint,)
+            ))
+        except StopAsyncIteration:
+            pass
+        else:
+            raise FingerprintExists(FingerprintExists.__doc__) from None
 
     # TODO: Delete PartID from PATH_PARTS if it links
     # to only one file that was removed.
@@ -892,7 +939,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 get size by ``len()`` (as ``__len__`` dunder). If all fails,
                 method tries to get ``file.read())`` (with load to RAM).
 
-                Abs file path length must be <= ``defaults.Limits.FILE_PATH_MAX``;
+                Abs file path length must be <= ``self.defaults.FILE_PATH_MAX``;
                 If file has no ``name`` and ``file_path`` is not
                 specified then it will be ``NO_FOLDER/{prbg(6).hex()}``.
 
@@ -905,9 +952,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 that isn't exists. If not specified, will
                 be used path from the ``BinaryIO``, if file
                 is not a ``BinaryIO`` then will be used a
-                ``defaults.DEF_NO_FOLDER``.
+                ``self.defaults.DEF_NO_FOLDER``.
 
-                Must be <= ``defaults.Limits.FILE_PATH_MAX``.
+                Must be <= ``self.defaults.FILE_PATH_MAX``.
 
             cattrs (``Dict[str, Union[bytes, None]]``, optional):
                 The file's custom metadata attributes that
@@ -916,7 +963,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
                 Please note that after some operations we
                 will create a file metadata. Its limit
-                defined as ``defaults.Limits.METADATA_MAX``. You
+                defined as ``self.defaults.METADATA_MAX``. You
                 shouldn't overflow this number plus size of
                 default metadata; other is up to you.
 
@@ -944,13 +991,19 @@ class DecryptedLocalBox(EncryptedLocalBox):
             if hasattr(file,'name') and file.name:
                 file_path = Path(file.name).absolute()
             else:
-                file_path = Path(DEF_NO_FOLDER, prbg(8).hex())
+                file_path = Path(self._defaults.DEF_NO_FOLDER, prbg(8).hex())
         else:
             if len(file_path.parts) < 2:
                 raise ValueError('Path should contain folder and file name')
 
-        if len(str(file_path)) > Limits.FILE_PATH_MAX:
-            raise LimitExceeded(f'File path must be <= {Limits.FILE_PATH_MAX} bytes.')
+        if len(str(file_path)) > self._defaults.FILE_PATH_MAX:
+            raise LimitExceeded(f'File path must be <= {self._defaults.FILE_PATH_MAX} bytes.')
+
+        file_fingerprint = sha256(
+            str(file_path).encode()\
+          + self._mainkey.key).digest()
+
+        await self._check_fingerprint(file_fingerprint)
 
         if not file_size:
             if isinstance(file, _TelegramVirtualFile):
@@ -976,6 +1029,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
                         file = BytesIO(rb)
                         del rb
 
+        if file_size <= 0:
+            raise InvalidFile('Specified file is empty or file_size in invalid')
+
         if isinstance(file, _TelegramVirtualFile):
             if file.mime:
                 mime_type = file.mime
@@ -987,7 +1043,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             try:
                 mime_type = filetype_guess(file).mime
                 file_type = mime_type.split('/')[0]
-            except (TypeError, FileNotFoundError):
+            except (TypeError, FileNotFoundError, AttributeError):
                 mime_type = ''
                 file_type = None
             finally:
@@ -1035,11 +1091,12 @@ class DecryptedLocalBox(EncryptedLocalBox):
         metadata = PackedAttributes.pack(
             box_salt = self._box_salt,
             file_salt = file_salt,
+            file_fingerprint = file_fingerprint,
             secret_metadata = secret_metadata
         )
-        if len(metadata) > Limits.METADATA_MAX:
+        if len(metadata) > self._defaults.METADATA_MAX:
             raise LimitExceeded(
-                f'Total len(metadata) must be <= {Limits.METADATA_MAX}'
+                f'Total len(metadata) must be <= {self._defaults.METADATA_MAX}'
             )
         if len(metadata) > 256**3-1:
             raise LimitExceeded(
@@ -1060,12 +1117,13 @@ class DecryptedLocalBox(EncryptedLocalBox):
             filesize = total_file_size,
             filepath = Path(file_path_no_name.decode()),
             filesalt = file_salt,
+            fingerprint = file_fingerprint,
             metadata = constructed_metadata,
             imported = False
         )
     async def import_file(
             self, drbf: 'tgbox.api.remote.DecryptedRemoteBoxFile',
-            file_path: Optional[Path] = None)\
+            file_path: Optional[Union[str, Path]] = None)\
             -> 'DecryptedLocalBoxFile':
         """
         Imports file to your ``DecryptedLocalBox``
@@ -1077,7 +1135,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             file_path (``Path``, optional):
                 File's path. Will be used ``drbf._file_path`` if
                 ``None`` and if drbf was decrypted with the
-                ``MainKey``, otherwise ``defaults.DEF_NO_FOLDER``.
+                ``MainKey``, otherwise ``self.defaults.DEF_NO_FOLDER``.
 
                 This method will call a ``set_file_path(file_path)``
                 on the specified drbf if ``file_path`` isn't a ``None``.
@@ -1091,7 +1149,13 @@ class DecryptedLocalBox(EncryptedLocalBox):
             await drbf._erbf.init()
 
         if not file_path:
-            file_path = drbf.file_path
+            if drbf.file_path:
+                file_path = drbf.file_path
+            else:
+                file_path = self._defaults.DEF_NO_FOLDER
+
+        if isinstance(file_path, str):
+            file_path = Path(file_path)
 
         drbf.set_file_path(file_path)
 
@@ -1100,8 +1164,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
             file = BytesIO(),
             filekey = drbf._filekey,
             filesize = drbf._size,
-            filepath = drbf._file_path,
+            filepath = file_path,
             filesalt = drbf._file_salt,
+            fingerprint = drbf._fingerprint,
             metadata = drbf._erbf._metadata,
             imported = True
         )
@@ -1471,7 +1536,9 @@ class EncryptedLocalBoxFile:
     """
     def __init__(
             self, id: int, tgbox_db: TgboxDB,
-            cache_preview: bool=True) -> None:
+            cache_preview: bool=True,
+            defaults: Optional[Union[DefaultsTableWrapper,
+                RemoteBoxDefaults]] = None) -> None:
         """
         Arguments:
             id (``int``):
@@ -1482,18 +1549,27 @@ class EncryptedLocalBoxFile:
 
             cache_preview (``bool``, optional):
                 Cache preview in class or not.
+
+            defaults (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
+                Class with a default values/constants we will use.
         """
         self._id = id
         self._tgbox_db = tgbox_db
         self._cache_preview = cache_preview
 
         self._initialized = False
+        self._fingerprint = None
+        self._updated_metadata = None
 
         self._ppath_head, self._upload_time = None, None
         self._metadata, self._directory = None, None
-        self._exported, self._efilekey = None, None
+        self._imported, self._efilekey = None, None
         self._file_salt, self._version_byte = None, None
-        self._updated_metadata = None
+
+        if defaults:
+            self._defaults = defaults
+        else:
+            self._defaults = DefaultsTableWrapper(self._tgbox_db)
 
     def __hash__(self) -> int:
         return hash((self._id, 22))
@@ -1512,12 +1588,20 @@ class EncryptedLocalBoxFile:
         return self._initialized
 
     @property
-    def exported(self) -> Union[bool, None]:
+    def imported(self) -> Union[bool, None]:
         """
         Returns ``True`` if file was
         forwarded to your BoxChannel.
         """
-        return self._exported
+        return self._imported
+
+    @property
+    def fingerprint(self) -> Union[bytes, None]:
+        """
+        Returns file fingerprint (hash of
+        file path plus mainkey) or ``None``
+        """
+        return self._fingerprint
 
     @property
     def version_byte(self) -> Union[bytes, None]:
@@ -1525,6 +1609,14 @@ class EncryptedLocalBoxFile:
         ``None`` if class wasn't initialized
         """
         return self._version_byte
+
+    @property
+    def defaults(self) -> Union[DefaultsTableWrapper, RemoteBoxDefaults]:
+        """
+        Will return ``DefaultsTableWrapper`` or
+        ``RemoteBoxDefaults``.
+        """
+        return self._defaults
 
     @property
     def directory(self) -> Union[
@@ -1603,6 +1695,7 @@ class EncryptedLocalBoxFile:
         ))
         self._updated_metadata = file_row.pop()
         self._metadata = file_row.pop()
+        self._fingerprint = file_row.pop()
         self._efilekey = file_row.pop()
         self._ppath_head = file_row.pop()
         self._upload_time = file_row.pop()
@@ -1613,7 +1706,7 @@ class EncryptedLocalBoxFile:
         )
         await self._directory.init()
 
-        self._exported = bool(self._efilekey)
+        self._imported = bool(self._efilekey)
 
         self._prefix = self._metadata[:len(PREFIX)]
         self._version_byte = self._metadata[
@@ -1628,8 +1721,11 @@ class EncryptedLocalBoxFile:
         self._file_salt = unpacked_metadata['file_salt']
         self._box_salt = unpacked_metadata['box_salt']
 
-        self._initialized = True
+        if isinstance(self._defaults, DefaultsTableWrapper):
+            if not self._defaults.initialized:
+                await self._defaults.init()
 
+        self._initialized = True
         return self
 
     def disable_cache_preview(self) -> None:
@@ -1757,10 +1853,12 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         self._efilekey = elbf._efilekey
 
         self._id = elbf._id
-        self._exported = elbf._exported
+        self._imported = elbf._imported
         self._ppath_head = elbf._ppath_head
 
+        self._fingerprint = elbf._fingerprint
         self._updated_metadata = elbf._updated_metadata
+        self._defaults = elbf._defaults
 
         self._prefix = elbf._prefix
         self._version_byte = elbf._version_byte
@@ -1842,7 +1940,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         else:
             self._directory = self._elbf._directory
 
-        self._download_path = DOWNLOAD_PATH
+        self._download_path = self._defaults.DOWNLOAD_PATH
 
         if self._elbf._updated_metadata:
             updates = AES(self._filekey).decrypt(

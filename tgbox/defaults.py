@@ -27,6 +27,7 @@ __all__ = [
     'PYINSTALLER_DATA'
 ]
 class Limits(IntEnum):
+    """Default TGBOX API limits"""
     # We store metadata size in three bytes, but
     # by default it's size is limited to 1MB. You
     # can set it up to the 256^3-1, but to share
@@ -38,6 +39,7 @@ class Limits(IntEnum):
     FILE_PATH_MAX: int=4096
 
 class Scrypt(IntEnum):
+    """Default Scrypt KDF configuration"""
     # See https://en.wikipedia.org/wiki/Scrypt for base info about Scrypt
     # -------------------------------------------------------------------
     # This salt affects basekeys, you can change it to protect your RemoteBox

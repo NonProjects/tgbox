@@ -57,8 +57,10 @@ from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter, OpenPretender,
     pad_request_size, PackedAttributes, prbg, anext
 )
-from .utils import TelegramClient, search_generator
-
+from .utils import (
+    TelegramClient, RemoteBoxDefaults,
+    DefaultsTableWrapper, search_generator
+)
 __all__ = [
     'make_remotebox',
     'get_remotebox',
@@ -121,7 +123,8 @@ async def make_remotebox(
 async def get_remotebox(
         dlb: Optional['DecryptedLocalBox'] = None,
         tc: Optional['TelegramClient'] = None,
-        entity: Optional[Union[int, str, PeerChannel]] = None)\
+        entity: Optional[Union[int, str, PeerChannel]] = None,
+        proxy: Optional[Union[tuple, list, dict]] = None)\
         -> Union['EncryptedRemoteBox', 'DecryptedRemoteBox']:
     """
     Returns ``EncryptedRemoteBox`` or
@@ -144,9 +147,15 @@ async def get_remotebox(
         entity (``PeerChannel``, ``int``, ``str``, optional):
             Can be ``Channel`` ID, Username or ``PeerChannel``.
             Will be used if specified. Must be specified with ``tc``.
+
+        proxy (tuple, list, dict, optional):
+            An iterable consisting of the proxy info. If connection
+            is one of MTProxy, then it should contain MTProxy credentials:
+            ('hostname', port, 'secret'). Otherwise, it’s meant to store
+            function parameters for PySocks, like (type, 'hostname', port).
+            See https://github.com/Anorov/PySocks#usage-1 for more info.
     """
-    if tc:
-        account = tc
+    if tc: account = tc
 
     elif tc and not entity:
         raise ValueError('entity must be specified with tc')
@@ -154,7 +163,8 @@ async def get_remotebox(
         account = TelegramClient(
             session=dlb._session,
             api_id=dlb._api_id,
-            api_hash=dlb._api_hash
+            api_hash=dlb._api_hash,
+            proxy=proxy
         )
         await account.connect()
     try:
@@ -223,7 +233,11 @@ class EncryptedRemoteBox:
 
         asyncio_run(main())
     """
-    def __init__(self, box_channel: Channel, tc: TelegramClient):
+    def __init__(self,
+            box_channel: Channel,
+            tc: TelegramClient,
+            defaults: Optional[Union[RemoteBoxDefaults,
+                DefaultsTableWrapper]] = None):
         """
         Arguments:
             box_channel (``Channel``):
@@ -235,6 +249,9 @@ class EncryptedRemoteBox:
 
             tc (``TelegramClient``):
                 Telegram account that have ``box_channel``.
+
+            defaults (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
+                Class with a default values/constants we will use.
         """
         self._tc = tc
 
@@ -246,6 +263,17 @@ class EncryptedRemoteBox:
         # you should await get_box_salt firstly.
         self._box_name = None
         # Similar to box_salt, await get_box_name.
+
+        if defaults:
+            self._defaults = defaults
+        else:
+            self._defaults = RemoteBoxDefaults(
+                METADATA_MAX = Limits.METADATA_MAX,
+                FILE_PATH_MAX = Limits.FILE_PATH_MAX,
+                DEF_UNK_FOLDER = DEF_UNK_FOLDER,
+                DEF_NO_FOLDER = DEF_NO_FOLDER,
+                DOWNLOAD_PATH = DOWNLOAD_PATH
+            )
 
     def __hash__(self) -> int:
         # Without 22 hash of int wil be equal to object's
@@ -266,6 +294,15 @@ class EncryptedRemoteBox:
         see *"Events Reference"* in Telethon Docs.
         """
         return events.NewMessage(chats=self.box_channel_id)
+
+    @property
+    def defaults(self) -> Union[DefaultsTableWrapper, RemoteBoxDefaults]:
+        """
+        Will return ``DefaultsTableWrapper`` if
+        ``dlb`` was specified or ``RemoteBoxDefaults``
+        with arguments from the ``defaults`` module if wasn't.
+        """
+        return self._defaults
 
     @property
     def tc(self) -> TelegramClient:
@@ -556,16 +593,20 @@ class EncryptedRemoteBox:
             if m.document:
                 if not decrypt:
                     rbf = await EncryptedRemoteBoxFile(
-                        m, self._tc, cache_preview=cache_preview).init()
+                        m, self._tc, cache_preview=cache_preview,
+                        defaults=self._defaults).init()
                 else:
                     try:
                         rbf = await EncryptedRemoteBoxFile(
-                            m, self._tc, cache_preview=cache_preview).decrypt(
+                            m, self._tc, cache_preview=cache_preview,
+                            defaults=self._defaults).decrypt(
                                 key, erase_encrypted_metadata)
+
                     except Exception as e: # In case of imported file
                         if return_imported_as_erbf and not dlb:
                             rbf = await EncryptedRemoteBoxFile(
-                                m, self._tc, cache_preview=cache_preview).init()
+                                m, self._tc, cache_preview=cache_preview,
+                                defaults=self._defaults).init()
 
                         elif ignore_errors and not dlb:
                             continue
@@ -581,7 +622,9 @@ class EncryptedRemoteBox:
                             if not dlb_file:
                                 if return_imported_as_erbf:
                                     rbf = await EncryptedRemoteBoxFile(
-                                        m, self._tc, cache_preview=cache_preview).init()
+                                        m, self._tc, cache_preview=cache_preview,
+                                        defaults=self._defaults).init()
+
                                 elif ignore_errors:
                                     continue
                                 else:
@@ -592,8 +635,8 @@ class EncryptedRemoteBox:
                             else:
                                 # We already imported file, so have FileKey
                                 rbf = await EncryptedRemoteBoxFile(
-                                    m, self._tc, cache_preview=cache_preview
-                                ).decrypt(dlb_file._filekey)
+                                    m, self._tc, cache_preview=cache_preview,
+                                    defaults=self._defaults).decrypt(dlb_file._filekey)
                         else:
                             raise e # Unknown Exception
                 yield rbf
@@ -665,9 +708,9 @@ class EncryptedRemoteBox:
                 (downloaded_bytes, total).
         """
         # Last 16 bytes of metadata is IV
-        state = AES(pf.filekey, pf.metadata[-16:])
+        aes_state = AES(pf.filekey, pf.metadata[-16:])
 
-        oe = OpenPretender(pf.file, state, pf.filesize)
+        oe = OpenPretender(pf.file, aes_state, pf.filesize)
         oe.concat_metadata(pf.metadata)
         try:
             ifile = await upload_file(
@@ -696,7 +739,10 @@ class EncryptedRemoteBox:
 
         await pf.dlb._make_local_file(pf)
 
-        erbf = await EncryptedRemoteBoxFile(file_message, self._tc).init()
+        erbf = await EncryptedRemoteBoxFile(
+            file_message, self._tc,
+            defaults=self._defaults).init()
+
         return await erbf.decrypt(pf.dlb._mainkey)
 
     async def get_requestkey(self, basekey: BaseKey) -> RequestKey:
@@ -719,17 +765,16 @@ class EncryptedRemoteBox:
         With calling this method you will left
         *RemoteBox* ``Channel``.
         """
-        await self._tc.delete_dialog(
-            self._box_channel)
+        await self._tc.delete_dialog(self._box_channel)
 
     async def delete(self) -> None:
         """
         This method **WILL DELETE** *RemoteBox*.
 
-        Use ``left()`` if you only want to left
-        from ``Channel``, not delete it.
+        Use ``left()`` if you **only want to left**
+        your *Box* ``Channel``, not delete it.
 
-        You need to have rights for this.
+        You need to have admin rights for this.
         """
         try:
             await self._tc(DeleteChannelRequest(self._box_channel))
@@ -826,10 +871,12 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
 
         self._box_salt = erb._box_salt
         self._box_name = erb._box_name
+
         self._dlb = dlb
 
         if self._dlb:
             self._mainkey = self._dlb._mainkey
+            self._defaults = self._dlb._defaults
         else:
             if not key:
                 raise ValueError('Must be specified at least key or dlb')
@@ -840,6 +887,8 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
                 self._mainkey = make_mainkey(key, self._box_salt)
             else:
                 raise IncorrectKey('key is not Union[MainKey, ImportKey, BaseKey]')
+
+            self._defaults = erb._defaults
 
     async def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """
@@ -897,7 +946,9 @@ class EncryptedRemoteBoxFile:
     def __init__(
             self, sended_file: Message,
             tc: TelegramClient,
-            cache_preview: bool=True):
+            cache_preview: bool=True,
+            defaults: Optional[Union[DefaultsTableWrapper,
+                RemoteBoxDefaults]] = None):
         """
         Arguments:
             sended_file (``Message``):
@@ -910,6 +961,9 @@ class EncryptedRemoteBoxFile:
             cache_preview (``bool``, optional):
                 Cache preview in class or not. ``True`` by default.
                 This kwarg will be used later in ``DecryptedRemoteBoxFile``
+
+            defaults (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
+                Class with a default values/constants we will use.
         """
         self._initialized = False
 
@@ -937,11 +991,23 @@ class EncryptedRemoteBoxFile:
         self._box_salt = None
         self._version_byte = None
         self._prefix = None
+        self._fingerprint = None
 
         if self._message.fwd_from:
-            self._exported = True
+            self._imported = True
         else:
-            self._exported = False
+            self._imported = False
+
+        if defaults is None:
+            self._defaults = RemoteBoxDefaults(
+                METADATA_MAX = Limits.METADATA_MAX,
+                FILE_PATH_MAX = Limits.FILE_PATH_MAX,
+                DEF_UNK_FOLDER = DEF_UNK_FOLDER,
+                DEF_NO_FOLDER = DEF_NO_FOLDER,
+                DOWNLOAD_PATH = DOWNLOAD_PATH,
+            )
+        else:
+            self._defaults = defaults
 
     def __hash__(self) -> int:
         if not self.initialized:
@@ -966,6 +1032,14 @@ class EncryptedRemoteBoxFile:
         return self._tc
 
     @property
+    def defaults(self) -> Union[DefaultsTableWrapper, RemoteBoxDefaults]:
+        """
+        Will return ``DefaultsTableWrapper`` or
+        ``RemoteBoxDefaults``.
+        """
+        return self._defaults
+
+    @property
     def sender(self) -> Union[str, None]:
         """
         Returns post author if sign
@@ -975,12 +1049,12 @@ class EncryptedRemoteBoxFile:
         return self._sender
 
     @property
-    def exported(self) -> bool:
+    def imported(self) -> bool:
         """
-        Returns ``True`` if file was exported
+        Returns ``True`` if file was imported
         from other RemoteBox. ``False`` otherwise.
         """
-        return self._exported
+        return self._imported
 
     @property
     def version_byte(self) -> Union[bytes, None]:
@@ -991,6 +1065,14 @@ class EncryptedRemoteBoxFile:
     def box_salt(self) -> Union[bytes, None]:
         """Returns BoxSalt or ``None`` if not initialized"""
         return self._box_salt
+
+    @property
+    def fingerprint(self) -> Union[bytes, None]:
+        """
+        Returns file fingerprint (hash of
+        file path plus mainkey) or ``None``
+        """
+        return self._fingerprint
 
     @property
     def upload_time(self) -> Union[int, None]:
@@ -1045,7 +1127,7 @@ class EncryptedRemoteBoxFile:
         """
         This method will download and set raw
         RemoteBoxFile metadata. If metadata length
-        is bigger than ``defaults.Limits.METADATA_MAX``
+        is bigger than ``self.defaults.METADATA_MAX``
         then ``errors.LimitExceeded`` will be raised.
 
         Arguments:
@@ -1054,6 +1136,10 @@ class EncryptedRemoteBoxFile:
                 ``defaults.PREFIX`` in metadata, and if
                 not, will raise a ``NotATgboxFile`` exception.
         """
+        if isinstance(self._defaults, DefaultsTableWrapper):
+            if not self._defaults.initialized:
+                await self._defaults.init()
+
         # 3 is amount of bytes to which we pack metadata length
         request_amount = len(PREFIX) + len(VERBYTE) + 3
 
@@ -1072,16 +1158,16 @@ class EncryptedRemoteBoxFile:
                 metadata_size = bytes_to_int(
                     base_data[request_amount-3:request_amount]
                 )
-                if metadata_size > Limits.METADATA_MAX:
-                    raise LimitExceeded(f'{Limits.METADATA_MAX=}, {metadata_size=}.')
+                if metadata_size > self._defaults.METADATA_MAX:
+                    raise LimitExceeded(f'{self._defaults.METADATA_MAX=}, {metadata_size=}.')
 
                 # We will also download IV. It's not included
                 # in the total metadata bytesize.
                 metadata_size += 16
                 break
 
-        if metadata_size > Limits.METADATA_MAX:
-            raise LimitExceeded(f'{metadata_size=} > {Limits.METADATA_MAX=}')
+        if metadata_size > self._defaults.METADATA_MAX:
+            raise LimitExceeded(f'{metadata_size=} > {self._defaults.METADATA_MAX=}')
 
         iter_down = self._tc.iter_download(
             file = self._message.document,
@@ -1095,6 +1181,11 @@ class EncryptedRemoteBoxFile:
             break
 
         parsedm = PackedAttributes.unpack(self._metadata[len(m):-16])
+
+        if 'file_fingerprint' in parsedm:
+            self._fingerprint = parsedm['file_fingerprint']
+        else:
+            self._fingerprint = b''
 
         self._file_salt = parsedm['file_salt']
         self._box_salt = parsedm['box_salt']
@@ -1123,7 +1214,6 @@ class EncryptedRemoteBoxFile:
                 '''You don\'t have enough rights to delete '''
                 '''file from this RemoteBox.'''
             )
-
     def get_requestkey(self, mainkey: MainKey) -> RequestKey:
         """
         Returns ``RequestKey`` for this file. You should
@@ -1225,18 +1315,20 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._sender = erbf._sender
 
         self._tc = erbf._tc
+        self._defaults = erbf._defaults
         self._cache_preview = erbf._cache_preview
 
         self._box_salt = erbf._box_salt
         self._box_channel_id = erbf._box_channel_id
         self._file_size = erbf._file_size
+        self._fingerprint = erbf._fingerprint
 
         self._upload_time, self._size = erbf._upload_time, None
         self._file_iv, self._file_salt = erbf._file_iv, erbf._file_salt
         self._cattrs, self._file_path = None, None
         self._duration, self._version_byte = None, erbf._version_byte
 
-        self._preview, self._exported = None, erbf._exported
+        self._preview, self._imported = None, erbf._imported
         self._prefix, self._file_pos = erbf._prefix, None
 
         self._file_file_name = erbf._file_file_name
@@ -1415,7 +1507,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         return self
 
     async def download(
-            self, *, outfile: Union[str, BinaryIO, Path] = DOWNLOAD_PATH,
+            self, *, outfile: Optional[Union[str, BinaryIO, Path]] = None,
             hide_folder: bool=False, hide_name: bool=False,
             decrypt: bool=True, request_size: int=524288,
             progress_callback: Optional[Callable[[int, int], None]] = None) -> BinaryIO:
@@ -1425,13 +1517,13 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         Arguments:
             oufile (``str``, ``BinaryIO``, ``PathLike``, optional):
                 Path-like or File-like object to which file
-                will be downloaded. ``.defaults.DOWNLOAD_PATH`` by default.
+                will be downloaded. ``self.defaults.DOWNLOAD_PATH`` by default.
 
                 If ``outfile`` has ``.write()`` method then we will use it.
 
             hide_folder (``bool``, optional):
                 Saves to folder which this file belongs to if False,
-                (default) otherwise to ``outfile/{defaults.DEF_UNK_FOLDER}``.
+                (default) otherwise to ``outfile/{self.defaults.DEF_UNK_FOLDER}``.
 
                 * Doesn't create any folders if ``isinstance(outfile, BinaryIO)``.
 
@@ -1464,17 +1556,20 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         if decrypt:
             aws = AES(self._filekey, self._file_iv)
 
+        if outfile is None:
+            outfile = self._defaults.DOWNLOAD_PATH
+
         if isinstance(outfile, (str, PathLike)):
             outfile = Path(outfile)
             outfile.mkdir(exist_ok=True)
 
-            path = DEF_UNK_FOLDER if hide_folder else self._file_path
+            path = self._defaults.DEF_UNK_FOLDER if hide_folder else self._file_path
             # The first '/' symbol in '/home/non/' is also path part,
             # so we need to create a folders like / -> home -> non,
             # however, Linux (and i believe all Unix) OS doesn't allow
             # to use a '/' symbol in filename, so instead of / we use
             # a '@' while creating path. You can refer to it as root.
-            path = str(DEF_NO_FOLDER if not path else path)
+            path = str(self._defaults.DEF_NO_FOLDER if not path else path)
             #
             if path.startswith('/'):
                 path = str(Path('@', path.lstrip('/')))

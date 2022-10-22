@@ -366,7 +366,7 @@ class OpenPretender:
     def tell(self) -> int:
         return self._position
 
-    def seekable(*args, **kwargs) -> bool:
+    def seekable(self, *args, **kwargs) -> bool:
         return False
 
     def close(self) -> None:

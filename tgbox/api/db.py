@@ -9,12 +9,48 @@ from pathlib import Path
 
 import aiosqlite
 
+from ..defaults import (
+    Limits, DOWNLOAD_PATH,
+    DEF_NO_FOLDER, DEF_UNK_FOLDER,
+)
 from ..errors import PathIsDirectory
 from ..tools import anext
 
+__all__ = ['SqlTableWrapper', 'TgboxDB', 'TABLES']
 
-__all__ = ['SqlTableWrapper', 'TgboxDB']
+TABLES = {
+    'BOX_DATA': (
+        ('BOX_CHANNEL_ID', 'BLOB NOT NULL'),
+        ('BOX_CR_TIME', 'BLOB NOT NULL'),
+        ('BOX_SALT', 'BLOB NOT NULL'),
+        ('MAINKEY', 'BLOB'),
+        ('SESSION', 'BLOB NOT NULL'),
+        ('API_ID', 'BLOB NOT NULL'),
+        ('API_HASH', 'BLOB NOT NULL'),
+    ),
+    'FILES': (
+        ('ID', 'INTEGER PRIMARY KEY'),
+        ('UPLOAD_TIME', 'BLOB NOT NULL'),
+        ('PPATH_HEAD', 'BLOB NOT NULL'),
+        ('FILEKEY', 'BLOB'),
+        ('FINGERPRINT', 'BLOB'),
+        ('METADATA', 'BLOB NOT NULL'),
+        ('UPDATED_METADATA', 'BLOB')
+    ),
+    'PATH_PARTS': (
+        ('ENC_PART', 'BLOB NOT NULL'),
+        ('PART_ID', 'BLOB NOT NULL'),
+        ('PARENT_PART_ID', 'BLOB'),
+    ),
+    'DEFAULTS': (                            # Default value
+        ('METADATA_MAX', 'INTEGER NOT NULL', int(Limits.METADATA_MAX)),
+        ('FILE_PATH_MAX', 'INTEGER NOT NULL', int(Limits.FILE_PATH_MAX)),
 
+        ('DOWNLOAD_PATH', 'TEXT NOT NULL', str(DOWNLOAD_PATH)),
+        ('DEF_NO_FOLDER', 'TEXT NOT NULL', str(DEF_NO_FOLDER)),
+        ('DEF_UNK_FOLDER', 'TEXT NOT NULL', str(DEF_UNK_FOLDER))
+    )
+}
 class SqlTableWrapper:
     """A low-level wrapper to SQLite Tables."""
     def __init__(self, aiosql_conn, table_name: str):
@@ -38,6 +74,8 @@ class SqlTableWrapper:
         )
         return (await cursor.fetchone())[0]
 
+    # TODO: Auto add FROM <TABLE_NAME> for select
+    #       and INSERT INTO <TABLE_NAME> for insert
     async def select(self, sql_tuple: Optional[tuple] = None) -> AsyncGenerator:
         """
         If ``sql_tuple`` isn't specified, then will be used
@@ -128,21 +166,42 @@ class TgboxDB:
     async def init(self) -> 'TgboxDB':
         self._aiosql_db = await aiosqlite.connect(self._db_path)
 
-        await self._aiosql_db.execute(
-            """CREATE TABLE IF NOT EXISTS BOX_DATA ("""
-            """BOX_CHANNEL_ID blob NOT NULL, BOX_CR_TIME blob NOT NULL, """
-            """BOX_SALT blob NOT NULL, MAINKEY blob, SESSION blob NOT NULL, """
-            """API_ID blob NOT NULL, API_HASH blob NOT NULL);"""
-        )
-        await self._aiosql_db.execute(
-            """CREATE TABLE IF NOT EXISTS FILES (ID integer PRIMARY KEY, """
-            """UPLOAD_TIME blob NOT NULL, PPATH_HEAD blob NOT NULL, """
-            """FILEKEY blob, METADATA blob NOT NULL, UPDATED_METADATA blob)"""
-        )
-        await self._aiosql_db.execute(
-            """CREATE TABLE IF NOT EXISTS PATH_PARTS (ENC_PART blob NOT NULL, """
-            """PART_ID blob NOT NULL, PARENT_PART_ID blob);"""
-        )
+        for table, data in TABLES.items():
+            try:
+                columns = ', '.join((f'{i[0]} {i[1]}' for i in data))
+                await self._aiosql_db.execute(
+                    f'CREATE TABLE {table} ({columns})'
+                )
+                if table == 'DEFAULTS':
+                    sql_statement = (
+                        f'INSERT INTO {table} VALUES ('
+                        + ('?,' * len(data))[:-1] + ')'
+                    )
+                    await self._aiosql_db.execute(
+                        sql_statement, [i[2] for i in data]
+                    )
+            except aiosqlite.OperationalError: # Table exists
+                table_columns = await self._aiosql_db.execute(
+                    f'PRAGMA table_info({table})'
+                )
+                table_columns = set((i[1] for i in await table_columns.fetchall()))
+                required_columns = set((i[0] for i in data))
+
+                if table_columns != required_columns:
+                    table_columns &= required_columns
+
+                    await self._aiosql_db.execute(
+                        f'CREATE TABLE "updated!{table}" ({columns})'
+                    )
+                    table_columns_str = ', '.join(table_columns)
+                    await self._aiosql_db.execute(
+                        f"""INSERT INTO "updated!{table}" ({table_columns_str}) """
+                        f"""SELECT {table_columns_str} FROM {table}"""
+                    )
+                    await self._aiosql_db.execute(f'DROP TABLE {table}')
+                    await self._aiosql_db.execute(
+                        f'ALTER TABLE "updated!{table}" RENAME TO {table}'
+                    )
         await self._aiosql_db.commit()
         self._aiosql_db_is_closed = False
 
