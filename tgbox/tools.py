@@ -158,7 +158,7 @@ class SearchFilter:
         self.in_filters = {
             'cattrs':    _TypeList(dict),
             'file_path': _TypeList(str),
-            'file_name': _TypeList(bytes),
+            'file_name': _TypeList(str),
             'file_salt': _TypeList(bytes),
             'verbyte':   _TypeList(bytes),
             'id':        _TypeList(int),
