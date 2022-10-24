@@ -6,6 +6,7 @@ from typing import (
 )
 from os import PathLike
 from dataclasses import dataclass
+from base64 import urlsafe_b64encode
 
 from telethon.tl.custom.file import File
 from telethon.sessions import StringSession
@@ -382,7 +383,12 @@ async def search_generator(
                         break
 
             for file_salt in filter['file_salt']:
-                if in_func(file_salt, file.file_salt):
+                if isinstance(file_salt, str):
+                    fsalt = urlsafe_b64encode(file.file_salt).decode()
+                else:
+                    fsalt = file.file_salt
+
+                if in_func(file_salt, fsalt):
                     if indx == 1:
                         yield_result[indx] = False
                     break
