@@ -474,7 +474,8 @@ class DefaultsTableWrapper:
     DEFAULTS table of TGBOX DB and will
     fetch all contents of it.
 
-    You can call
+    You can await the ``change`` coroutine
+    to change default values to your own.
     """
     def __init__(self, tgbox_db: TgboxDB):
         """
@@ -523,28 +524,28 @@ class DefaultsTableWrapper:
 
         .. code-block:: python
 
-        from asyncio import run as asyncio_run
+            from asyncio import run as asyncio_run
 
-        from tgbox.defaults import DEF_TGBOX_NAME
-        from tgbox.api.db import TgboxDB
-        from tgbox.api.utils import DefaultsTableWrapper
+            from tgbox.defaults import DEF_TGBOX_NAME
+            from tgbox.api.db import TgboxDB
+            from tgbox.api.utils import DefaultsTableWrapper
 
-        async def main():
-            # Make a DefaultsTableWrapper object
-            tdb = await TgboxDB(DEF_TGBOX_NAME).init()
-            dtw = await DefaultsTableWrapper(tdb).init()
+            async def main():
+                # Make a DefaultsTableWrapper object
+                tdb = await TgboxDB(DEF_TGBOX_NAME).init()
+                dtw = await DefaultsTableWrapper(tdb).init()
 
-            # Change METADATA_MAX to the max allowed size
-            dtw.change('METADATA_MAX', 256**3-1)
+                # Change METADATA_MAX to the max allowed size
+                dtw.change('METADATA_MAX', 256**3-1)
 
-            # Access DTW from the DecryptedLocalBox
-            ... # Some code was omited here
-            # Disable making file hash on preparing
-            dlb.defaults.change('HASH_FILE', 0)
-            # Change the default download path
-            dlb.defaults.change('DOWNLOAD_PATH', 'Downloads')
+                # Access DTW from the DecryptedLocalBox
+                ... # Some code was omited here
+                # Disable making file hash on preparing
+                dlb.defaults.change('HASH_FILE', 0)
+                # Change the default download path
+                dlb.defaults.change('DOWNLOAD_PATH', 'Downloads')
 
-        asyncio_run(main())
+            asyncio_run(main())
         """
         getattr(self, key) # Vetrify that Key exist
         await self._tgbox_db.DEFAULTS.execute((
