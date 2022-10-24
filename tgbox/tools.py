@@ -77,7 +77,8 @@ class _TypeList:
         for type_ in self.type:
             if isinstance(value, type_):
                 return value
-            else:
+        else:
+            for type_ in self.type:
                 try:
                     if isinstance(b'', type_):
                         # bytes(str) doesn't work
@@ -86,10 +87,10 @@ class _TypeList:
                         return type_(value)
                 except:
                     pass
-        else:
-            raise TypeError(
-                f'Invalid type! Expected {self.type}, got {type(value)}'
-            )
+            else:
+                raise TypeError(
+                    f'Invalid type! Expected {self.type}, got {type(value)}'
+                )
     def append(self, value):
         self.list.append(self.__check_type(value))
 
@@ -159,7 +160,7 @@ class SearchFilter:
             'cattrs':    _TypeList(dict),
             'file_path': _TypeList(str),
             'file_name': _TypeList(str),
-            'file_salt': _TypeList(bytes),
+            'file_salt': _TypeList((bytes,str)),
             'verbyte':   _TypeList(bytes),
             'id':        _TypeList(int),
             'min_id':    _TypeList(int),
