@@ -152,7 +152,7 @@ class SearchFilter:
         * **max_time** *integer/float*: Upload Time should be < max_time
 
         * **mime**     *str*:  File mime type
-        * **exported** *bool*: Yield only exported files
+        * **imported** *bool*: Yield only imported files
         * **re**       *bool*: re_search for every ``bytes``
     """
     def __init__(self, **kwargs):
@@ -170,7 +170,7 @@ class SearchFilter:
             'min_time':  _TypeList((int,float)),
             'max_time':  _TypeList((int,float)),
             'mime':      _TypeList(str),
-            'exported':  _TypeList(bool),
+            'imported':  _TypeList(bool),
             're':        _TypeList(bool),
         }
         self.ex_filters = deepcopy(self.in_filters)
