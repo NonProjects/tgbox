@@ -491,7 +491,6 @@ class EncryptedLocalBox:
         sql_query = f'SELECT ID FROM FILES {where} {min_id} {max_id}'
         cursor = await self._tgbox_db.FILES.execute((sql_query ,()))
 
-        stime = time()
         while True:
             pending = await cursor.fetchmany(100)
             if not pending: return # No more files
