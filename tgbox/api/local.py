@@ -12,7 +12,7 @@ from io import BytesIO
 from time import time
 
 from hashlib import sha256
-from asyncio import iscoroutinefunction
+from asyncio import iscoroutinefunction, gather
 
 from filetype import guess as filetype_guess
 from telethon.tl.types import Photo, Document
@@ -475,6 +475,12 @@ class EncryptedLocalBox:
         Arguments:
             cache_preview (``bool``, optional):
                 Cache preview in class or not.
+
+            min_id (``bool``, optional):
+                Will iterate from this ID.
+
+            max_id (``bool``, optional):
+                Will iterate up to this ID.
         """
         min_id = f'ID > {min_id}' if min_id else ''
         max_id = f'ID < {max_id}' if max_id else ''
@@ -485,8 +491,19 @@ class EncryptedLocalBox:
         sql_query = f'SELECT ID FROM FILES {where} {min_id} {max_id}'
         cursor = await self._tgbox_db.FILES.execute((sql_query ,()))
 
-        async for file_id in cursor:
-            yield await self.get_file(file_id[0], cache_preview=cache_preview)
+        stime = time()
+        while True:
+            pending = await cursor.fetchmany(100)
+            if not pending: return # No more files
+
+            pending = [
+                self.get_file(file_id[0], cache_preview=cache_preview)
+                for file_id in pending
+            ]
+            pending = await gather(*pending)
+
+            while pending:
+                yield pending.pop(0)
 
     def get_requestkey(self, basekey: BaseKey) -> RequestKey:
         """
@@ -903,7 +920,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
             await self._tgbox_db.BOX_DATA.execute(sql_tuple)
 
     async def search_file(
-            self, sf: SearchFilter) -> AsyncGenerator[
+            self, sf: SearchFilter,
+            cache_preview: bool=True) -> AsyncGenerator[
                 'DecryptedLocalBoxFile', None
             ]:
         """
@@ -912,9 +930,13 @@ class DecryptedLocalBox(EncryptedLocalBox):
         Arguments:
             sf (``SearchFilter``):
                 ``SearchFilter`` with kwargs you like.
+
+            cache_preview (``bool``, optional):
+                Will cache preview in file object if ``True``.
         """
-        async for file in search_generator(sf, lb=self):
-            yield file
+        async for file in search_generator(
+                sf, lb=self, cache_preview=cache_preview):
+                    yield file
 
     async def prepare_file(
             self, file: Union[BinaryIO, bytes, Document, Photo],

@@ -645,7 +645,8 @@ class EncryptedRemoteBox:
             self,
             sf: SearchFilter,
             mainkey: Optional[MainKey] = None,
-            dlb: Optional['DecryptedLocalBox'] = None) ->\
+            dlb: Optional['DecryptedLocalBox'] = None,
+            cache_preview: bool=True) ->\
             AsyncGenerator[Union['EncryptedRemoteBoxFile', 'DecryptedRemoteBoxFile'], None]:
         """
         This method used to search for files in your ``RemoteBox``.
@@ -660,6 +661,9 @@ class EncryptedRemoteBox:
             dlb (``DecryptedLocalBox``, optional):
                 LocalBox associated with this ``RemoteBox``. We
                 will take ``MainKey`` from it.
+
+            cache_preview (``bytes``, optional):
+                Will cache preview in file object if ``True``.
 
         .. note::
             - If ``dlb`` and ``mainkey`` not specified, then method\
@@ -683,10 +687,13 @@ class EncryptedRemoteBox:
             ids=ids,
             min_id=min_id,
             max_id=max_id,
-            reverse=True
+            reverse=True,
+            cache_preview=cache_preview
         )
-        sgen = search_generator(sf, lb=dlb,
-            it_messages=it_messages
+        sgen = search_generator(
+            sf, lb=dlb,
+            it_messages=it_messages,
+            cache_preview=cache_preview
         )
         async for file in sgen:
             yield file

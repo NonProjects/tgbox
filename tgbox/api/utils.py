@@ -209,7 +209,8 @@ class DirectoryRoot:
 # TODO: Improve SearchFilter
 async def search_generator(
         sf: SearchFilter, it_messages: Optional[AsyncGenerator] = None,
-        lb: Optional['tgbox.api.local.DecryptedLocalBox'] = None) -> AsyncGenerator:
+        lb: Optional['tgbox.api.local.DecryptedLocalBox'] = None,
+        cache_preview: bool = True) -> AsyncGenerator:
     """
     Generator used to search for files in dlb and rb. It's
     only for internal use, and you shouldn't use it in your
@@ -227,7 +228,7 @@ async def search_generator(
     else:
         min_id = sf.in_filters['min_id'][-1] if sf.in_filters['min_id'] else None
         max_id = sf.in_filters['max_id'][-1] if sf.in_filters['max_id'] else None
-        iter_from = lb.files(min_id=min_id, max_id=max_id)
+        iter_from = lb.files(min_id=min_id, max_id=max_id, cache_preview=cache_preview)
 
     if not iter_from:
         raise ValueError('At least it_messages or lb must be specified.')
