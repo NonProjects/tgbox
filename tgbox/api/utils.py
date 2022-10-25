@@ -216,8 +216,8 @@ async def search_generator(
     only for internal use, and you shouldn't use it in your
     own projects.
 
-    If file is imported from other RemoteBox and was exported
-    to your LocalBox, then you can specify ``dlb`` as ``lb``. AsyncGenerator
+    If file is exported from other RemoteBox and was imported to your
+    LocalBox, then you can specify ``dlb`` as ``lb``. AsyncGenerator
     will try to get ``FileKey`` and decrypt ``EncryptedRemoteBoxFile``.
     Otherwise imported file will be ignored.
     """
@@ -236,8 +236,11 @@ async def search_generator(
     async for file in iter_from:
         if hasattr(file, '_message'): # *RemoteBoxFile
             file_size = file.file_size
+            file_path = file.file_path if file.file_path else ''
         elif hasattr(file, '_tgbox_db'): # *LocalBoxFile
             file_size = file.size
+            await file.directory.lload(full=True)
+            file_path = str(file.directory)
         else:
             continue
 
@@ -248,13 +251,13 @@ async def search_generator(
         yield_result = [True, True]
 
         for indx, filter in enumerate((sf.in_filters, sf.ex_filters)):
-            if filter['exported']:
-                if bool(file.exported) != bool(filter['exported']):
+            if filter['imported']:
+                if bool(file.imported) != bool(filter['imported']):
                     if indx == 0: # O is Include
                         yield_result[indx] = False
                         break
 
-                elif bool(file.exported) == bool(filter['exported']):
+                elif bool(file.imported) == bool(filter['imported']):
                     if indx == 1: # 1 is Exclude
                         yield_result[indx] = False
                         break
@@ -361,8 +364,8 @@ async def search_generator(
                                 yield_result[indx] = False
                                 break
 
-            for file_path in filter['file_path']:
-                if in_func(str(file_path), str(file.file_path)):
+            for filter_file_path in filter['file_path']:
+                if in_func(str(filter_file_path), file_path):
                     if indx == 1:
                         yield_result[indx] = False
                     break
@@ -547,8 +550,6 @@ class DefaultsTableWrapper:
 
                 # Access DTW from the DecryptedLocalBox
                 ... # Some code was omited here
-                # Disable making file hash on preparing
-                dlb.defaults.change('HASH_FILE', 0)
                 # Change the default download path
                 dlb.defaults.change('DOWNLOAD_PATH', 'Downloads')
 
