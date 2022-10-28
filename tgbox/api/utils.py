@@ -34,7 +34,8 @@ __all__ = [
     'DirectoryRoot',
     'PreparedFile',
     'TelegramClient',
-    'DefaultsTableWrapper'
+    'DefaultsTableWrapper',
+    'RemoteBoxDefaults'
 ]
 class TelegramClient(TTelegramClient):
     """
