@@ -2,26 +2,29 @@ from setuptools import setup
 
 setup(
     name             = 'tgbox',
-    packages         = ['tgbox'],
-    version          = '0.4',
+    packages         = ['tgbox', 'tgbox.api'],
+    version          = '1.0',
     license          = 'LGPL-2.1',
-    description      = 'Encrypted cloud storage based on Telegram API',
+    description      = 'Encrypted cloud storage API based on a Telegram API',
+    long_description = open('README.rst').read(),
     author           = 'NonProjects',
     author_email     = 'thenonproton@pm.me',
     url              = 'https://github.com/NonProjects/tgbox',
-    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/main%23{VERSION}.tar.gz',
+    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/v1.0.tar.gz',
+
+    long_description_content_type='text/x-rst',
 
     package_data = {
         'tgbox': ['tgbox/other'],
     },
     include_package_data = True,
-    
+
     install_requires = [
         'aiosqlite==0.17.0',
-        'telethon==1.24.0',
+        'telethon==1.25.4',
         'ecdsa==0.16.1',
         'filetype==1.0.8',
-        'sphinx-rtd-theme==1.0.0'
+        'pysocks==1.7.1'
     ],
     keywords = [
         'Telegram', 'Cloud-Storage', 'Cloud',
@@ -29,10 +32,11 @@ setup(
     ],
     extras_require = {
         'fast': [
-            'pycryptodome==3.12.0',
-            'cryptg==0.2.post4',
-            'regex==2021.11.10'
-        ]
+            'cryptography',
+            'cryptg==0.3.1',
+            'regex==2022.8.17'
+        ],
+        'doc': ['sphinx-rtd-theme==1.0.0']
     },
     classifiers = [
         'Development Status :: 4 - Beta',

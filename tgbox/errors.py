@@ -15,7 +15,10 @@ class LimitExceeded(TgboxException):
     """Value is out of allowed range"""
 
 class NotATgboxFile(TgboxException):
-    """This Telegram mesage isn't a TGBOX file"""
+    """This Telegram message isn't a TGBOX file"""
+
+class InvalidFile(TgboxException):
+    """Specified file is invalid"""
 
 # Crypto Exceptions
 
@@ -61,6 +64,9 @@ class RemoteBoxInaccessible(TgboxException):
 class NotEnoughRights(TgboxException):
     """You don't have rigths for this action"""
 
+class NoPlaceLeftForMetadata(TgboxException):
+    """Your edited metadata overflow Telegram caption limit"""
+
 # LocalBox Exceptions
 
 class AlreadyImported(TgboxException):
@@ -68,3 +74,6 @@ class AlreadyImported(TgboxException):
 
 class NotImported(TgboxException):
     """The file you try to retrieve wasn\'t imported yet"""
+
+class FingerprintExists(TgboxException):
+    """File with the same file path already uploaded to the Box"""

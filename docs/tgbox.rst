@@ -1,19 +1,37 @@
 tgbox package
 =============
 
-tgbox.api module
-----------------
+tgbox.api.local module
+----------------------
 
-.. automodule:: tgbox.api
+.. automodule:: tgbox.api.local
    :members:
    :undoc-members:
    :show-inheritance:
    :inherited-members:
 
-tgbox.constants module
+tgbox.api.remote module
+-----------------------
+
+.. automodule:: tgbox.api.remote
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+
+tgbox.api.db module
+-------------------
+
+.. automodule:: tgbox.api.db
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+
+tgbox.api.utils module
 ----------------------
 
-.. automodule:: tgbox.constants
+.. automodule:: tgbox.api.utils
    :members:
    :undoc-members:
    :show-inheritance:
@@ -23,15 +41,6 @@ tgbox.crypto module
 -------------------
 
 .. automodule:: tgbox.crypto
-   :members:
-   :undoc-members:
-   :show-inheritance:
-   :inherited-members:
-
-tgbox.db module
----------------
-
-.. automodule:: tgbox.db
    :members:
    :undoc-members:
    :show-inheritance:
@@ -72,3 +81,13 @@ tgbox.tools module
    :undoc-members:
    :show-inheritance:
    :inherited-members:
+
+tgbox.defaults module
+----------------------
+
+.. automodule:: tgbox.defaults
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+

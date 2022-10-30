@@ -1,34 +1,33 @@
 RemoteBox
 =========
 
-The *RemoteBox* is a place where we store encrypted files. It's a Telegram ``Channel``, that have encoded by url safe Base64 *BoxSalt* in the description. By default, all created by API channels will have ``"tgbox: "`` prefix in the name.
+The *RemoteBox* is a place where we store encrypted files. It's a Telegram ``Channel``, that have encoded by url safe Base64 *BoxSalt* in the description. By default, all created by API channels will have ``f"TGBOX[{VERBYTE.hex()}]: "`` prefix in the name.
 
 RemoteBoxFile
 -------------
 
-The ``EncryptedRemoteBoxFile`` may be reffered as new file format, with own ``RemoteBoxFileMetadata``. As per ``0-1`` Version, schema looks like follows:
+The ``EncryptedRemoteBoxFile`` has own metadata. As per **version 1** schema looks like follows:
 
 .. image:: images/rbfm_schema.png
 
-The *Prefix*, *Verbyte*, *BoxSalt*, *FileSalt* and *Navbytes* is always fixed in first ``103`` bytes of ``EncryptedRemoteBoxFile``. To decrypt file and its attributes, we need to go through some steps:
+To decrypt file and its attributes, we need to go through some steps:
 
-1. If not ``MainKey``, take ``BoxSalt``, user's ``Phrase`` and make it;
-2. Take ``FileSalt`` and make ``FileKey`` with ``MainKey``;
-3. Decrypt *Navbytes* with ``FileKey``, receive *FileData* & *Preview* length;
-4. Download bytes from ``103`` to the ``FileDataLen``, receive *FileData*;
-5. Download bytes from ``103 + FileDataLen`` to the ``PreviewLen``, receive *Preview*;
-6. Decrypt *FileData* with ``FileKey``, receive *File attributes*;
-7. Download bytes from ``103 + FileDataLen + PreviewLen``, receive *File*;
-8. Decrypt *File* with ``FileKey``, receive *Decrypted file*.
+0. Sum length of ``PREFIX``, ``VERBYTE`` and ``METADA_SIZE`` (*10 by default*), get a ``fixed_bytes_size``
+1. Download fixed bytes: ``from=0``, ``to=fixed_bytes_size``; get a ``PREFIX``, ``VERBYTE`` and ``METADA_SIZE``
+2. Convert ``METADA_SIZE`` to ``int`` and verify that ``METADATA_SIZE <= defaults.Limits.METADATA_MAX``
+3. Download the metadata: ``from=fixed_bytes_size``, ``to=METADA_SIZE``, receive a ``metadata``
+4. Unpack ``metadata`` with the ``tools.PackedAttributes.unpack(metadata)``, receive a ``metadata_dict``
+5. If ``BaseKey`` isn't presented, take a user's password/phrase and call ``keys.make_basekey(phrase)``
+6. If ``MainKey`` isn't presented, take a user's ``basekey`` and call ``keys.make_mainkey(basekey, metadata_dict['box_salt'])``
+7. If ``FileKey`` isn't presented, take a user's ``mainkey`` and call ``keys.make_filekey(mainkey, metadata_dict['file_salt'])``
+8. Decrypt ``metadata_dict['secret_metadata']`` with the user's ``filekey``
+9. Unpack ``secret_metadata`` with the ``tools.PackedAttributes.unpack(secret_metadata)``
+10. If ``MainKey`` was presented, decrypt ``secret_metadata['efile_path']``, get a ``file_path``
 
 .. note::
-    - We decrypt attributes with variable size in *FileData* (i.e *Comment*), similarly to the *Preview* in the five step.
-    - We **always** encrypt *Folder* with ``MainKey``.
-    - Max bytesize of every *Metadata* element defined in the ``constants`` module.
-
-Extra
------
-
-- *RemoteBox* (``Channel``) **doesn't** store any keys, so you may leave it public if you want. But beware, if you're using weak ``Phrase``, then you can still be brute-forced.
-- ``EncryptedRemoteBoxFile`` **can** be decrypted outside of *RemoteBox*, as standalone file.
-- *RemoteBox* store all information that store :doc:`localbox`.
+    - Unpacked *metadata* is a ``{'box_salt': ..., 'file_salt': ..., 'secret_metadata': ...}``
+    - We need to decrypt *secret_metadata* with the ``FileKey`` and unpack it to access attributes
+    - We **always** encrypt *efile_path* attribute with the ``MainKey``
+    - Max bytesize of *metadata* is defined in the ``defaults.Limits.METADATA_MAX`` variable
+    - *RemoteBox* Telegram channel **doesn't** store any sensitive information. You can leave it public if you want but beware, if you're using weak or predictable password then you can still be brute-forced.
+    - *RemoteBox* store all information that store :doc:`localbox`.
