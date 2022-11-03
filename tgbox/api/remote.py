@@ -1364,7 +1364,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
     @property
     def preview(self) -> Union[bytes, None]:
-        """Returns preview bytes or ``None`` if not initialized."""
+        """Returns preview bytes or ``b''`` if not initialized."""
         return self._preview
 
     @property

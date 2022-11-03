@@ -2027,7 +2027,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
     @property
     def preview(self) -> Union[bytes, None]:
         """
-        Returns preview bytes or ``None``
+        Returns preview bytes or ``b''``
         if ``cache_preview`` is ``False``.
         """
         return self._preview
