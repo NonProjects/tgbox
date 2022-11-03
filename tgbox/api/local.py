@@ -1947,7 +1947,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             )
             self._file_path = Path(self._file_path.decode())
         else:
-            self._file_path = None
+            self._file_path = self._defaults.DEF_NO_FOLDER
 
         for attr in self.__required_metadata:
             secret_metadata.pop(attr)
@@ -1982,7 +1982,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                             self._file_path = AES(self._mainkey).decrypt(v)
                             self._file_path = Path(self._file_path.decode())
                         else:
-                            self._file_path = None
+                            self._file_path = self._defaults.DEF_NO_FOLDER
                     else:
                         setattr(self, f'_{k}', v)
                 else:

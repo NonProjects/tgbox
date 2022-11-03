@@ -1478,7 +1478,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             )
             self._file_path = Path(self._file_path.decode())
         else:
-            self._file_path = None
+            self._file_path = self._defaults.DEF_NO_FOLDER
 
         for attr in self.__required_metadata:
             secret_metadata.pop(attr)
