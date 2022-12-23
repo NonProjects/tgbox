@@ -206,7 +206,7 @@ class TgboxDB:
         self._aiosql_db_is_closed = False
 
         tables = await self._aiosql_db.execute(
-            "SELECT name FROM sqlite_schema WHERE type='table'"
+            "SELECT name FROM sqlite_master WHERE type='table'"
         )
         for table in (await tables.fetchall()):
             setattr(self, table[0], SqlTableWrapper(self._aiosql_db, table[0]))
