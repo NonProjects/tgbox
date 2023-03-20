@@ -638,7 +638,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         self._api_id = bytes_to_int(
             AES(self._mainkey).decrypt(elb._api_id)
         )
-        self._api_hash = AES(self._mainkey).decrypt(elb._api_hash)
+        self._api_hash = AES(self._mainkey).decrypt(elb._api_hash).hex()
         self._box_salt = elb._box_salt
 
     @staticmethod

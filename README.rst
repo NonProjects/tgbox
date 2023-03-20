@@ -65,7 +65,7 @@ TGBOX: encrypted cloud storage based on Telegram
 
             # You can also access all information about
             # the RemoteBoxFile you need from the LocalBox
-            dlbf = await dlb.get_file(drb.id)
+            dlbf = await dlb.get_file(drbf.id)
 
             print('File path:', dlbf.file_path)
             print('Custom Attributes:', dlbf.cattrs)

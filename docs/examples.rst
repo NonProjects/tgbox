@@ -67,7 +67,7 @@ Logging in & Box creation
 
             # You can also access all information about
             # the RemoteBoxFile you need from the LocalBox
-            dlbf = await dlb.get_file(drb.id)
+            dlbf = await dlb.get_file(drbf.id)
 
             print('File path:', dlbf.file_path)
             print('Custom Attributes:', dlbf.cattrs)
@@ -131,7 +131,7 @@ One upload
 
             # You can also access all information about
             # the RemoteBoxFile you need from the LocalBox
-            dlbf = await dlb.get_file(drb.id)
+            dlbf = await dlb.get_file(drbf.id)
 
             print('File path:', dlbf.file_path)
             print('Custom Attributes:', dlbf.cattrs)
