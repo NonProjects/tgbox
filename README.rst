@@ -93,12 +93,12 @@ This *[unofficial]* library targets to be a PoC of **encrypted file storage** in
 Abstract
 --------
 
-We name *"encrypted cloud storage"* as **Box** and the API to it as **Tgbox**. There is **two** of boxes: the **RemoteBox** and the **LocalBox**. They define a basic primitives. You can share your Box and separate Files with other people absolutely secure - only You and someone you want will have decryption key, even through insecure communication canals (`e2e <https://en.wikipedia.org/wiki/End-to-end_encryption>`_). You can make unlimited amount of Boxes, Upload & Download speed is **faster** than in official Telegram clients and maximum filesize is around **2GB** and around **4GB** for Premium users.
+We name *"encrypted cloud storage"* as **Box** and the API to it as **Tgbox**. There is **two** of boxes: the **RemoteBox** and the **LocalBox**. They define a basic primitives. You can share your Box and separate Files with other people absolutely secure - only You and someone you want will have decryption key, even through insecure communication canals (`e2e <https://en.wikipedia.org/wiki/End-to-end_encryption>`__). You can make unlimited amount of Boxes, Upload & Download speed is **faster** than in official Telegram clients and maximum filesize is around **2GB** and around **4GB** for Premium users.
 
 Documentation
 -------------
 
-See `ReadTheDocs <https://tgbox.readthedocs.io/>`_ for main information and help.
+See `ReadTheDocs <https://tgbox.readthedocs.io/>`__ for main information and help.
 
 You can also build docs from the source
 
@@ -110,17 +110,17 @@ You can also build docs from the source
 
 Third party & thanks to
 -----------------------
-- `⭐️ <https://github.com/NonProjects/tgbox/stargazers>`_ **Stargazers!**
-- `Sphinx_rtd_theme <https://github.com/readthedocs/sphinx_rtd_theme>`_ (`MIT <https://github.com/readthedocs/sphinx_rtd_theme/blob/master/LICENSE>`_)
-- `Regex <https://github.com/mrabarnett/mrab-regex>`_ (`LICENSE <https://github.com/mrabarnett/mrab-regex/blob/hg/LICENSE.txt>`_)
-- `Aiosqlite <https://github.com/omnilib/aiosqlite>`_ (`MIT <https://github.com/omnilib/aiosqlite/blob/main/LICENSE>`_)
-- `Telethon <https://github.com/LonamiWebs/Telethon>`_ (`MIT <https://github.com/LonamiWebs/Telethon/blob/master/LICENSE>`_)
-- `Ecdsa <https://github.com/tlsfuzzer/python-ecdsa>`_ (`LICENSE <https://github.com/tlsfuzzer/python-ecdsa/blob/master/LICENSE>`_)
-- `Filetype <https://github.com/h2non/filetype.py>`_ (`MIT <https://github.com/h2non/filetype.py/blob/master/LICENSE>`_)
-- `Cryptg <https://github.com/cher-nov/cryptg>`_ (`LICENSE <https://github.com/cher-nov/cryptg/blob/master/LICENSE.txt>`_)
-- `Cryptography <https://github.com/pyca/cryptography>`_ (`LICENSE <https://github.com/pyca/cryptography/blob/main/LICENSE>`_)
+- `⭐️ <https://github.com/NonProjects/tgbox/stargazers>`__ **Stargazers!**
+- `Sphinx_rtd_theme <https://github.com/readthedocs/sphinx_rtd_theme>`__ (`MIT <https://github.com/readthedocs/sphinx_rtd_theme/blob/master/LICENSE>`__)
+- `Regex <https://github.com/mrabarnett/mrab-regex>`__ (`LICENSE <https://github.com/mrabarnett/mrab-regex/blob/hg/LICENSE.txt>`__)
+- `Aiosqlite <https://github.com/omnilib/aiosqlite>`__ (`MIT <https://github.com/omnilib/aiosqlite/blob/main/LICENSE>`__)
+- `Telethon <https://github.com/LonamiWebs/Telethon>`__ (`MIT <https://github.com/LonamiWebs/Telethon/blob/master/LICENSE>`__)
+- `Ecdsa <https://github.com/tlsfuzzer/python-ecdsa>`__ (`LICENSE <https://github.com/tlsfuzzer/python-ecdsa/blob/master/LICENSE>`__)
+- `Filetype <https://github.com/h2non/filetype.py>`__ (`MIT <https://github.com/h2non/filetype.py/blob/master/LICENSE>`__)
+- `Cryptg <https://github.com/cher-nov/cryptg>`__ (`LICENSE <https://github.com/cher-nov/cryptg/blob/master/LICENSE.txt>`__)
+- `Cryptography <https://github.com/pyca/cryptography>`__ (`LICENSE <https://github.com/pyca/cryptography/blob/main/LICENSE>`__)
 
 Resources
 ---------
-- Official **developer channel**: `@nontgbox <https://telegram.me/nontgbox>`_
-- **Example** TGBOX **container**: `@nontgbox_non <https://telegram.me/nontgbox_non>`_
+- Official **developer channel**: `@nontgbox <https://telegram.me/nontgbox>`__
+- **Example** TGBOX **container**: `@nontgbox_non <https://telegram.me/nontgbox_non>`__
