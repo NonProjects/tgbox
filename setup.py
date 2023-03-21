@@ -3,14 +3,14 @@ from setuptools import setup
 setup(
     name             = 'tgbox',
     packages         = ['tgbox', 'tgbox.api'],
-    version          = '1.0',
+    version          = '1.1',
     license          = 'LGPL-2.1',
     description      = 'Encrypted cloud storage API based on a Telegram API',
     long_description = open('README.rst').read(),
     author           = 'NonProjects',
     author_email     = 'thenonproton@pm.me',
     url              = 'https://github.com/NonProjects/tgbox',
-    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/v1.0.tar.gz',
+    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/v1.1.tar.gz',
 
     long_description_content_type='text/x-rst',
 
@@ -39,7 +39,7 @@ setup(
         'doc': ['sphinx-rtd-theme==1.0.0']
     },
     classifiers = [
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'Topic :: Security :: Cryptography',
         'Topic :: Software Development :: Libraries',
