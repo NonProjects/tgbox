@@ -3,7 +3,7 @@ Encrypted cloud storage API based on Telegram
 https://github.com/NonProjects/tgbox
 """
 
-__version__ = '1.1'
+__version__ = '1.1.1'
 
 from asyncio import get_event_loop
 from typing import Coroutine
