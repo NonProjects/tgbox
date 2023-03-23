@@ -6,7 +6,7 @@ setup(
     version          = '1.1',
     license          = 'LGPL-2.1',
     description      = 'Encrypted cloud storage API based on a Telegram API',
-    long_description = open('README.rst').read(),
+    long_description = open('README.rst', encoding='utf-8').read(),
     author           = 'NonProjects',
     author_email     = 'thenonproton@pm.me',
     url              = 'https://github.com/NonProjects/tgbox',
