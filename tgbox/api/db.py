@@ -39,7 +39,7 @@ TABLES = {
     ),
     'PATH_PARTS': (
         ('ENC_PART', 'BLOB NOT NULL'),
-        ('PART_ID', 'BLOB NOT NULL'),
+        ('PART_ID', 'BLOB NOT NULL PRIMARY KEY'),
         ('PARENT_PART_ID', 'BLOB'),
     ),
     'DEFAULTS': (                            # Default value
@@ -96,17 +96,22 @@ class SqlTableWrapper:
 
     async def insert(
             self, *args, sql_statement: Optional[str] = None,
-            commit: bool=True) -> None:
+            commit: bool=True, ignore: bool=False) -> None:
         """
         If ``sql_statement`` isn't specified, then will be used
         ``INSERT INTO TABLE_NAME values (...)``.
 
         This method doesn't check if you insert correct data
         or correct amount of it, you should know DB structure.
+
+        If ``ignore`` specified, will be used ``INSERT OR IGNORE``
+        instead of ``INSERT`` to silently ignore errors.
         """
+        insert_ = 'INSERT OR IGNORE' if ignore else 'INSERT'
+
         if not sql_statement:
             sql_statement = (
-                f'INSERT INTO {self._table_name} values ('
+                f'{insert_} INTO {self._table_name} values ('
                 + ('?,' * len(args))[:-1] + ')'
             )
         await self._aiosql_conn.execute(sql_statement, args)
