@@ -668,14 +668,10 @@ class DecryptedLocalBox(EncryptedLocalBox):
             if not parent_part_id:
                 parent_part_id = None
 
-            cursor = await self._tgbox_db.PATH_PARTS.execute((
-                'SELECT PART_ID FROM PATH_PARTS WHERE PART_ID=?', (part_id,))
+            await self._tgbox_db.PATH_PARTS.insert(
+                AES(self._mainkey).encrypt(part.encode()),
+                part_id, parent_part_id, ignore=True
             )
-            if not await cursor.fetchone():
-                await self._tgbox_db.PATH_PARTS.insert(
-                    AES(self._mainkey).encrypt(part.encode()),
-                    part_id, parent_part_id
-                )
         elbd = EncryptedLocalBoxDirectory(self._tgbox_db, part_id)
         return await elbd.decrypt(self._mainkey)
 
@@ -742,8 +738,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
         else:
             raise FingerprintExists(FingerprintExists.__doc__) from None
 
-    # TODO: Delete PartID from PATH_PARTS if it links
-    # to only one file that was removed.
     async def sync(
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
             start_from: int=0,
@@ -857,7 +851,10 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     if rbfiles[0] and not rbfiles[1]:
                         if current == 0:
                             try:
-                                await self.import_file(rbfiles[current])
+                                # Imported files returned as EncryptedRemoteBoxFile,
+                                # skip it as we don't have a FileKey in LocalBox
+                                if not 'Encrypted' in repr(rbfiles[current]):
+                                    await self.import_file(rbfiles[current])
                             except AlreadyImported:
                                 pass # Last file may be already in Box, so skip
 
@@ -1369,6 +1366,7 @@ class EncryptedLocalBoxDirectory:
         """
         self.__raise_initialized()
 
+        # 256**8 here is just an infinity analogue
         for _ in range(256**8 if full else 1):
             previous_part = await self._tgbox_db.PATH_PARTS.select_once((
                 'SELECT PARENT_PART_ID FROM PATH_PARTS WHERE PART_ID=?',
@@ -1795,15 +1793,37 @@ class EncryptedLocalBoxFile:
         await self._tgbox_db.FILES.execute(
             ('DELETE FROM FILES WHERE ID=?',(self._id,))
         )
-        try:
-            await self._tgbox_db.FILES.select_once(sql_tuple=(
-                'SELECT ID FROM FILES WHERE PPATH_HEAD=?',(file_row[0],)
+        ppath_head = file_row[0]
+        # The code below will check all parent path part ids
+        # and remove empty ones (which doesn't pointed)
+        while True:
+            # Retrieve file rows that point to PPATH_HEAD
+            files_pointed = await self._tgbox_db.FILES.execute((
+                'SELECT ID FROM FILES WHERE PPATH_HEAD=?',(ppath_head,)
             ))
-        # Only one file point to this path part (folder)
-        except StopAsyncIteration:
+            if (await files_pointed.fetchone()):
+                break # Part ID pointed by file, so break
+
+            # Amount of parts that point to current ppath_head
+            pparts_pointed = await self._tgbox_db.PATH_PARTS.execute((
+                'SELECT * FROM PATH_PARTS WHERE PARENT_PART_ID=?',
+                (ppath_head,)
+            ))
+            if (await pparts_pointed.fetchone()):
+                break
+
+            parent_part_id = await self._tgbox_db.PATH_PARTS.select_once(sql_tuple=(
+                'SELECT PARENT_PART_ID FROM PATH_PARTS WHERE PART_ID=?',
+                (ppath_head,)
+            ))
             await self._tgbox_db.PATH_PARTS.execute((
-                'DELETE FROM PATH_PARTS WHERE PART_ID=?',(file_row[0],)
+                'DELETE FROM PATH_PARTS WHERE PART_ID=?',
+                (ppath_head,)
             ))
+            # Set parent part id as ppath_head to recursive
+            # check for useless path parts
+            ppath_head = parent_part_id[0]
+            if not ppath_head: break
 
     def get_requestkey(self, mainkey: MainKey) -> RequestKey:
         """
