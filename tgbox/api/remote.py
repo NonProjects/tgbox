@@ -1176,10 +1176,15 @@ class EncryptedRemoteBoxFile:
         if metadata_size > self._defaults.METADATA_MAX:
             raise LimitExceeded(f'{metadata_size=} > {self._defaults.METADATA_MAX=}')
 
+        if metadata_size <= 1048576:
+            metadata_size_padded = pad_request_size(metadata_size)
+        else:
+            metadata_size_padded = metadata_size
+
         iter_down = self._tc.iter_download(
             file = self._message.document,
             offset = request_amount,
-            request_size = pad_request_size(metadata_size)
+            request_size = metadata_size_padded
         )
         async for metadata in iter_down:
             m = self._prefix + self._version_byte
