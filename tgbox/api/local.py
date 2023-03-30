@@ -801,21 +801,20 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 rbfiles.append(await _get_file(rbfiles[0].id))
                 last_id = rbfiles[0].id
 
-                sql_tuple = (
+                # Remove all files from LocalBox which ID is less
+                # than the first RemoteBox file
+                await self._tgbox_db.FILES.execute(sql_tuple=(
                     'DELETE FROM FILES WHERE ID < ?',
-                    (last_id,)
-                )
-                await self._tgbox_db.FILES.execute(
-                    sql_tuple=sql_tuple
-                )
+                    ((await _get_file(0)).id,)
+                ))
             else:
                 rbfiles.append(await _get_file(rbfiles[1].id))
                 if None in rbfiles: break
 
                 rbfiles.append(await _get_file(rbfiles[2].id-1))
                 if None in rbfiles: break
-                rbfiles.pop(0); rbfiles.pop(1)
 
+                rbfiles.pop(0); rbfiles.pop(1)
 
             while True:
                 if progress_callback and last_pushed_progress != last_id:
