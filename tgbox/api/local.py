@@ -756,7 +756,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         progress_callback (``Callable[[int, int], None]``, optional):
             A callback function accepting
-            two parameters: (last_id, current_id).
+            two parameters: (current_id, last_id).
         """
         async def _get_file(n=start_from):
             iter_over = drb.files(
@@ -781,7 +781,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         async for drbf in drb.files(cache_preview=False):
             last_drbf_id = drbf.id; break
 
-        rbfiles = []
+        rbfiles, last_pushed_progress = [], None
 
         while True:
             current = 0
@@ -816,13 +816,16 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 if None in rbfiles: break
                 rbfiles.pop(0); rbfiles.pop(1)
 
-            if progress_callback:
-                if iscoroutinefunction(progress_callback):
-                    await progress_callback(last_id, last_drbf_id)
-                else:
-                    progress_callback(last_id, last_drbf_id)
 
             while True:
+                if progress_callback and last_pushed_progress != last_id:
+                    if iscoroutinefunction(progress_callback):
+                        await progress_callback(last_id, last_drbf_id)
+                    else:
+                        progress_callback(last_id, last_drbf_id)
+
+                    last_pushed_progress = last_id
+
                 if current == 2 or not rbfiles[current]:
                     break
                 try:
