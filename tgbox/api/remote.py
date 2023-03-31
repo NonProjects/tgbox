@@ -1107,6 +1107,11 @@ class EncryptedRemoteBoxFile:
         return self._file
 
     @property
+    def message(self) -> File:
+        """Returns Telethon's ``Message`` object."""
+        return self._message
+
+    @property
     def file_size(self) -> int:
         """Returns size of the ``File`` from ``Message`` object."""
         return self._file_size
