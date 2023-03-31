@@ -1107,7 +1107,7 @@ class EncryptedRemoteBoxFile:
         return self._file
 
     @property
-    def message(self) -> File:
+    def message(self) -> Message:
         """Returns Telethon's ``Message`` object."""
         return self._message
 
