@@ -74,8 +74,6 @@ class SqlTableWrapper:
         )
         return (await cursor.fetchone())[0]
 
-    # TODO: Auto add FROM <TABLE_NAME> for select
-    #       and INSERT INTO <TABLE_NAME> for insert
     async def select(self, sql_tuple: Optional[tuple] = None) -> AsyncGenerator:
         """
         If ``sql_tuple`` isn't specified, then will be used
