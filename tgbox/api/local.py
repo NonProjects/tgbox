@@ -753,7 +753,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         )
         return await EncryptedLocalBoxFile(
             pf.file_id, self._tgbox_db,
-            defaults=self._defaults).decrypt(pf.filekey)
+            defaults=self._defaults).decrypt(pf.dlb._mainkey)
 
     async def _check_fingerprint(self, fingerprint: bytes):
         """
