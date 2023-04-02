@@ -1,5 +1,7 @@
 """This module stores wrappers around Tgbox SQL DB."""
 
+import logging
+
 from typing import (
     Optional, Union,
     AsyncGenerator
@@ -17,6 +19,8 @@ from ..errors import PathIsDirectory
 from ..tools import anext
 
 __all__ = ['SqlTableWrapper', 'TgboxDB', 'TABLES']
+
+logger = logging.getLogger(__name__)
 
 TABLES = {
     'BOX_DATA': (
@@ -69,6 +73,9 @@ class SqlTableWrapper:
 
     async def count_rows(self) -> int:
         """Execute ``SELECT count(*) from TABLE_NAME``"""
+
+        logger.debug(f'SELECT count(*) FROM {self._table_name}')
+
         cursor = await self._aiosql_conn.execute(
             f'SELECT count(*) FROM {self._table_name}'
         )
@@ -81,6 +88,8 @@ class SqlTableWrapper:
         """
         if not sql_tuple:
             sql_tuple = (f'SELECT * FROM {self._table_name}',())
+
+        logger.debug(f'self._aiosql_conn.execute(*{sql_tuple})')
 
         cursor = await self._aiosql_conn.execute(*sql_tuple)
         async for row in cursor: yield row
@@ -112,15 +121,22 @@ class SqlTableWrapper:
                 f'{insert_} INTO {self._table_name} values ('
                 + ('?,' * len(args))[:-1] + ')'
             )
+        logger.debug(f'self._aiosql_conn.execute({sql_statement}, {args})')
         await self._aiosql_conn.execute(sql_statement, args)
-        if commit: await self._aiosql_conn.commit()
+        if commit:
+            logger.debug('self._aiosql_conn.commit()')
+            await self._aiosql_conn.commit()
 
     async def execute(self, sql_tuple: tuple, commit: bool=True):
+        logger.debug(f'self._aiosql_conn.execute(*{sql_tuple})')
         result = await self._aiosql_conn.execute(*sql_tuple)
-        if commit: await self._aiosql_conn.commit()
+        if commit:
+            logger.debug('self._aiosql_conn.commit()')
+            await self._aiosql_conn.commit()
         return result # Returns Cursor object
 
     async def commit(self) -> None:
+        logger.debug('self._aiosql_conn.commit()')
         await self._aiosql_conn.commit()
 
 class TgboxDB:
@@ -144,10 +160,12 @@ class TgboxDB:
 
     @property
     def name(self) -> str:
+        """Returns TgboxDB name"""
         return self._name
 
     @property
     def db_path(self) -> PathLike:
+        """Returns path to TgboxDB file"""
         return self._db_path
 
     @property
@@ -160,13 +178,18 @@ class TgboxDB:
 
     @staticmethod
     async def create(db_path: Union[str, PathLike]) -> 'TgboxDB':
+        """Will initialize TgboxDB"""
         return await TgboxDB(db_path).init()
 
     async def close(self) -> None:
+        """Will close TgboxDB"""
+        logger.debug(f'{self._db_path} @ self._aiosql_db.close()')
         await self._aiosql_db.close()
         self._aiosql_db_is_closed = True
 
     async def init(self) -> 'TgboxDB':
+        logger.debug(f'tgbox.api.db.TgboxDB.init("{self._db_path}")')
+
         self._aiosql_db = await aiosqlite.connect(self._db_path)
 
         for table, data in TABLES.items():
@@ -184,6 +207,7 @@ class TgboxDB:
                         sql_statement, [i[2] for i in data]
                     )
             except aiosqlite.OperationalError: # Table exists
+                # The code below will update TgboxDB schema if it's outdated
                 table_columns = await self._aiosql_db.execute(
                     f'PRAGMA table_info({table})'
                 )
@@ -191,20 +215,32 @@ class TgboxDB:
                 required_columns = set((i[0] for i in data))
 
                 if table_columns != required_columns:
+                    logger.info(f'TgboxDB {self._db_path} seems outdated. Updating...')
                     table_columns &= required_columns
+
+                    logger.debug(f'CREATE TABLE "updated!{table}" ({columns})')
 
                     await self._aiosql_db.execute(
                         f'CREATE TABLE "updated!{table}" ({columns})'
                     )
                     table_columns_str = ', '.join(table_columns)
+
+                    logger.debug(
+                        f"""INSERT INTO "updated!{table}" ({table_columns_str}) """
+                        f"""SELECT {table_columns_str} FROM {table}"""
+                    )
                     await self._aiosql_db.execute(
                         f"""INSERT INTO "updated!{table}" ({table_columns_str}) """
                         f"""SELECT {table_columns_str} FROM {table}"""
                     )
+                    logger.debug(f'DROP TABLE {table}')
                     await self._aiosql_db.execute(f'DROP TABLE {table}')
+
+                    logger.debug(f'ALTER TABLE "updated!{table}" RENAME TO {table}')
                     await self._aiosql_db.execute(
                         f'ALTER TABLE "updated!{table}" RENAME TO {table}'
                     )
+        logger.debug('self._aiosql_conn.commit()')
         await self._aiosql_db.commit()
         self._aiosql_db_is_closed = False
 
