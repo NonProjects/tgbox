@@ -32,6 +32,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+import sys
+
+# This function will auto-log all unhandled exceptions
+def log_excepthook(exc_type, exc_value, exc_traceback):
+    # I don't think we should log KeyboardInterrupt
+    if not issubclass(exc_type, KeyboardInterrupt):
+        logger.critical(
+            'Found Critical error! See Traceback below:',
+            exc_info=(exc_type, exc_value, exc_traceback)
+        )
+    sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+sys.excepthook = log_excepthook
+
 from asyncio import get_event_loop
 from typing import Coroutine
 
