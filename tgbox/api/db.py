@@ -136,7 +136,7 @@ class SqlTableWrapper:
         return result # Returns Cursor object
 
     async def commit(self) -> None:
-        logger.debug('self._aiosql_conn.commit()')
+        logger.info('SqlTableWrapper._aiosql_conn.commit()')
         await self._aiosql_conn.commit()
 
 class TgboxDB:
@@ -183,14 +183,14 @@ class TgboxDB:
 
     async def close(self) -> None:
         """Will close TgboxDB"""
-        logger.debug(f'{self._db_path} @ self._aiosql_db.close()')
+        logger.info(f'{self._db_path} @ self._aiosql_db.close()')
         await self._aiosql_db.close()
         self._aiosql_db_is_closed = True
 
     async def init(self) -> 'TgboxDB':
         logger.debug(f'tgbox.api.db.TgboxDB.init("{self._db_path}")')
 
-        logger.debug(f'Opening SQLite connection to {self._db_path}')
+        logger.info(f'Opening SQLite connection to {self._db_path}')
         self._aiosql_db = await aiosqlite.connect(self._db_path)
 
         for table, data in TABLES.items():
@@ -241,7 +241,7 @@ class TgboxDB:
                     await self._aiosql_db.execute(
                         f'ALTER TABLE "updated!{table}" RENAME TO {table}'
                     )
-        logger.debug('self._aiosql_conn.commit()')
+        logger.info('TgboxDB._aiosql_conn.commit()')
         await self._aiosql_db.commit()
         self._aiosql_db_is_closed = False
 
