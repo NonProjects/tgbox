@@ -22,7 +22,7 @@ except ModuleNotFoundError:
     # PyAES is much slower. You can use it for quick tests.
     from pyaes import AESModeOfOperationCBC
     FAST_ENCRYPTION = False
-    logger.warn('Fast cryptography library was NOT found. ')
+    logger.warning('Fast cryptography library was NOT found. ')
 try:
     # Check if cryptg is installed.
     from cryptg import __name__ as _
