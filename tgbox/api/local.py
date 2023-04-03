@@ -263,8 +263,10 @@ class EncryptedLocalBox:
         self._tgbox_db = tgbox_db
 
         if defaults is None:
+            logger.debug('Custom defaults is not present')
             self._defaults = DefaultsTableWrapper(self._tgbox_db)
         else:
+            logger.debug('Found custom defaults, will try to use it')
             self._defaults = defaults
 
         self._api_id = None
@@ -414,18 +416,21 @@ class EncryptedLocalBox:
             self.__raise_initialized()
             logger.debug(f'File by ID{id} was requested from LocalBox')
 
-            elbf = EncryptedLocalBoxFile(
-                id, self._tgbox_db,
-                cache_preview=cache_preview,
-                defaults=self._defaults
-            )
             if decrypt and self._mainkey and not\
                 isinstance(self._mainkey, EncryptedMainkey):
                     logger.debug(f'Return ID{id} DecryptedLocalBoxFile')
-                    return await elbf.decrypt(self._mainkey)
+
+                    elbf = EncryptedLocalBoxFile(id, self._elb,
+                        cache_preview=cache_preview
+                    )
+                    return await elbf.decrypt(dlb=self)
             else:
                 logger.debug(f'Return ID{id} EncryptedLocalBoxFile')
+
+                elbf = EncryptedLocalBoxFile(id, self,
+                    cache_preview=cache_preview)
                 return await elbf.init()
+
         except StopAsyncIteration: # No file by ``id``.
             return None
 
@@ -459,11 +464,11 @@ class EncryptedLocalBox:
         logger.debug(f'LocalBox contents(), {sfpid=}')
 
         for pid in sfpid:
-            lbfid = EncryptedLocalBoxDirectory(self._tgbox_db, pid)
-
             if isinstance(self, DecryptedLocalBox):
-                lbfid = await lbfid.decrypt(self._mainkey)
+                lbfid = EncryptedLocalBoxDirectory(self._elb, pid)
+                lbfid = await lbfid.decrypt(dlb=self)
             else:
+                lbfid = EncryptedLocalBoxDirectory(self, pid)
                 lbfid = await lbfid.init()
 
             yield lbfid
@@ -508,8 +513,8 @@ class EncryptedLocalBox:
             max_id (``bool``, optional):
                 Will iterate up to this ID.
         """
-        min_id = f'ID > {min_id}' if min_id else ''
-        max_id = f'ID < {max_id}' if max_id else ''
+        min_id = f'ID >= {min_id}' if min_id else ''
+        max_id = f'ID <= {max_id}' if max_id else ''
 
         min_id = min_id + ' AND' if all((min_id,max_id)) else min_id
         where = 'WHERE' if any((min_id, max_id)) else ''
@@ -708,8 +713,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 AES(self._mainkey).encrypt(part.encode()),
                 part_id, parent_part_id, ignore=True
             )
-        elbd = EncryptedLocalBoxDirectory(self._tgbox_db, part_id)
-        return await elbd.decrypt(self._mainkey)
+        elbd = EncryptedLocalBoxDirectory(self._elb, part_id)
+        return await elbd.decrypt(dlb=self)
 
     async def _make_local_file(self, pf: 'PreparedFile') -> 'DecryptedLocalBoxFile':
         """
@@ -751,9 +756,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
             part_id, efilekey, pf.fingerprint,
             pf.metadata, None
         )
-        return await EncryptedLocalBoxFile(
-            pf.file_id, self._tgbox_db,
-            defaults=self._defaults).decrypt(pf.dlb._mainkey)
+        elbf = EncryptedLocalBoxFile(pf.file_id, self._elb)
+        return await elbf.decrypt(dlb=self)
 
     async def _check_fingerprint(self, fingerprint: bytes):
         """
@@ -1331,19 +1335,20 @@ class EncryptedLocalBoxDirectory:
 
         asyncio_run(main())
     """
-    def __init__(self, tgbox_db: TgboxDB, part_id: bytes):
+    def __init__(self, elb: EncryptedLocalBox, part_id: bytes):
         """
         Arguments:
-            tgbox_db (``TgboxDB``):
-                Tgbox Database.
+            elb (``EncryptedLocalBox``):
+                Encrypted LocalBox.
 
             part_id (``bytes``):
                 Path's part ID. You can fetch it from
                 the ``PATH_PARTS`` table in ``TgboxDB``.
         """
         self._initialized = False
-        self._tgbox_db = tgbox_db
-        self._lb = EncryptedLocalBox(self._tgbox_db)
+
+        self._lb = elb
+        self._tgbox_db = self._lb._tgbox_db
 
         self._part = None
         self._part_id = part_id
@@ -1421,6 +1426,11 @@ class EncryptedLocalBoxDirectory:
         """Will return ``True`` if path was fully loaded"""
         return self._floaded
 
+    @property
+    def tgbox_db(self) -> TgboxDB:
+        """Will return TgboxDB associated with this directory"""
+        return self._tgbox_db
+
     async def init(self) -> 'EncryptedLocalBoxDirectory':
         """Will fetch required data from the database."""
 
@@ -1469,11 +1479,11 @@ class EncryptedLocalBoxDirectory:
                 return
 
             if isinstance(self._lb, DecryptedLocalBox):
-                previous_part = await EncryptedLocalBoxDirectory(
-                    self._tgbox_db, previous_part[0]).decrypt(self._lb._mainkey)
+                elbd = EncryptedLocalBoxDirectory(self._lb._elb, previous_part[0])
+                previous_part = await elbd.decrypt(dlb=self._lb)
             else:
                 previous_part = await EncryptedLocalBoxDirectory(
-                    self._tgbox_db, previous_part[0]).init()
+                    self._lb, previous_part[0]).init()
 
             self.parts.insert(0, previous_part)
 
@@ -1532,10 +1542,10 @@ class EncryptedLocalBoxDirectory:
             ))
             async for folder_row in folders:
                 if isinstance(self._lb, DecryptedLocalBox):
-                    yield await EncryptedLocalBoxDirectory(self._tgbox_db,
-                        folder_row[1]).decrypt(self._lb._mainkey)
+                    elbd = EncryptedLocalBoxDirectory(self._lb._elb, folder_row[1])
+                    yield await elbd.decrypt(dlb=self._lb)
                 else:
-                    yield await EncryptedLocalBoxDirectory(self._tgbox_db,
+                    yield await EncryptedLocalBoxDirectory(self._lb,
                         folder_row[1]).init()
 
         if not ignore_files:
@@ -1584,29 +1594,60 @@ class EncryptedLocalBoxDirectory:
         await self._tgbox_db.PATH_PARTS.execute(
             ('DELETE FROM PATH_PARTS WHERE PART_ID=?',(self._part_id,))
         )
-    async def decrypt(self, key: Union[BaseKey, MainKey]):
-        """Decrypt self and return ``DecryptedLocalBoxDirectory``"""
-        if not self._initialized: await self.init()
-        return DecryptedLocalBoxDirectory(self, key)
+    async def decrypt(
+            self, key: Optional[Union[BaseKey, MainKey]] = None,
+            dlb: Optional[DecryptedLocalBox] = None):
+        """
+        Decrypt self and return ``DecryptedLocalBoxDirectory``
+
+        Arguments:
+            key (``BaseKey``, ``MainKey``, optional):
+                Decryption key. Must be specified if ``dlb`` is ``None``.
+
+            dlb (``DecryptedLocalBox``, optional):
+                ``DecryptedLocalBox`` that we will use to decrypt
+                ``EncryptedLocalBoxDirectory``. Must be specified
+                if ``key`` argument is ``None``.
+        """
+        if not any((key, dlb)):
+            raise ValueError('At least key or dlb must be specified')
+
+        if not self._initialized:
+            await self.init()
+
+        return DecryptedLocalBoxDirectory(self, key=key, dlb=dlb)
 
 class DecryptedLocalBoxDirectory(EncryptedLocalBoxDirectory):
     def __init__(
             self, elbd: EncryptedLocalBoxDirectory,
-            key: Union[BaseKey, MainKey]):
+            key: Optional[Union[BaseKey, MainKey]] = None,
+            dlb: Optional[DecryptedLocalBox] = None):
         """
         Arguments:
             elbd (``EncryptedLocalBoxDirectory``):
                 Initialized ``EncryptedLocalBoxDirectory``.
 
             key (``BaseKey``, ``MainKey``):
-                Decryption ``Key``.
+                Decryption ``Key``. Must be specified if ``dlb`` is ``None``.
+
+            dlb (``DecryptedLocalBox``, optional):
+                ``DecryptedLocalBox`` that we will use to decrypt
+                ``EncryptedLocalBoxDirectory``. Must be specified
+                if ``key`` argument is ``None``.
         """
-        super().__init__(elbd._tgbox_db, elbd._part_id)
+        if not any((key, dlb)):
+            raise ValueError('At least key or dlb must be specified')
+
+        super().__init__(elbd._lb, elbd._part_id)
 
         self._initialized = True
         self._elbd = elbd
 
-        self._lb = DecryptedLocalBox(elbd._lb, key)
+        if dlb:
+            self._lb = dlb
+        else:
+            self._lb = self._elbd._lb.decrypt(key)
+
         self._part = AES(self._lb._mainkey).decrypt(elbd._part)
 
     @staticmethod
@@ -1650,27 +1691,24 @@ class EncryptedLocalBoxFile:
         asyncio_run(main())
     """
     def __init__(
-            self, id: int, tgbox_db: TgboxDB,
-            cache_preview: bool=True,
-            defaults: Optional[Union[DefaultsTableWrapper,
-                RemoteBoxDefaults]] = None) -> None:
+            self, id: int, elb: EncryptedLocalBox,
+            cache_preview: bool=True) -> None:
         """
         Arguments:
             id (``int``):
                 File ID.
 
-            tgbox_db (``TgboxDB``):
-                Tgbox Database.
+            elb (``EncryptedLocalBox``):
+                Encrypted LocalBox.
 
             cache_preview (``bool``, optional):
                 Cache preview in class or not.
-
-            defaults (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
-                Class with a default values/constants we will use.
         """
         self._id = id
-        self._tgbox_db = tgbox_db
+        self._lb = elb
         self._cache_preview = cache_preview
+
+        self._defaults = self._lb._defaults
 
         self._initialized = False
         self._fingerprint = None
@@ -1680,13 +1718,6 @@ class EncryptedLocalBoxFile:
         self._metadata, self._directory = None, None
         self._imported, self._efilekey = None, None
         self._file_salt, self._version_byte = None, None
-
-        if defaults:
-            logger.debug('Custom defaults found, we will try to use it')
-            self._defaults = defaults
-        else:
-            logger.debug('Custom defaults is NOT found')
-            self._defaults = DefaultsTableWrapper(self._tgbox_db)
 
     def __hash__(self) -> int:
         return hash((self._id, 22))
@@ -1800,6 +1831,15 @@ class EncryptedLocalBoxFile:
         """
         return self._prefix
 
+    @property
+    def lb(self) -> Union[EncryptedLocalBox, DecryptedLocalBox]:
+        """
+        Will return ``EncryptedLocalBox`` from the
+        ``EncryptedLocalBoxFile`` and ``DecryptedLocalBox``
+        from the ``DecryptedLocalBoxFile`` object.
+        """
+        return self._lb
+
     def __raise_initialized(self) -> NoReturn:
         if not self._initialized:
             raise NotInitializedError('Not initialized. Call .init().')
@@ -1809,7 +1849,7 @@ class EncryptedLocalBoxFile:
 
         logger.debug(f'Init ELBF | SELECT * FROM FILES WHERE ID={self._id}')
 
-        file_row = list(await self._tgbox_db.FILES.select_once(
+        file_row = list(await self._lb._tgbox_db.FILES.select_once(
             sql_tuple = ('SELECT * FROM FILES WHERE ID=?', (self._id,))
         ))
         self._updated_metadata = file_row.pop()
@@ -1821,7 +1861,7 @@ class EncryptedLocalBoxFile:
         self._id = file_row.pop()
 
         self._directory = EncryptedLocalBoxDirectory(
-            self._tgbox_db, self._ppath_head
+            self._lb, self._ppath_head
         )
         await self._directory.init()
 
@@ -1863,17 +1903,28 @@ class EncryptedLocalBoxFile:
         """
         self._cache_preview = True
 
-    async def decrypt(self, key: Union[FileKey, MainKey]) -> 'DecryptedLocalBoxFile':
+    async def decrypt(
+            self, key: Optional[Union[FileKey, MainKey]] = None,
+            dlb: Optional[DecryptedLocalBox] = None) -> 'DecryptedLocalBoxFile':
         """
-        Returns decrypted by ``key`` ``EncryptedLocalBoxFile``
+        Returns decrypted by ``key``/``dlb`` ``EncryptedLocalBoxFile``
 
         Arguments:
             key (``FileKey``, ``MainKey``):
-                Decryption key.
+                Decryption key. Must be specified if
+                ``dlb`` argument is ``None``.
+
+            dlb (``DecryptedLocalBox``, optional):
+                Decrypted LocalBox. Must be specified
+                if ``key`` argument is ``None``.
         """
+        if not any((key, dlb)):
+            raise ValueError('You should specify at least key or dlb')
+
         if not self.initialized:
             await self.init()
-        return DecryptedLocalBoxFile(self, key)
+
+        return DecryptedLocalBoxFile(self, key=key, dlb=dlb)
 
     async def delete(self) -> None:
         """
@@ -1886,12 +1937,12 @@ class EncryptedLocalBoxFile:
             function on ``EncryptedRemoteBoxFile``.
         """
         # Getting file row for PPATH_HEAD
-        file_row = await self._tgbox_db.FILES.select_once(
+        file_row = await self._lb._tgbox_db.FILES.select_once(
             sql_tuple=('SELECT PPATH_HEAD FROM FILES WHERE ID=?',(self._id,))
         )
         logger.debug(f'Removing ELBF | DELETE FROM FILES WHERE ID={self._id}')
         # Removing requested file
-        await self._tgbox_db.FILES.execute(
+        await self._lb._tgbox_db.FILES.execute(
             ('DELETE FROM FILES WHERE ID=?',(self._id,))
         )
         ppath_head = file_row[0]
@@ -1899,21 +1950,21 @@ class EncryptedLocalBoxFile:
         # and remove empty ones (which doesn't pointed)
         while True:
             # Retrieve file rows that point to PPATH_HEAD
-            files_pointed = await self._tgbox_db.FILES.execute((
+            files_pointed = await self._lb._tgbox_db.FILES.execute((
                 'SELECT ID FROM FILES WHERE PPATH_HEAD=?',(ppath_head,)
             ))
             if (await files_pointed.fetchone()):
                 break # Part ID pointed by file, so break
 
             # Amount of parts that point to current ppath_head
-            pparts_pointed = await self._tgbox_db.PATH_PARTS.execute((
+            pparts_pointed = await self._lb._tgbox_db.PATH_PARTS.execute((
                 'SELECT * FROM PATH_PARTS WHERE PARENT_PART_ID=?',
                 (ppath_head,)
             ))
             if (await pparts_pointed.fetchone()):
                 break
 
-            parent_part_id = await self._tgbox_db.PATH_PARTS.select_once(sql_tuple=(
+            parent_part_id = await self._lb._tgbox_db.PATH_PARTS.select_once(sql_tuple=(
                 'SELECT PARENT_PART_ID FROM PATH_PARTS WHERE PART_ID=?',
                 (ppath_head,)
             ))
@@ -1921,7 +1972,7 @@ class EncryptedLocalBoxFile:
                 '''Removing orphaned directory | DELETE FROM '''
                f'''PATH_PARTS WHERE PART_ID={ppath_head}'''
             )
-            await self._tgbox_db.PATH_PARTS.execute((
+            await self._lb._tgbox_db.PATH_PARTS.execute((
                 'DELETE FROM PATH_PARTS WHERE PART_ID=?',
                 (ppath_head,)
             ))
@@ -1973,7 +2024,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
     """
     def __init__(
             self, elbf: EncryptedLocalBoxFile,
-            key: Union[FileKey, ImportKey, MainKey],
+            key: Optional[Union[FileKey, ImportKey, MainKey]] = None,
+            dlb: Optional[DecryptedLocalBox] = None,
             cache_preview: bool=True):
         """
         Arguments:
@@ -1981,12 +2033,23 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 Encrypted local box file that
                 you want to decrypt.
 
-            key (``FileKey``, ``ImportKey``, ``MainKey``):
-                Decryption key.
+            key (``FileKey``, ``ImportKey``, ``MainKey``, optional):
+                Decryption key. If ``key`` is ``MainKey``,
+                ``EncryptedLocalBox`` attached to the ``elbf``
+                will be auto-decrypted too (self.lb). Must be
+                specified if ``dlb`` is ``None``.
+
+            dlb (``DecryptedLocalBox``, optional):
+                Decrypted LocalBox associated with the
+                EncryptedLocalBoxFile you want to decrypt.
+                Must be specified if ``key` is ``None``.
 
             cache_preview (``bool``, optional):
                 Cache preview in class or not.
         """
+        if not any((key, dlb)):
+            raise ValueError('At least key or dlb must be specified')
+
         if not elbf._initialized:
             raise NotInitializedError('You should init elbf firstly')
 
@@ -1994,7 +2057,11 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         self._elbf = elbf
         self._key = key
-        self._tgbox_db = elbf._tgbox_db
+
+        if dlb:
+            self._lb = dlb
+        else:
+            self._lb = elbf._lb
 
         self._efilekey = elbf._efilekey
 
@@ -2017,21 +2084,39 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         else:
             self._cache_preview = cache_preview
 
+
         if isinstance(key, (FileKey, ImportKey)):
             logger.debug('Treating key as FileKey')
             self._filekey = FileKey(key.key)
+
         elif isinstance(key, MainKey) and self._efilekey:
             logger.debug('Trying to decrypt encrypted FileKey with MainKey')
             self._filekey = FileKey(
                 AES(self._key).decrypt(self._efilekey)
             )
-        else:
-            logger.debug('make_filekey(self._key, self._file_salt)')
+        elif isinstance(self._lb, DecryptedLocalBox) and self._efilekey:
+            logger.debug('Trying to decrypt encrypted FileKey with DecryptedLocalBox')
+            self._filekey = FileKey(
+                AES(self._lb._mainkey).decrypt(self._efilekey)
+            )
+        elif isinstance(key, MainKey) and not self._efilekey:
+            logger.debug('Making FileKey from the MainKey and FileSalt')
             self._filekey = make_filekey(self._key, self._file_salt)
+
+        elif isinstance(self._lb, DecryptedLocalBox):
+            logger.debug('We will use MainKey from DecryptedLocalBox')
+            self._filekey = make_filekey(self._lb._mainkey, self._file_salt)
+
 
         if isinstance(key, MainKey):
             logger.debug('key is MainKey, self._mainkey is present')
             self._mainkey = key
+
+            logger.debug('Decrypting EncryptedLocalBox with MainKey')
+            self._lb = DecryptedLocalBox(self._lb, self._mainkey)
+
+        elif isinstance(self._lb, DecryptedLocalBox):
+            self._mainkey = self._lb._mainkey
         else:
             self._mainkey = None
 
@@ -2096,7 +2181,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         if self._mainkey:
             self._directory = DecryptedLocalBoxDirectory(
-                self._elbf._directory, self._mainkey
+                self._elbf._directory, dlb=self._lb
             )
         else:
             self._directory = self._elbf._directory
@@ -2236,7 +2321,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
            f'''UPDATED_METADATA={_updated_metadata} '''
            f'''WHERE ID={self._id}'''
         )
-        await self._tgbox_db.FILES.execute((
+        await self._lb._tgbox_db.FILES.execute((
             'UPDATE FILES SET UPDATED_METADATA=? WHERE ID=?',
             (_updated_metadata, self._id)
         ))

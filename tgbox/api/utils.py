@@ -1,4 +1,4 @@
-"""Module with all API utils."""
+"""Module with utils for api package."""
 
 from typing import (
     BinaryIO, Optional,
@@ -238,7 +238,7 @@ async def search_generator(
         if hasattr(file, '_message'): # *RemoteBoxFile
             file_size = file.file_size
             file_path = file.file_path if file.file_path else ''
-        elif hasattr(file, '_tgbox_db'): # *LocalBoxFile
+        elif hasattr(file, '_lb'): # *LocalBoxFile
             file_size = file.size
             await file.directory.lload(full=True)
             file_path = str(file.directory)
