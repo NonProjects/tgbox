@@ -1,5 +1,9 @@
 """This module stores all cryptography used in API."""
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from os import urandom
 from typing import Union, Optional
 
@@ -12,11 +16,13 @@ try:
     from cryptography.hazmat.primitives.ciphers\
         import Cipher, algorithms, modes
     FAST_ENCRYPTION = True
+    logger.info('Fast cryptography library was found.')
 except ModuleNotFoundError:
     # We can use PyAES if there is no cryptography library.
     # PyAES is much slower. You can use it for quick tests.
     from pyaes import AESModeOfOperationCBC
     FAST_ENCRYPTION = False
+    logger.warn('Fast cryptography library was NOT found. ')
 try:
     # Check if cryptg is installed.
     from cryptg import __name__ as _
