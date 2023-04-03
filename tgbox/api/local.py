@@ -78,7 +78,7 @@ async def make_localbox(
     """
     erb_box_name = await erb.get_box_name()
 
-    logger.debug(f'TgboxDB.create({erb_box_name})')
+    logger.info(f'TgboxDB.create({erb_box_name})')
     tgbox_db = await TgboxDB.create(erb_box_name)
 
     if (await tgbox_db.BOX_DATA.count_rows()):
@@ -129,10 +129,10 @@ async def get_localbox(
         tgbox_db = await TgboxDB(tgbox_db_path).init()
 
     if basekey:
-        logger.debug(f'Getting DecryptedLocalBox of {tgbox_db.db_path}')
+        logger.info(f'Getting DecryptedLocalBox of {tgbox_db.db_path}')
         return await EncryptedLocalBox(tgbox_db).decrypt(basekey)
     else:
-        logger.debug(f'Getting EncryptedLocalBox of {tgbox_db.db_path}')
+        logger.info(f'Getting EncryptedLocalBox of {tgbox_db.db_path}')
         return await EncryptedLocalBox(tgbox_db).init()
 
 async def clone_remotebox(
@@ -164,7 +164,7 @@ async def clone_remotebox(
     drb_box_name = await drb.get_box_name()
     box_path = drb_box_name if not box_path else box_path
 
-    logger.debug(
+    logger.info(
         f'Cloning DecryptedRemoteBox {drb_box_name} to LocalBox {box_path}'
     )
     tgbox_db = await TgboxDB.create(box_path)
@@ -199,7 +199,7 @@ async def clone_remotebox(
             else:
                 progress_callback(drbf.id, last_file_id)
 
-        logger.debug(f'Importing ID{drbf.id} from {drb_box_name} to {tgbox_db.name}')
+        logger.info(f'Importing ID{drbf.id} from {drb_box_name} to {tgbox_db.name}')
         await dlb.import_file(drbf)
 
     return dlb
@@ -414,7 +414,7 @@ class EncryptedLocalBox:
         """
         try:
             self.__raise_initialized()
-            logger.debug(f'File by ID{id} was requested from LocalBox')
+            logger.info(f'File by ID{id} was requested from LocalBox')
 
             if decrypt and self._mainkey and not\
                 isinstance(self._mainkey, EncryptedMainkey):
@@ -461,7 +461,7 @@ class EncryptedLocalBox:
             ))
             sfpid = [i[0] for i in await root_pids.fetchall()]
 
-        logger.debug(f'LocalBox contents(), {sfpid=}')
+        logger.info(f'*LocalBox.contents(), {sfpid=}')
 
         for pid in sfpid:
             if isinstance(self, DecryptedLocalBox):
@@ -565,7 +565,7 @@ class EncryptedLocalBox:
         if not self._tgbox_db.closed:
             await self.done()
 
-        logger.debug(f'Removing LocalBox {self._tgbox_db.db_path}...')
+        logger.info(f'Removing LocalBox {self._tgbox_db.db_path}...')
         self._tgbox_db.db_path.unlink()
 
     async def decrypt(self, key: Union[BaseKey, MainKey]) -> 'DecryptedLocalBox':
@@ -586,7 +586,7 @@ class EncryptedLocalBox:
         work with LocalBox, so we will
         clean up & close connections.
         """
-        logger.debug('Closing all LocalBox DB connections...')
+        logger.info('Closing all LocalBox DB connections...')
         await self._tgbox_db.close()
 
 class DecryptedLocalBox(EncryptedLocalBox):
@@ -739,13 +739,13 @@ class DecryptedLocalBox(EncryptedLocalBox):
         eupload_time = AES(pf.filekey).encrypt(int_to_bytes(pf.upload_time))
 
         if pf.imported:
-            logger.debug('Adding imported PreparedFile to LocalBox')
+            logger.info(f'Adding imported PreparedFile ID{pf.file_id} to LocalBox')
             if make_filekey(self._mainkey, pf.filesalt) == pf.filekey:
                 efilekey = None # We can make it with our MainKey
             else:
                 efilekey = AES(self._mainkey).encrypt(pf.filekey.key)
         else:
-            logger.debug('Adding PreparedFile to LocalBox')
+            logger.info(f'Adding PreparedFile ID{pf.file_id} to LocalBox')
             efilekey = None
 
         logger.debug('Making LocalBox path parts from PreparedFile file path...')
@@ -802,7 +802,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             two parameters: (current_id, last_id).
         """
         drb_box_name = await drb.get_box_name()
-        logger.debug(f'Syncing {self._tgbox_db.db_path} with {drb_box_name}...')
+        logger.info(f'Syncing {self._tgbox_db.db_path} with {drb_box_name}...')
 
         async def _get_file(n=start_from):
             iter_over = drb.files(
@@ -1058,7 +1058,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         filekey = make_filekey(self._mainkey, file_salt)
 
         if isinstance(file, (Document, Photo)):
-            logger.debug('Trying to make a PreparedFile from Telegram file...')
+            logger.info('Trying to make a PreparedFile from Telegram file...')
 
             if not self._session:
                 raise NotEnoughRights(
@@ -1119,7 +1119,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                         file_size = file.tell()
                         file.seek(0,0)
                     else:
-                        logger.warn(
+                        logger.warning(
                             '''You didn\'t specified a file_size, so the best '''
                             '''option for now is read a whole file to RAM and '''
                             '''get a length of it. Change your code to omit this.'''
@@ -2167,7 +2167,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             )
             self._file_path = Path(self._file_path.decode())
         else:
-            logger.warn(
+            logger.warning(
                f'''We can\'t decrypt real file path of ID{self._id} because '''
                 '''MainKey is not present. Try to decrypt EncryptedLocalBoxFile '''
                 '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
