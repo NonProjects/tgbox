@@ -190,6 +190,7 @@ class TgboxDB:
     async def init(self) -> 'TgboxDB':
         logger.debug(f'tgbox.api.db.TgboxDB.init("{self._db_path}")')
 
+        logger.debug(f'Opening SQLite connection to {self._db_path}')
         self._aiosql_db = await aiosqlite.connect(self._db_path)
 
         for table, data in TABLES.items():
