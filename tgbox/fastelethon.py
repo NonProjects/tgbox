@@ -6,7 +6,7 @@ Copied again from Painor GitHub
     gist.github.com/painor/7e74de80ae0c819d3e9abcf9989a8dd6
 
 | This file was patched for TGBOX project (github.com/NonProjects/tgbox)
-| and may not work as you expected in your libraries.
+| and may not work as you expect in your code.
 
 Big thanks to all contributors of this module.
 """
@@ -52,7 +52,7 @@ from telethon.tl.functions.upload import (
     SaveFilePartRequest,
     SaveBigFilePartRequest
 )
-log: logging.Logger = logging.getLogger("telethon")
+log: logging.Logger = logging.getLogger()
 
 TypeLocation = Union[
     Document, Photo, InputDocumentFileLocation,
