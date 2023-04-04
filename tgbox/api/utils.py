@@ -1,5 +1,7 @@
 """Module with utils for api package."""
 
+import logging
+
 from typing import (
     BinaryIO, Optional,
     Union, AsyncGenerator
@@ -29,6 +31,7 @@ from ..fastelethon import download_file
 
 from .db import TABLES, TgboxDB
 
+
 __all__ = [
     'search_generator',
     'DirectoryRoot',
@@ -37,9 +40,11 @@ __all__ = [
     'DefaultsTableWrapper',
     'RemoteBoxDefaults'
 ]
+logger = logging.getLogger(__name__)
+
 class TelegramClient(TTelegramClient):
     """
-    A little extend to the ``telethon.TelegramClient``.
+    A little extension to the ``telethon.TelegramClient``.
 
     This class inherits Telethon's TelegramClient and support
     all features that has ``telethon.TelegramClient``.
@@ -126,6 +131,8 @@ class TelegramClient(TTelegramClient):
             force_sms (``bool``, optional):
                 Whether to force sending as SMS.
         """
+        logger.info(f'Sending login code to {self._phone_number}...')
+
         return await self.send_code_request(
             self._phone_number, force_sms=force_sms
         )
@@ -147,9 +154,17 @@ class TelegramClient(TTelegramClient):
         """
         if not await self.is_user_authorized():
             try:
+                logger.info(f'Trying to sign-in with {self._phone_number} and {code} code..')
                 await self.sign_in(self._phone_number, code)
             except SessionPasswordNeededError:
+                logger.info(
+                    '''Log-in without 2FA password failed. '''
+                   f'''Trying to sign-in with {self._phone_number}, '''
+                   f'''password and {code} code..'''
+                )
                 await self.sign_in(password=password)
+        else:
+            logger.debug(f'User {self._phone_number} is already authorized.')
 
     async def resend_code(self, sent_code: SentCode) -> SentCode:
         """
@@ -169,6 +184,7 @@ class TelegramClient(TTelegramClient):
             sent_code = await tc.send_code()
             sent_code = await tc.resend_code(sent_code)
         """
+        logger.info(f'Resending login code to {self._phone_number}...')
         return await self(ResendCodeRequest(
             self._phone_number, sent_code.phone_code_hash)
         )
@@ -214,7 +230,7 @@ async def search_generator(
         cache_preview: bool = True) -> AsyncGenerator:
     """
     Generator used to search for files in dlb and rb. It's
-    only for internal use, and you shouldn't use it in your
+    only for internal use and you shouldn't use it in your
     own projects.
 
     If file is exported from other RemoteBox and was imported to your
@@ -415,8 +431,10 @@ async def search_generator(
                         break
 
         if all(yield_result):
+            logger.info(f'SearchFilter matched ID{file.id}')
             yield file
         else:
+            logger.info(f'SearchFilter mismatch ID{file.id} [{yield_result}]')
             continue
 
 class _TelegramVirtualFile:
@@ -503,6 +521,10 @@ class DefaultsTableWrapper:
 
     async def init(self) -> 'DefaultsTableWrapper':
         """Fetch the defaults and initialize"""
+        logger.debug(
+            '''Initializing DefaultsTableWrapper for '''
+           f'''{self._tgbox_db._db_path} LocalBox'''
+        )
         if self._tgbox_db.closed:
             await self._tgbox_db.init()
 
@@ -557,6 +579,8 @@ class DefaultsTableWrapper:
             asyncio_run(main())
         """
         getattr(self, key) # Vetrify that Key exist
+
+        logger.info(f'Changing defaults | UPDATE DEFAULTS SET {key}={value}')
         await self._tgbox_db.DEFAULTS.execute((
             f'UPDATE DEFAULTS SET {key}=?', (value,)
         ))
