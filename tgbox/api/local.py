@@ -1075,12 +1075,14 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         if file_path is None:
             if hasattr(file,'name') and file.name:
-                file_path = Path(file.name).absolute()
+                file_path = Path(file.name).absolute().resolve()
             else:
                 file_path = Path(self._defaults.DEF_NO_FOLDER, prbg(8).hex())
         else:
             if len(file_path.parts) < 2:
                 raise ValueError('Path should contain folder and file name')
+
+            file_path = file_path.resolve()
 
         if len(str(file_path)) > self._defaults.FILE_PATH_MAX:
             raise LimitExceeded(f'File path must be <= {self._defaults.FILE_PATH_MAX} bytes.')
