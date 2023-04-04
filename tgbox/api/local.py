@@ -418,20 +418,21 @@ class EncryptedLocalBox:
 
             if decrypt and self._mainkey and not\
                 isinstance(self._mainkey, EncryptedMainkey):
-                    logger.debug(f'Return ID{id} DecryptedLocalBoxFile')
+                    logger.debug(f'Trying to return ID{id} DecryptedLocalBoxFile...')
 
                     elbf = EncryptedLocalBoxFile(id, self._elb,
                         cache_preview=cache_preview
                     )
                     return await elbf.decrypt(dlb=self)
             else:
-                logger.debug(f'Return ID{id} EncryptedLocalBoxFile')
+                logger.debug(f'Trying to return ID{id} EncryptedLocalBoxFile...')
 
                 elbf = EncryptedLocalBoxFile(id, self,
                     cache_preview=cache_preview)
                 return await elbf.init()
 
-        except StopAsyncIteration: # No file by ``id``.
+        except StopAsyncIteration: # There is no file by "id" in the *LocalBox.
+            logger.debug(f'LocalBox doesn\'t have a file with ID{id}: return None.')
             return None
 
     async def contents(
