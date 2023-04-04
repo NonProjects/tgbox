@@ -1,5 +1,7 @@
 """This module stores API defaults."""
 
+import logging
+
 from enum import IntEnum
 from pathlib import Path
 from . import __version__
@@ -26,6 +28,8 @@ __all__ = [
     'DOWNLOAD_PATH',
     'PYINSTALLER_DATA'
 ]
+logger = logging.getLogger(__name__)
+
 class Limits(IntEnum):
     """Default TGBOX API limits"""
     # We store metadata size in three bytes, but
@@ -92,6 +96,7 @@ FFMPEG = 'ffmpeg'
 #
 for file in _other.iterdir():
     if file.name == 'ffmpeg.exe':
+        logger.info(f'FFMPEG found in {str(_other)}, we will use it')
         FFMPEG = _other / 'ffmpeg.exe'
 
 # By default, PyInstaller will not grab files
