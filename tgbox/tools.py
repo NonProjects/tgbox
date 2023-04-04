@@ -121,7 +121,7 @@ class SearchFilter:
 
     * The ``SearchFilter(**kwargs)`` will add all filters \
       to the **include**. Also use ``SearchFilter.include(...)`` \
-      & ``SearchFilter.exclude(...)`` methods after initializion.
+      & ``SearchFilter.exclude(...)`` methods after initialization.
 
     All filters:
         * **id** *integer*: File ID
