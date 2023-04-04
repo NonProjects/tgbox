@@ -1,12 +1,15 @@
 """Module with API functions and classes for RemoteBox."""
 
+import logging
+
 from typing import (
     BinaryIO, Union, NoReturn, Callable,
     AsyncGenerator, List, Dict, Optional
 )
 from pathlib import Path
-
 from os import PathLike
+
+from traceback import format_exc
 
 from base64 import (
     urlsafe_b64encode,
@@ -69,6 +72,8 @@ __all__ = [
     'EncryptedRemoteBoxFile',
     'DecryptedRemoteBoxFile',
 ]
+logger = logging.getLogger(__name__)
+
 async def make_remotebox(
         tc: TelegramClient,
         box_name: Optional[str] = DEF_TGBOX_NAME,
@@ -108,7 +113,11 @@ async def make_remotebox(
     box_salt = urlsafe_b64encode(
         box_salt if box_salt else get_rnd_bytes()
     )
+    box_salt = box_salt.decode()
+
     channel_name = rb_prefix + box_name
+
+    logger.info(f'Making RemoteBox {channel_name} ({box_salt[:12]}...)')
 
     channel = (await tc(CreateChannelRequest(
         channel_name, '', megagroup=False))).chats[0]
@@ -117,7 +126,7 @@ async def make_remotebox(
         box_image = await tc.upload_file(open(box_image,'rb'))
         await tc(EditPhotoRequest(channel, box_image))
 
-    await tc(EditChatAboutRequest(channel, box_salt.decode()))
+    await tc(EditChatAboutRequest(channel, box_salt))
     return EncryptedRemoteBox(channel, tc)
 
 async def get_remotebox(
@@ -155,7 +164,8 @@ async def get_remotebox(
             function parameters for PySocks, like (type, 'hostname', port).
             See https://github.com/Anorov/PySocks#usage-1 for more info.
     """
-    if tc: account = tc
+    if tc:
+        account = tc
 
     elif tc and not entity:
         raise ValueError('entity must be specified with tc')
@@ -167,6 +177,14 @@ async def get_remotebox(
             proxy=proxy
         )
         await account.connect()
+
+    if dlb:
+        logger.info(
+            f'''Getting RemoteBox ID{dlb._box_channel_id} '''
+            f'''with the {dlb._tgbox_db._db_path} LocalBox'''
+        )
+    else:
+        logger.info(f'Getting RemoteBox ({entity}) with TelegramClient')
     try:
         entity = entity if entity else PeerChannel(dlb._box_channel_id)
         channel_entity = await account.get_entity(entity)
@@ -180,8 +198,10 @@ async def get_remotebox(
         raise RemoteBoxInaccessible(RemoteBoxInaccessible.__doc__) from None
 
     if not dlb:
+        logger.debug('DLB is NOT specified, return EncryptedRemoteBox')
         return EncryptedRemoteBox(channel_entity, account)
     else:
+        logger.debug('DLB is specified, return DecryptedRemoteBox')
         return await EncryptedRemoteBox(
             channel_entity, account).decrypt(dlb=dlb)
 
@@ -215,7 +235,7 @@ class EncryptedRemoteBox:
         API_HASH = '00000000000000000000000000000000' # Your own API_HASH
 
         async def main():
-            # Connecting and logging to Telegram
+            # Connect and sign-in to Telegram
             tc = TelegramClient(
                 phone_number = PHONE_NUMBER,
                 api_id = API_ID,
@@ -265,8 +285,11 @@ class EncryptedRemoteBox:
         # Similar to box_salt, await get_box_name.
 
         if defaults:
+            logger.debug('ERB: Found custom defaults, will try to use it')
             self._defaults = defaults
         else:
+            logger.debug('ERB: Custom defaults is not present')
+
             self._defaults = RemoteBoxDefaults(
                 METADATA_MAX = Limits.METADATA_MAX,
                 FILE_PATH_MAX = Limits.FILE_PATH_MAX,
@@ -422,10 +445,14 @@ class EncryptedRemoteBox:
                 Cache preview in returned by method
                 RemoteBoxFiles or not. ``True`` by default.
         """
+        logger.info(f'Getting file ID{id} from the RemoteBox ID{self._box_channel_id}')
+
         if hasattr(self, '_mainkey') and not key:
+            logger.debug('self have _mainkey, will try to return DecryptedRemoteBoxFile')
             key = self._mainkey # pylint: disable=no-member
 
         if hasattr(self, '_dlb'):
+            logger.debug('self have _dlb, will try to return DecryptedRemoteBoxFile')
             dlb = self._dlb # pylint: disable=no-member
 
         file_iter = self.files(
@@ -565,10 +592,17 @@ class EncryptedRemoteBox:
                 to save more RAM if ``True``. You can call
                 ``.init()`` method on it to load it again.
         """
+        logger.info(f'*RemoteBox.files generator started, ids={ids}')
+
+        if key:
+            logger.debug('Custom key specified, will try to use it to decrypt files')
+
         if hasattr(self, '_mainkey') and not key:
+            logger.debug('self have _mainkey, will try to yield DecryptedRemoteBoxFile')
             key = self._mainkey # pylint: disable=no-member
 
         if hasattr(self, '_dlb'):
+            logger.debug('self have _dlb, will try to yield DecryptedRemoteBoxFile')
             dlb = self._dlb # pylint: disable=no-member
 
         if decrypt and not any((key, dlb)):
@@ -591,11 +625,29 @@ class EncryptedRemoteBox:
                 raise RemoteFileNotFound('One of requsted by you file doesn\'t exist')
 
             if m.document:
+                logger.debug(f'Found Document: {m.file.name[:12]}...(ID{m.id})')
+
                 if not decrypt:
-                    rbf = await EncryptedRemoteBoxFile(
-                        m, self._tc, cache_preview=cache_preview,
-                        defaults=self._defaults).init()
+                    logger.debug(
+                        '''Decryption is disabled, will try to '''
+                        '''yield EncryptedRemoteBoxFile''')
+                    try:
+                        rbf = await EncryptedRemoteBoxFile(
+                            m, self._tc, cache_preview=cache_preview,
+                            defaults=self._defaults).init()
+
+                    except NotATgboxFile as e:
+                        if ignore_errors:
+                            logger.debug(
+                               f'''Document: {m.file.name[:12]}...(ID{m.id}) '''
+                                '''is not a TGBOX file, skipping.'''
+                            )
+                            continue
+                        raise e
                 else:
+                    logger.debug(
+                        '''Decryption is enabled, will try to '''
+                        '''yield DecryptedRemoteBoxFile''')
                     try:
                         rbf = await EncryptedRemoteBoxFile(
                             m, self._tc, cache_preview=cache_preview,
@@ -603,29 +655,73 @@ class EncryptedRemoteBox:
                                 key, erase_encrypted_metadata)
 
                     except Exception as e: # In case of imported file
+                        logger.debug(
+                            '''Failed to decrypt EncryptedRemoteBoxFile '''
+                           f'''(ID{m.id}), it seems that file is imported/'''
+                           f'''non-TGBOX [{e}]'''
+                        )
                         if return_imported_as_erbf and not dlb:
-                            rbf = await EncryptedRemoteBoxFile(
-                                m, self._tc, cache_preview=cache_preview,
-                                defaults=self._defaults).init()
+                            logger.debug(
+                                '''return_imported_as_erbf is True & DLB '''
+                                '''is not specified, so will return ERBF''')
+                            try:
+                                rbf = await EncryptedRemoteBoxFile(
+                                    m, self._tc, cache_preview=cache_preview,
+                                    defaults=self._defaults).init()
+
+                            except NotATgboxFile as exc:
+                                if ignore_errors:
+                                    logger.debug(
+                                       f'''Document: {m.file.name[:12]}...(ID{m.id}) '''
+                                        '''is not a TGBOX file, skipping.'''
+                                    )
+                                    continue
+                                raise exc
 
                         elif ignore_errors and not dlb:
+                            logger.debug(
+                                '''return_imported_as_erbf is False & DLB '''
+                                '''is not specified, ignore_errors is True '''
+                                '''so we will continue iteration for other.'''
+                            )
                             continue
 
                         elif not ignore_errors and not dlb:
                             raise IncorrectKey(
-                                'File is imported. Specify dlb?') from None
+                                'File is imported. Try to specify dlb?') from None
                         elif dlb:
+                            logger.debug('DLB is specified, will try to fetch FileKey from it.')
                             # We try to fetch FileKey of imported file from DLB.
                             dlb_file = await dlb.get_file(m.id, cache_preview=False)
 
                             # If we haven't imported this file to DLB
                             if not dlb_file:
                                 if return_imported_as_erbf:
-                                    rbf = await EncryptedRemoteBoxFile(
-                                        m, self._tc, cache_preview=cache_preview,
-                                        defaults=self._defaults).init()
+                                    try:
+                                        logger.debug(
+                                           f'''DLB is specified, but FileKey to {m.id} is not '''
+                                            '''present in it. return_imported_as_erbf is True, '''
+                                            '''so we will return ERBF.'''
+                                        )
+                                        rbf = await EncryptedRemoteBoxFile(
+                                            m, self._tc, cache_preview=cache_preview,
+                                            defaults=self._defaults).init()
+
+                                    except NotATgboxFile as exc:
+                                        if ignore_errors:
+                                            logger.debug(
+                                               f'''Document: {m.file.name[:12]}...(ID{m.id}) '''
+                                                '''is not a TGBOX file, skipping.'''
+                                            )
+                                            continue
+                                        raise exc
 
                                 elif ignore_errors:
+                                    logger.debug(
+                                       f'''DLB is specified, but FileKey to ID{m.id} is not '''
+                                        '''present in it. return_imported_as_erbf is False, '''
+                                        '''so we will skip it and continue iteration.'''
+                                    )
                                     continue
                                 else:
                                     raise NotImported(
@@ -633,7 +729,7 @@ class EncryptedRemoteBox:
                                         """Set to True ``return_imported_as_erbf``?"""
                                     ) from None
                             else:
-                                # We already imported file, so have FileKey
+                                # We already imported file, so DLB contains a FileKey
                                 rbf = await EncryptedRemoteBoxFile(
                                     m, self._tc, cache_preview=cache_preview,
                                     defaults=self._defaults).decrypt(dlb_file._filekey)
@@ -671,6 +767,8 @@ class EncryptedRemoteBox:
             - You may ignore this kwargs if you call this\
             method on ``DecryptedRemoteBox`` class.
         """
+        logger.info(f'Searching for files with {sf}')
+
         if hasattr(self, '_mainkey'):
             mainkey = self._mainkey
 
@@ -714,20 +812,37 @@ class EncryptedRemoteBox:
                 A callback function accepting two parameters:
                 (downloaded_bytes, total).
         """
+        logger.info(f'Pushing {pf.file} to RemoteBox ID{pf.dlb._box_channel_id}...')
+
         # Last 16 bytes of metadata is IV
         aes_state = AES(pf.filekey, pf.metadata[-16:])
 
         oe = OpenPretender(pf.file, aes_state, pf.filesize)
         oe.concat_metadata(pf.metadata)
         try:
-            ifile = await upload_file(
-                self._tc, oe,
-                file_name=urlsafe_b64encode(pf.filesalt).decode(),
+            # Here we will use fast upload function
+            try:
+                ifile = await upload_file(
+                    self._tc, oe,
+                    file_name=urlsafe_b64encode(pf.filesalt).decode(),
+                    part_size_kb=512, file_size=pf.filesize,
+                    progress_callback=progress_callback
+                )
+            except FilePartsInvalidError:
+                raise LimitExceeded('Your file is too big to upload')
+
+        except Exception as e:
+            # If some error was found during uploading then it's
+            # probably because of fast "upload_file(...)" from
+            # the custom fastelethon module. We will try to
+            # use the slow upload from the Telethon library
+            logger.warning(f'Fast upload FAILED, falling to SLOW!\n{format_exc()}')
+
+            ifile = await self._tc.upload_file(
+                oe, file_name=urlsafe_b64encode(pf.filesalt).decode(),
                 part_size_kb=512, file_size=pf.filesize,
                 progress_callback=progress_callback
             )
-        except FilePartsInvalidError:
-            raise LimitExceeded('Your file is too big to upload')
         try:
             file_message = await self._tc.send_file(
                 self._box_channel, file=ifile,
@@ -882,6 +997,7 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
         self._dlb = dlb
 
         if self._dlb:
+            logger.debug('DecryptedLocalBox is decrypted with the DLB')
             self._mainkey = self._dlb._mainkey
             self._defaults = self._dlb._defaults
         else:
@@ -889,8 +1005,10 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
                 raise ValueError('Must be specified at least key or dlb')
 
             if isinstance(key, (MainKey, ImportKey)):
+                logger.debug('DecryptedLocalBox is decrypted with the MainKey')
                 self._mainkey = MainKey(key.key)
             elif isinstance(key, BaseKey):
+                logger.debug('DecryptedLocalBox is decrypted with the BaseKey>MainKey')
                 self._mainkey = make_mainkey(key, self._box_salt)
             else:
                 raise IncorrectKey('key is not Union[MainKey, ImportKey, BaseKey]')
@@ -1006,6 +1124,8 @@ class EncryptedRemoteBoxFile:
             self._imported = False
 
         if defaults is None:
+            logger.debug('ERBF: Custom defaults is not present')
+
             self._defaults = RemoteBoxDefaults(
                 METADATA_MAX = Limits.METADATA_MAX,
                 FILE_PATH_MAX = Limits.FILE_PATH_MAX,
@@ -1014,6 +1134,7 @@ class EncryptedRemoteBoxFile:
                 DOWNLOAD_PATH = DOWNLOAD_PATH,
             )
         else:
+            logger.debug('ERBF: Found custom defaults, will try to use it')
             self._defaults = defaults
 
     def __hash__(self) -> int:
@@ -1148,12 +1269,16 @@ class EncryptedRemoteBoxFile:
                 ``defaults.PREFIX`` in metadata, and if
                 not, will raise a ``NotATgboxFile`` exception.
         """
+        logger.info(f'Initializing EncryptedRemoteBoxFile (ID{self._id})...')
+
         if isinstance(self._defaults, DefaultsTableWrapper):
             if not self._defaults.initialized:
                 await self._defaults.init()
 
         # 3 is amount of bytes to which we pack metadata length
         request_amount = len(PREFIX) + len(VERBYTE) + 3
+
+        logger.debug(f'base_data request_amount is {request_amount} bytes')
 
         async for base_data in self._tc.iter_download(
             self._message.document, request_size=pad_request_size(request_amount)):
@@ -1181,10 +1306,14 @@ class EncryptedRemoteBoxFile:
         if metadata_size > self._defaults.METADATA_MAX:
             raise LimitExceeded(f'{metadata_size=} > {self._defaults.METADATA_MAX=}')
 
+        logger.debug(f'metadata_size is {metadata_size} bytes')
+
         if metadata_size <= 1048576:
             metadata_size_padded = pad_request_size(metadata_size)
         else:
             metadata_size_padded = metadata_size
+
+        logger.debug(f'metadata_size_padded is {metadata_size_padded} bytes')
 
         iter_down = self._tc.iter_download(
             file = self._message.document,
@@ -1202,6 +1331,7 @@ class EncryptedRemoteBoxFile:
         if 'file_fingerprint' in parsedm:
             self._fingerprint = parsedm['file_fingerprint']
         else:
+            # For backward compatibility only
             self._fingerprint = b''
 
         self._file_salt = parsedm['file_salt']
@@ -1223,6 +1353,8 @@ class EncryptedRemoteBoxFile:
             your LocalBox then you can use the
             same ``delete()`` method on your LocalBoxFile.
         """
+        logger.debug(f'Removing file ID{self._id} from ID{self._box_channel_id}')
+
         rm_result = await self._tc.delete_messages(
             self._box_channel_id, [self._id]
         )
@@ -1451,16 +1583,23 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         parent class then you can set similar kwarg
         here to ``True`` and method will save it.
         """
+        logger.debug(f'Initializing DRBF ID({self._id})...')
+
         if not self._erbf._initialized:
             await self._erbf.init()
 
         cache_preview = cache_preview if cache_preview else self._cache_preview
         pattr_offset = len(PREFIX) + len(VERBYTE) + 3
 
+        logger.debug('Unpacking Public part of RBF metadata...')
+
         unpacked_metadata = PackedAttributes.unpack(
             bytes(self._erbf._metadata[pattr_offset:-16])
         )
         self._file_pos = len(self._erbf._metadata)
+        logger.debug(f'Actual encrypted filedata position: {self._file_pos}')
+
+        logger.debug('Unpacking Secret part of RBF metadata...')
 
         secret_metadata = AES(self._filekey).decrypt(
             unpacked_metadata['secret_metadata']
@@ -1471,8 +1610,10 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             raise AESError('Metadata wasn\'t decrypted correctly. Incorrect key?')
 
         if cache_preview:
+            logger.debug('cache_preview is True, DRBF preview will be saved.')
             self._preview = secret_metadata['preview']
         else:
+            logger.debug('cache_preview is False, DRBF preview won\'t be saved.')
             secret_metadata.pop('preview')
             self._preview = b''
 
@@ -1483,11 +1624,17 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._mime = secret_metadata['mime'].decode()
 
         if self._mainkey:
+            logger.debug('Decrypting efile_path with the MainKey')
             self._file_path = AES(self._mainkey).decrypt(
                 secret_metadata['efile_path']
             )
             self._file_path = Path(self._file_path.decode())
         else:
+            logger.warning(
+               f'''We can\'t decrypt real file path of ID{self._id} because '''
+                '''MainKey is not present. Try to decrypt EncryptedRemoteBoxFile '''
+                '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
+            )
             self._file_path = self._defaults.DEF_NO_FOLDER
 
         for attr in self.__required_metadata:
@@ -1501,6 +1648,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     urlsafe_b64decode(self._message.message)
                 )
                 edited_metadata = PackedAttributes.unpack(edited_metadata)
+                logger.debug(f'Updates to metadata for ID{self._id} found. Applying...')
 
                 for k,v in tuple(edited_metadata.items()):
                     if k in self.__required_metadata:
@@ -1511,10 +1659,10 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     del edited_metadata[k]
 
             except (TypeError, ValueError):
-                # Caption is not an updated metadata.
-                # TODO: Log this in future.
-                pass
-
+                logger.debug(
+                    f'''Updates to metadata for ID{self._id} failed. '''
+                    f'''Traceback:\n{format_exc()}'''
+                )
         self._initialized = True
 
         if erase_encrypted_metadata:
@@ -1570,6 +1718,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         """
         self.__raise_initialized()
 
+        logger.info(f'Downloading DRBF (ID{self._id})...')
+
         if decrypt:
             aws = AES(self._filekey, self._file_iv)
 
@@ -1605,41 +1755,79 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         else:
             raise TypeError('outfile not Union[BinaryIO, str, PathLike].')
 
-        iter_down = download_file(
-            client = self._tc,
-            location = self._message.document,
-            request_size = request_size,
-        )
-        buffered, offset, total = b'', self._file_pos, 0
-        async for chunk in iter_down:
-            if buffered:
-                buffered += chunk
-                chunk = buffered[:request_size]
-                buffered = buffered[request_size:]
-            else:
-                buffered += chunk[offset:]
-                offset = None; continue
+        logger.debug(f'outfile is {outfile}')
 
-            chunk = aws.decrypt(chunk, unpad=False) if decrypt else chunk
-            outfile.write(chunk)
+        use_slow_download_switch = 0
 
-            if progress_callback:
-                total += len(chunk)
-                if iscoroutinefunction(progress_callback):
-                    await progress_callback(total, self._file_size)
+        while True:
+            try:
+                # By default we will try to download file via the
+                # fast "download_file" coroutine from fastelethon
+                # module. If it fails, the "use_slow_download_switch"
+                # will be incremented and this code will be switched
+                # to the default "iter_download" from TelegramClient;
+                # If it will fail too, -- we will raise an error.
+                if use_slow_download_switch == 0:
+                    iter_down = download_file(
+                        client = self._tc,
+                        location = self._message.document,
+                        request_size = request_size,
+                    )
                 else:
-                    progress_callback(total, self._file_size)
+                    # Switch to the default slow method
+                    iter_down = self._tc.iter_download(
+                        self._message.document,
+                        request_size=request_size
+                    )
+                buffered, offset, total = b'', self._file_pos, 0
+                async for chunk in iter_down:
+                    if buffered:
+                        buffered += chunk
+                        chunk = buffered[:request_size]
+                        buffered = buffered[request_size:]
+                    else:
+                        buffered += chunk[offset:]
+                        offset = None; continue
 
-        if buffered:
-            outfile.write(aws.decrypt(buffered, unpad=True) if decrypt else chunk)
+                    chunk = aws.decrypt(chunk, unpad=False) if decrypt else chunk
+                    outfile.write(chunk)
 
-            if progress_callback:
-                if iscoroutinefunction(progress_callback):
-                    await progress_callback(
-                        self._file_size, self._file_size)
+                    if progress_callback:
+                        total += len(chunk)
+                        logger.debug(
+                            f'''ID{self._id}: Downloaded {self._file_size} '''
+                            f'''from the {total} bytes'''
+                        )
+                        if iscoroutinefunction(progress_callback):
+                            await progress_callback(total, self._file_size)
+                        else:
+                            progress_callback(total, self._file_size)
+
+                if buffered:
+                    logger.debug(f'ID{self._id}: Writing the last buffered bytes...')
+                    outfile.write(aws.decrypt(buffered, unpad=True) if decrypt else chunk)
+
+                    if progress_callback:
+                        if iscoroutinefunction(progress_callback):
+                            await progress_callback(
+                                self._file_size, self._file_size)
+                        else:
+                            progress_callback(
+                                self._file_size, self._file_size)
+
+                break # Download is successfull so we can exit this loop
+
+            except Exception as e:
+                if use_slow_download_switch < 1:
+                    use_slow_download_switch += 1
+                    logger.warning(
+                        '''Fast download FAILED. Trying to use SLOW. '''
+                       f'''Traceback:\n{format_exc()}''')
+                    continue
                 else:
-                    progress_callback(
-                        self._file_size, self._file_size)
+                    logger.error('Fast & Slow download methods failed')
+                    raise e
+
         return outfile
 
     async def update_metadata(
@@ -1682,7 +1870,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
               or await the ``refresh_metadata`` method on the
               ``DecryptedLocalBoxFile`` with the same ID.
 
-            - Not a *default* metadata (like file_name, mime, etc)
+            - Not a *default* metadata (default is file_name, mime, etc)
               will be placed to the ``residual_metadata`` property dict.
 
             - There is a file caption (and so updated metadata)
@@ -1699,6 +1887,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         if 'file_path' in changes and not dlb:
             raise ValueError('You can\'t change file_path without specifying dlb!')
+
+        logger.debug(f'Applying changes {changes} to the ID{self._id}...')
         try:
             message_caption = urlsafe_b64decode(self._message.message)
             updates = AES(self._filekey).decrypt(message_caption)
