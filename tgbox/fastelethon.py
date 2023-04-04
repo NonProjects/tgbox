@@ -52,7 +52,7 @@ from telethon.tl.functions.upload import (
     SaveFilePartRequest,
     SaveBigFilePartRequest
 )
-log: logging.Logger = logging.getLogger()
+logger: logging.Logger = logging.getLogger(__name__)
 
 TypeLocation = Union[
     Document, Photo, InputDocumentFileLocation,
@@ -134,7 +134,7 @@ class UploadSender:
 
     async def _next(self, data: bytes) -> None:
         self.request.bytes = data
-        log.debug(f"Sending file part {self.request.file_part}/{self.part_count}"
+        logger.debug(f"Sending file part {self.request.file_part}/{self.part_count}"
                   f" with {len(data)} bytes")
         await self.client._call(self.sender, self.request)
         self.request.file_part += self.stride
@@ -248,7 +248,7 @@ class ParallelTransferrer:
                                                      loggers=self.client._log,
                                                      proxy=self.client._proxy))
         if not self.auth_key:
-            log.debug(f"Exporting auth to DC {self.dc_id}")
+            logger.debug(f"Exporting auth to DC {self.dc_id}")
             auth = await self.client(ExportAuthorizationRequest(self.dc_id))
             self.client._init_request.query = ImportAuthorizationRequest(id=auth.id,
                                                                          bytes=auth.bytes)
@@ -284,7 +284,7 @@ class ParallelTransferrer:
         part_size = (part_size_kb or utils.get_appropriated_part_size(file_size)) * 1024
         part_count = math.ceil(file_size / part_size)
 
-        log.debug("Starting parallel download: "
+        logger.debug("Starting parallel download: "
                   f"{connection_count} {part_size} {part_count} {file!s}")
 
         await self._init_download(
@@ -303,9 +303,9 @@ class ParallelTransferrer:
                     break
                 yield data
                 part += 1
-                log.debug(f"Part {part} downloaded")
+                logger.debug(f"Part {part} downloaded")
 
-        log.debug("Parallel download finished, cleaning up connections")
+        logger.debug("Parallel download finished, cleaning up connections")
         await self._cleanup()
 
 
