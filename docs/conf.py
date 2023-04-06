@@ -22,11 +22,11 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'tgbox'
-copyright = '2022, NonProjects'
+copyright = '2023, NonProjects'
 author = 'NonProjects'
 
 # The full version, including alpha/beta/rc tags
-release = '1.2-indev'
+release = '1.2+indev'
 
 
 # -- General configuration ---------------------------------------------------
