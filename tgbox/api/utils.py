@@ -431,10 +431,10 @@ async def search_generator(
                         break
 
         if all(yield_result):
-            logger.info(f'SearchFilter matched ID{file.id}')
+            logger.debug(f'SearchFilter matched ID{file.id}')
             yield file
         else:
-            logger.info(f'SearchFilter mismatch ID{file.id} [{yield_result}]')
+            logger.debug(f'SearchFilter mismatch ID{file.id} [{yield_result}]')
             continue
 
 class _TelegramVirtualFile:
