@@ -4,7 +4,7 @@ import logging
 
 from typing import (
     BinaryIO, Union, NoReturn, Callable,
-    AsyncGenerator, Dict, Optional
+    AsyncGenerator, Dict, Optional, List
 )
 from os.path import getsize
 from pathlib import Path
@@ -298,6 +298,51 @@ class EncryptedLocalBox:
         if not self._initialized:
             raise NotInitializedError('Not initialized. Call .init().')
 
+    async def _clear_orphaned_path_parts(self, part_ids: Optional[List[bytes]] = None):
+        part_ids = [] if not part_ids else part_ids
+
+        if not part_ids:
+            logger.debug('part_ids is not specified, doing a full check...')
+
+            part_ids = await self._tgbox_db.PATH_PARTS.select_once(sql_tuple=(
+                'SELECT PART_ID FROM PATH_PARTS', ()
+            ))
+        for ppath_head in part_ids:
+            # The code below will check all parent path part ids
+            # and remove empty ones (which doesn't pointed)
+            while True:
+                # Retrieve file rows that point to PPATH_HEAD
+                files_pointed = await self._tgbox_db.FILES.execute((
+                    'SELECT ID FROM FILES WHERE PPATH_HEAD=?',(ppath_head,)
+                ))
+                if (await files_pointed.fetchone()):
+                    break # Part ID pointed by file, so break
+
+                # Amount of parts that point to current ppath_head
+                pparts_pointed = await self._tgbox_db.PATH_PARTS.execute((
+                    'SELECT * FROM PATH_PARTS WHERE PARENT_PART_ID=?',
+                    (ppath_head,)
+                ))
+                if (await pparts_pointed.fetchone()):
+                    break
+
+                parent_part_id = await self._tgbox_db.PATH_PARTS.select_once(sql_tuple=(
+                    'SELECT PARENT_PART_ID FROM PATH_PARTS WHERE PART_ID=?',
+                    (ppath_head,)
+                ))
+                logger.debug(
+                    '''Removing orphaned directory | DELETE FROM '''
+                   f'''PATH_PARTS WHERE PART_ID={ppath_head}'''
+                )
+                await self._tgbox_db.PATH_PARTS.execute((
+                    'DELETE FROM PATH_PARTS WHERE PART_ID=?',
+                    (ppath_head,)
+                ))
+                # Set parent part id as ppath_head to recursive
+                # check for useless path parts
+                ppath_head = parent_part_id[0]
+                if not ppath_head: break
+
     @property
     def api_id(self) -> Union[int, None]:
         """Returns API_ID."""
@@ -537,6 +582,58 @@ class EncryptedLocalBox:
 
             while pending:
                 yield pending.pop(0)
+
+    async def delete_files(
+            self,
+
+            *lbf: Union[
+                'EncryptedLocalBoxFile',
+                'DecryptedLocalBoxFile'
+            ],
+            lbf_ids: Optional[list] = None,
+
+            rb: Optional[
+                Union[
+                    'tgbox.api.remote.EncryptedRemoteBox',
+                    'tgbox.api.remote.DecryptedRemoteBox'
+                ]
+            ] = None) -> None:
+        """
+        A function to remove a bunch of local files at once.
+
+        Arguments:
+            lbf (``EncryptedLocalBoxFile``, ``DecryptedLocalBoxFile``, asterisk):
+                ``(Encrypted|Decrypted)LocalBoxFile(s)`` to remove.
+
+            lbf_ids (``list``, optional):
+                You can specify ids instead of LocalBox file
+                objects. However, ``lbf`` is preferred here.
+
+            rb (``EncryptedRemoteBox``, ``DecryptedRemoteBox``, optional):
+                You can specify a *RemoteBox* associated
+                with current *LocalBox* to also remove
+                all specified files in *RemoteBox* too.
+
+        .. note::
+            Without ``rb`` this will delete files only from
+            your LocalBox. To completly remove your file
+            use the same coroutine on *RemoteBox* or
+            specify ``(Encrypted|Decrypted)RemoteBox``.
+        """
+        lbf_ids = lbf_ids if lbf_ids else []
+        lbf_ids.extend(lbf_.id for lbf_ in lbf)
+
+        logger.info(f'Removing {len(lbf_ids)} local files...')
+
+        q = '(' + ('?,' * len(lbf_ids))[:-1] + ')'
+
+        await self._tgbox_db.FILES.execute(sql_tuple=(
+            f'DELETE FROM FILES WHERE ID IN {q}', lbf_ids
+        ))
+        part_ids = set(lbf_.directory.part_id for lbf_ in lbf) if lbf else []
+        await self._clear_orphaned_path_parts(part_ids=part_ids)
+
+        if rb: await rb.delete_files(rbf_ids=lbf_ids)
 
     def get_requestkey(self, basekey: BaseKey) -> RequestKey:
         """
@@ -1939,50 +2036,7 @@ class EncryptedLocalBoxFile:
             To completly remove your file use same
             function on ``EncryptedRemoteBoxFile``.
         """
-        # Getting file row for PPATH_HEAD
-        file_row = await self._lb._tgbox_db.FILES.select_once(
-            sql_tuple=('SELECT PPATH_HEAD FROM FILES WHERE ID=?',(self._id,))
-        )
-        logger.debug(f'Removing ELBF | DELETE FROM FILES WHERE ID={self._id}')
-        # Removing requested file
-        await self._lb._tgbox_db.FILES.execute(
-            ('DELETE FROM FILES WHERE ID=?',(self._id,))
-        )
-        ppath_head = file_row[0]
-        # The code below will check all parent path part ids
-        # and remove empty ones (which doesn't pointed)
-        while True:
-            # Retrieve file rows that point to PPATH_HEAD
-            files_pointed = await self._lb._tgbox_db.FILES.execute((
-                'SELECT ID FROM FILES WHERE PPATH_HEAD=?',(ppath_head,)
-            ))
-            if (await files_pointed.fetchone()):
-                break # Part ID pointed by file, so break
-
-            # Amount of parts that point to current ppath_head
-            pparts_pointed = await self._lb._tgbox_db.PATH_PARTS.execute((
-                'SELECT * FROM PATH_PARTS WHERE PARENT_PART_ID=?',
-                (ppath_head,)
-            ))
-            if (await pparts_pointed.fetchone()):
-                break
-
-            parent_part_id = await self._lb._tgbox_db.PATH_PARTS.select_once(sql_tuple=(
-                'SELECT PARENT_PART_ID FROM PATH_PARTS WHERE PART_ID=?',
-                (ppath_head,)
-            ))
-            logger.debug(
-                '''Removing orphaned directory | DELETE FROM '''
-               f'''PATH_PARTS WHERE PART_ID={ppath_head}'''
-            )
-            await self._lb._tgbox_db.PATH_PARTS.execute((
-                'DELETE FROM PATH_PARTS WHERE PART_ID=?',
-                (ppath_head,)
-            ))
-            # Set parent part id as ppath_head to recursive
-            # check for useless path parts
-            ppath_head = parent_part_id[0]
-            if not ppath_head: break
+        await self._lb.delete_files(self)
 
     def get_requestkey(self, mainkey: MainKey) -> RequestKey:
         """

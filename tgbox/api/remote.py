@@ -867,6 +867,60 @@ class EncryptedRemoteBox:
 
         return await erbf.decrypt(pf.dlb._mainkey)
 
+    async def delete_files(
+            self,
+
+            *rbf: Union[
+                'EncryptedRemoteBoxFile',
+                'DecryptedRemoteBoxFile'
+            ],
+            rbf_ids: Optional[list] = None,
+
+            lb: Optional[
+                Union[
+                    'tgbox.api.local.EncryptedLocalBox',
+                    'tgbox.api.local.DecryptedLocalBox'
+                ]
+            ] = None) -> None:
+        """
+        A function to remove a bunch of remote files
+        at once. You need to have some admin rights.
+
+        Arguments:
+            rbf (``EncryptedRemoteBoxFile``, ``DecryptedRemoteBoxFile``, asterisk):
+                ``(Encrypted|Decrypted)RemoteBoxFile(s)`` to remove.
+
+            rbf_ids (``list``, optional):
+                You can specify ids instead of RemoteBox file
+                objects. However, ``rbf`` is preferred here.
+
+            lb (``EncryptedLocalBox``, ``DecryptedLocalBox``, optional):
+                You can specify a *LocalBox* associated
+                with current *RemoteBox* to also remove
+                all specified files in *LocalBox* too.
+
+        .. note::
+            If you want to delete files only from
+            your LocalBox then you can use the
+            same method on your LocalBoxFile.
+        """
+        rbf_ids = rbf_ids if rbf_ids else []
+        rbf_ids.extend(rbf_.id for rbf_ in rbf)
+
+        logger.info(f'Removing {len(rbf_ids)} remote files...')
+
+        rm_result = await self._tc.delete_messages(
+            entity = self._box_channel_id,
+            message_ids = rbf_ids
+        )
+        if not rm_result[0].pts_count:
+            raise NotEnoughRights(
+                '''You don\'t have enough rights to delete '''
+                '''files from this RemoteBox.'''
+            )
+        if lb:
+            await lb.delete_files(lbf_ids=rbf_ids)
+
     async def get_requestkey(self, basekey: BaseKey) -> RequestKey:
         """
         Returns ``RequestKey`` for this *RemoteBox*.
