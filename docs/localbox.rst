@@ -16,11 +16,11 @@ BOX_DATA
 
 *BOX_DATA* store information about *Box*, *Session*, etc.
 
-============== =========== ======== ========= ======= ====== ========
-BOX_CHANNEL_ID BOX_CR_TIME BOX_SALT MAINKEY   SESSION API_ID API_HASH
-============== =========== ======== ========= ======= ====== ========
-BLOB           BLOB        BLOB     BLOB|NULL BLOB    BLOB   BLOB
-============== =========== ======== ========= ======= ====== ========
+============== =========== ======== ========= ======= ====== ======== =======================
+BOX_CHANNEL_ID BOX_CR_TIME BOX_SALT MAINKEY   SESSION API_ID API_HASH FAST_SYNC_LAST_EVENT_ID
+============== =========== ======== ========= ======= ====== ======== =======================
+BLOB           BLOB        BLOB     BLOB|NULL BLOB    BLOB   BLOB     BLOB
+============== =========== ======== ========= ======= ====== ======== =======================
 
 - ``BOX_CHANNEL_ID`` -- *Encrypted RemoteBox (Telegram channel) ID*
 - ``BOX_CR_TIME`` -- *Encrypted LocalBox creation time*
@@ -29,6 +29,7 @@ BLOB           BLOB        BLOB     BLOB|NULL BLOB    BLOB   BLOB
 - ``SESSION`` -- *Encrypted by BaseKey Telethon's StringSession*
 - ``API_ID`` -- *Encrypted by MainKey your API_ID from the my.telegram.org site*
 - ``API_HASH`` -- *Encrypted by MainKey your API_HASH from the my.telegram.org site*
+- ``FAST_SYNC_LAST_EVENT_ID`` -- *Last found on the fast syncing event ID*
 
 FILES
 ^^^^^
@@ -53,11 +54,11 @@ PATH_PARTS
 
 *PATH_PARTS* store every path part in encrypted form with their IDs.
 
-======== ======= ==============
-ENC_PART PART_ID PARENT_PART_ID
-======== ======= ==============
-BLOB     BLOB    BLOB|NULL
-======== ======= ==============
+======== ===================== ==============
+ENC_PART PART_ID {PRIMARY_KEY} PARENT_PART_ID
+======== ===================== ==============
+BLOB     BLOB                  BLOB|NULL
+======== ===================== ==============
 
 How does we store file paths
 ----------------------------
