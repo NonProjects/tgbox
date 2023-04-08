@@ -20,10 +20,10 @@ setup(
     include_package_data = True,
 
     install_requires = [
-        'aiosqlite==0.17.0',
-        'telethon==1.25.4',
-        'ecdsa==0.16.1',
-        'filetype==1.0.8',
+        'aiosqlite==0.18.0',
+        'telethon==1.28.2',
+        'ecdsa==0.18.0',
+        'filetype==1.2.0',
         'pysocks==1.7.1'
     ],
     keywords = [
@@ -33,10 +33,10 @@ setup(
     extras_require = {
         'fast': [
             'cryptography',
-            'cryptg==0.3.1',
-            'regex==2022.8.17'
+            'cryptg==0.4.0',
+            'regex==2023.3.23'
         ],
-        'doc': ['sphinx-rtd-theme==1.0.0']
+        'doc': ['sphinx-rtd-theme==1.2.0']
     },
     classifiers = [
         'Development Status :: 5 - Production/Stable',
