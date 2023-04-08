@@ -846,7 +846,8 @@ class EncryptedRemoteBox:
         try:
             file_message = await self._tc.send_file(
                 self._box_channel, file=ifile,
-                silent=False, force_document=True
+                silent=False, force_document=True,
+                caption = '<This caption must be removed>'
             )
         except ChatAdminRequiredError:
             box_name = await self.get_box_name()
@@ -856,6 +857,13 @@ class EncryptedRemoteBox:
                 '''use this box as read only.'''
             ) from None
 
+        # We will set and remove caption only for
+        # "Recent Actions" admin log. We can make
+        # a quick synchronization with its help.
+        await self._tc.edit_message(
+            entity = self._box_channel_id,
+            message = file_message, text = ''
+        )
         pf.set_file_id(file_message.id)
         pf.set_upload_time(int(file_message.date.timestamp()))
 
@@ -1712,7 +1720,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
                     del edited_metadata[k]
 
-            except (TypeError, ValueError):
+            except Exception:
                 logger.debug(
                     f'''Updates to metadata for ID{self._id} failed. '''
                     f'''Traceback:\n{format_exc()}'''
@@ -1973,10 +1981,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         updates_packed = PackedAttributes.pack(**updates)
         updates_encrypted = AES(self._filekey).encrypt(updates_packed)
+        updates_encoded = urlsafe_b64encode(updates_encrypted).decode()
         try:
-            await self._message.edit(
-                urlsafe_b64encode(updates_encrypted).decode()
-            )
+            await self._message.edit(updates_encoded)
         except MediaCaptionTooLongError:
             raise NoPlaceLeftForMetadata(NoPlaceLeftForMetadata.__doc__) from None
         except ChatAdminRequiredError:
@@ -1995,7 +2002,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         if dlb:
             dlbfi = await dlb.get_file(self._id)
-            await dlbfi.refresh_metadata(_updated_metada=updates_encrypted)
+            await dlbfi.refresh_metadata(_updated_metada=updates_encoded)
 
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """

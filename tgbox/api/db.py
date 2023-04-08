@@ -31,6 +31,7 @@ TABLES = {
         ('SESSION', 'BLOB NOT NULL'),
         ('API_ID', 'BLOB NOT NULL'),
         ('API_HASH', 'BLOB NOT NULL'),
+        ('FAST_SYNC_LAST_EVENT_ID', 'BLOB')
     ),
     'FILES': (
         ('ID', 'INTEGER PRIMARY KEY'),
