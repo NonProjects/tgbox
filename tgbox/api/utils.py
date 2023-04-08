@@ -78,6 +78,8 @@ class TelegramClient(TTelegramClient):
 
         asyncio_run(main())
     """
+    __version__ = VERSION
+
     def __init__(
             self, api_id: int, api_hash: str,
             phone_number: Optional[str] = None,
@@ -119,7 +121,6 @@ class TelegramClient(TTelegramClient):
             StringSession(session),
             api_id, api_hash, **kwargs
         )
-        self.__version__ = VERSION
         self._api_id, self._api_hash = api_id, api_hash
         self._phone_number = phone_number
 
