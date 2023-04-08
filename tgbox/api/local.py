@@ -933,15 +933,15 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         .. note::
             * By default this method will use a fast
-            syncing, from the "Recent Actions" admin
-            log. This is the best for changes made
-            within 48 hours & useless after. Deep
-            syncing will iterate over each file in
-            the remote and compare it to local, thus,
-            may take a very long time to complete.
+              syncing, from the "Recent Actions" admin
+              log. This is the best for changes made
+              within 48 hours & useless after. Deep
+              syncing will iterate over each file in
+              the remote and compare it to local, thus,
+              may take a very long time to complete.
 
             * In fast syncing we will fetch updates to
-            Box only from other admins.
+              Box only from other admins.
         """
         drb_box_name = await drb.get_box_name()
 
