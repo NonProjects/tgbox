@@ -316,7 +316,7 @@ class EncryptedRemoteBox:
         You can use it in Telethon's decorator,
         see *"Events Reference"* in Telethon Docs.
         """
-        return events.NewMessage(chats=self.box_channel_id)
+        return events.NewMessage(chats=self.box_channel)
 
     @property
     def defaults(self) -> Union[DefaultsTableWrapper, RemoteBoxDefaults]:
@@ -368,7 +368,7 @@ class EncryptedRemoteBox:
         Will be cached after first method call.
         """
         if not self._box_name:
-            entity = await self._tc.get_entity(self._box_channel_id)
+            entity = await self._tc.get_entity(self._box_channel)
             self._box_name = entity.title.split(': ')[1]
         return self._box_name
 
@@ -861,7 +861,7 @@ class EncryptedRemoteBox:
         # "Recent Actions" admin log. We can make
         # a quick synchronization with its help.
         await self._tc.edit_message(
-            entity = self._box_channel_id,
+            entity = self._box_channel,
             message = file_message, text = ''
         )
         pf.set_file_id(file_message.id)
@@ -918,7 +918,7 @@ class EncryptedRemoteBox:
         logger.info(f'Removing {len(rbf_ids)} remote files...')
 
         rm_result = await self._tc.delete_messages(
-            entity = self._box_channel_id,
+            entity = self._box_channel,
             message_ids = rbf_ids
         )
         if not rm_result[0].pts_count:
@@ -1418,7 +1418,7 @@ class EncryptedRemoteBoxFile:
         logger.debug(f'Removing file ID{self._id} from ID{self._box_channel_id}')
 
         rm_result = await self._tc.delete_messages(
-            self._box_channel_id, [self._id]
+            self._box_channel, [self._id]
         )
         if not rm_result[0].pts_count:
             raise NotEnoughRights(
