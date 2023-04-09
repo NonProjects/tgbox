@@ -20,17 +20,7 @@ __all__ = [
     'tools',
     'sync',
 ]
-import logging
-
-logging.basicConfig(
-    format = (
-        ''':%(asctime)s: %(levelname)s:%(name)s~'''
-        '''%(funcName)s{%(lineno)s} ::: %(message)s'''
-    ),
-    datefmt = '%Y-%m-%d ^ %H:%M:%S',
-    level = logging.WARNING
-)
-logger = logging.getLogger(__name__)
+import logging; logger = logging.getLogger(__name__)
 
 import sys
 
