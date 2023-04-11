@@ -1169,6 +1169,7 @@ class EncryptedRemoteBoxFile:
         self._cache_preview = cache_preview
 
         self._upload_time = int(self._message.date.timestamp())
+        self._box_channel = sended_file.chat
         self._box_channel_id = sended_file.peer_id.channel_id
         self._file_size = self._file.size
         self._file_file_name = self._file.name
@@ -1306,8 +1307,13 @@ class EncryptedRemoteBoxFile:
 
     @property
     def box_channel_id(self) -> int:
-        """Returns ID of the Box Channel."""
+        """Returns ID of the RemoteBox ``Channel``."""
         return self._box_channel_id
+
+    @property
+    def box_channel(self) -> Channel:
+        """Returns RemoteBox ``Channel`` object."""
+        return self._box_channel
 
     @property
     def prefix(self) -> Union[bytes, None]:
