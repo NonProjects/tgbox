@@ -471,7 +471,7 @@ class EncryptedLocalBox:
                 isinstance(self._mainkey, EncryptedMainkey):
                     logger.debug(f'Trying to return ID{id} DecryptedLocalBoxFile...')
 
-                    elbf = EncryptedLocalBoxFile(id, self._elb,
+                    elbf = EncryptedLocalBoxFile(id, self._elb, # pylint: disable=E1101
                         cache_preview=cache_preview
                     )
                     return await elbf.decrypt(dlb=self)

@@ -56,7 +56,7 @@ class _PyaesState:
         """
         key = key.key if hasattr(key, 'key') else key
 
-        self._aes_state = AESModeOfOperationCBC(
+        self._aes_state = AESModeOfOperationCBC( # pylint: disable=E0601
             key = bytes(key), iv = bytes(iv)
         )
         self.__mode = None # encrypt mode is 1 and decrypt is 2
