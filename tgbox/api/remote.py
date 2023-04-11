@@ -1535,8 +1535,10 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._defaults = erbf._defaults
         self._cache_preview = erbf._cache_preview
 
-        self._box_salt = erbf._box_salt
+        self._box_channel = erbf._box_channel
         self._box_channel_id = erbf._box_channel_id
+
+        self._box_salt = erbf._box_salt
         self._file_size = erbf._file_size
         self._fingerprint = erbf._fingerprint
 
