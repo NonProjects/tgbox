@@ -1811,6 +1811,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             if path.startswith('/'):
                 path = str(Path('@', path.lstrip('/')))
             #
+            elif path.startswith('\\'):
+                path = str(Path('@', path.lstrip('\\')))
+            #
             if hide_name:
                 name = prbg(16).hex() + Path(self._file_name).suffix
             else:
