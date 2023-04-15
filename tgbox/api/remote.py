@@ -6,9 +6,9 @@ from typing import (
     BinaryIO, Union, NoReturn, Callable,
     AsyncGenerator, List, Dict, Optional
 )
-from pathlib import Path
-from os import PathLike
+from pathlib import Path, PureWindowsPath
 
+from os import PathLike
 from traceback import format_exc
 
 from base64 import (
@@ -1807,6 +1807,14 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             # to use a '/' symbol in filename, so instead of / we use
             # a '@' while creating path. You can refer to it as root.
             path = str(self._defaults.DEF_NO_FOLDER if not path else path)
+            # Here we will check if file path is Windows-
+            # like path, and if it is, then we will
+            # reconstruct it from its parts. This
+            # will make a correct download Path
+            # if we're on a Unix-like system
+            win_path = PureWindowsPath(path)
+            if win_path.drive:
+                path = str(Path(*win_path.parts))
             #
             if path.startswith('/'):
                 path = str(Path('@', path.lstrip('/')))
