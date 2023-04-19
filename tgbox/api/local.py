@@ -34,10 +34,10 @@ from ..keys import (
 from ..defaults import PREFIX, VERBYTE, DEF_TGBOX_NAME
 
 from ..errors import (
-    NotInitializedError, AlreadyImported,
     InUseException, AESError, PreviewImpossible,
     LimitExceeded, DurationImpossible, InvalidFile,
-    NotEnoughRights, IncorrectKey, FingerprintExists
+    NotEnoughRights, IncorrectKey, FingerprintExists,
+    NotInitializedError, AlreadyImported, RemoteFileNotFound
 )
 from ..tools import (
     PackedAttributes, ppart_id_generator,
@@ -1041,8 +1041,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 if sql_tuple_ids[0] == sql_tuple_ids[1] \
                     or sql_tuple_ids[0]+1 == sql_tuple_ids[1]:
                         return False
-                else:
-                    return True
+                return True
 
             async for drbf in drb.files(cache_preview=False):
                 last_drbf_id = drbf.id; break
@@ -1052,14 +1051,53 @@ class DecryptedLocalBox(EncryptedLocalBox):
             while True:
                 current = 0
 
-                if None in rbfiles:
-                    break
-
                 if not rbfiles:
                     rbfiles.append(await _get_file())
 
                     if rbfiles[0] is None:
-                        logger.debug('{drb_box_name} don\'t have any files, clearing local...')
+                        # The first requested file was not found. This can
+                        # be either because of the empty RemoteBox (not a
+                        # single file was uploaded before or all files was
+                        # removed) (1) or because the "start_from" argument
+                        # is more than the last file id (2). User can cause
+                        # a (2) scenario, so we *must* verify that Box is
+                        # really empty. (1) will result in clearing LocalBox.
+
+                        logger.debug(
+                           f'''It seems that {drb_box_name} doesn\'t have any files OR '''
+                            '''"start_from" argument is incorrect. Will try to verify '''
+                            '''that this isn\'t a second scenario...'''
+                        )
+                        test_msg = await drb._tc.send_message(drb._box_channel, '.', silent=True)
+                        await drb.delete_files(rbf_ids=[test_msg.id])
+
+                        # The "start_from" is invalid
+                        if test_msg.id <= start_from:
+                            raise RemoteFileNotFound(
+                               f'''start_from={start_from} is invalid '''
+                               f'''for {drb_box_name}. Exit sync()...'''
+                            )
+
+                        logger.debug(
+                            '''The "start_from" is < than last file id. We will '''
+                            '''try to verify that RemoteBox is really empty...'''
+                        )
+                        test_drbf = None
+                        async for drbf in drb.files(offset_id=test_msg.id, reverse=False):
+                            test_drbf = drbf; break
+
+                        # RemoteBox has at least one
+                        # DecryptedRemoteBoxFile, so
+                        # "start_from" is invalid
+                        if test_drbf:
+                            raise RemoteFileNotFound(
+                                '''Can not init sync() with start_from='''
+                               f'''{start_from}: message doesn\'t exists '''
+                               '''or "start_from" equals last file id.'''
+                            )
+
+                        logger.debug(f'{drb_box_name} doesn\'t have any files, clearing local...')
+
                         await self._tgbox_db.FILES.execute(
                             sql_tuple=('DELETE FROM FILES', ()))
                         await self._tgbox_db.PATH_PARTS.execute(
@@ -1084,7 +1122,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     rbfiles.append(await _get_file(rbfiles[2].id-1))
                     if None in rbfiles: break
 
-                    rbfiles.pop(0); rbfiles.pop(1)
+                    rbfiles.pop(0)
+                    rbfiles.pop(1)
 
                 while True:
                     if deep_progress_callback and last_pushed_progress != last_id:
@@ -1143,6 +1182,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
                             break
                         else:
                             last_id = rbfiles[1].id
+
+                if rbfiles[0] is None:
+                    break
 
                 sql_tuple = (
                     'DELETE FROM FILES WHERE ID > ? AND ID < ?',
