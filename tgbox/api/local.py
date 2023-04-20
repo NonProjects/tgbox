@@ -187,6 +187,7 @@ async def clone_remotebox(
         AES(basekey).encrypt(drb._tc.session.save().encode()),
         AES(drb._mainkey).encrypt(int_to_bytes(drb._tc._api_id)),
         AES(drb._mainkey).encrypt(bytes.fromhex(drb._tc._api_hash)),
+        None # FAST_SYNC_LAST_EVENT_ID
     )
     dlb = await EncryptedLocalBox(tgbox_db).decrypt(basekey)
 

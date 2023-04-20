@@ -17,6 +17,7 @@ from base64 import (
 )
 from asyncio import iscoroutinefunction
 
+from telethon.utils import resolve_id
 from telethon.tl.custom.file import File
 from telethon.tl.functions.messages import EditChatAboutRequest
 
@@ -276,7 +277,7 @@ class EncryptedRemoteBox:
         self._tc = tc
 
         self._box_channel = box_channel
-        self._box_channel_id = box_channel.id
+        self._box_channel_id = resolve_id(box_channel.id)[0]
 
         self._box_salt = None
         # We can't use await in __init__, so
