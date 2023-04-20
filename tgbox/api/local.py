@@ -20,6 +20,8 @@ from asyncio import iscoroutinefunction, gather
 from telethon.tl.types import (
     Photo, Document, ChannelParticipantsAdmins
 )
+from telethon.errors.rpcerrorlist import ChatAdminRequiredError
+
 from filetype import guess as filetype_guess
 
 from ..crypto import get_rnd_bytes
@@ -948,12 +950,23 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         if not deep:
             logger.info(f'Fast syncing {self._tgbox_db.db_path} with {drb_box_name}...')
-            delete_canidates = []
 
-            box_admins = await drb.tc.get_participants(
-                entity = drb.box_channel,
-                filter = ChannelParticipantsAdmins
-            )
+            delete_canidates = []
+            try:
+                box_admins = await drb.tc.get_participants(
+                    entity = drb.box_channel,
+                    filter = ChannelParticipantsAdmins
+                )
+            except ChatAdminRequiredError as e:
+                err_msg = (
+                    """You don't have enough rights (access to Admin Log) """
+                    """to make a fast box synchronization. Ask a RemoteBox """
+                    """owner to make You (at least) Admin with 0 rights or """
+                    """use a deep syncing by specifying "deep" flag. Specify """
+                    """"start_from" ID to fasten deep syncing."""
+                )
+                raise NotEnoughRights(err_msg) from e
+
             box_admins = [admin.id for admin in box_admins]
             box_admins.remove((await drb.tc.get_entity('me')).id)
 
