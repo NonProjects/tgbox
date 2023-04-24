@@ -1365,20 +1365,16 @@ class EncryptedRemoteBoxFile:
                     base_data[request_amount-3:request_amount]
                 )
                 if metadata_size > self._defaults.METADATA_MAX:
-                    raise LimitExceeded(
-                        f'''self._defaults.METADATA_MAX={self._defaults.METADATA_MAX}, '''
-                        f'''metadata_size={metadata_size}.'''
-                    )
+                    raise LimitExceeded(f'{self._defaults.METADATA_MAX=}, {metadata_size=}.')
+
                 # We will also download IV. It's not included
                 # in the total metadata bytesize.
                 metadata_size += 16
                 break
 
         if metadata_size > self._defaults.METADATA_MAX:
-            raise LimitExceeded(
-                f'''metadata_size={metadata_size} > self._defaults.'''
-                f'''METADATA_MAX={self._defaults.METADATA_MAX}'''
-            )
+            raise LimitExceeded(f'{metadata_size=} > {self._defaults.METADATA_MAX=}')
+
         logger.debug(f'metadata_size is {metadata_size} bytes')
 
         if metadata_size <= 1048576:
