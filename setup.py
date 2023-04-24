@@ -33,8 +33,7 @@ setup(
     extras_require = {
         'fast': [
             'cryptography',
-            'cryptg==0.4.0',
-            'regex==2023.3.23'
+            'cryptg==0.4.0'
         ],
         'doc': ['sphinx-rtd-theme==1.2.0']
     },

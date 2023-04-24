@@ -8,6 +8,7 @@ from typing import (
 )
 from os import PathLike
 from dataclasses import dataclass
+from re import search as re_search
 from base64 import urlsafe_b64encode
 
 from telethon.tl.custom.file import File
@@ -20,17 +21,12 @@ from telethon import TelegramClient as TTelegramClient
 from telethon.errors import SessionPasswordNeededError
 from telethon.tl.functions.auth import ResendCodeRequest
 
-try:
-    from regex import search as re_search
-except ImportError:
-    from re import search as re_search
 
 from ..defaults import VERSION
 from ..tools import anext, SearchFilter
 from ..fastelethon import download_file
 
 from .db import TABLES, TgboxDB
-
 
 __all__ = [
     'search_generator',
@@ -224,7 +220,6 @@ class DirectoryRoot:
     please use it only for ``lbd.iterdir``
     """
 
-# TODO: Improve SearchFilter
 async def search_generator(
         sf: SearchFilter, it_messages: Optional[AsyncGenerator] = None,
         lb: Optional['tgbox.api.local.DecryptedLocalBox'] = None,

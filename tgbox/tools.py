@@ -1,10 +1,5 @@
 """This module stores utils required by API."""
 
-try:
-    from regex import search as re_search
-except ImportError:
-    from re import search as re_search
-
 from asyncio import (
     iscoroutine, get_event_loop
 )
@@ -20,6 +15,8 @@ from io import BytesIO
 from os import PathLike
 from pathlib import Path
 from functools import partial
+
+from re import search as re_search
 from os import remove as remove_file
 
 from .errors import (
