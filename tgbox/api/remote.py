@@ -1979,6 +1979,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             updates = {}
 
         new_file_path = changes.pop('file_path', None)
+        if isinstance(new_file_path, bytes):
+            new_file_path = new_file_path.decode(encoding='utf-8')
 
         if new_file_path:
             directory = await dlb._make_local_path(Path(new_file_path))
@@ -1987,7 +1989,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
                 (directory.part_id, self._id)
             ))
-            efile_path = AES(self._mainkey).encrypt(str(new_file_path).encode())
+            efile_path = AES(self._mainkey).encrypt(new_file_path.encode())
             changes['efile_path'] = efile_path
 
         updates.update(changes)
