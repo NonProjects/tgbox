@@ -2594,7 +2594,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 elif k == 'efile_path':
                     if isinstance(self._lb, DecryptedLocalBox) or self._mainkey:
                         mainkey = self._mainkey if self._mainkey else self._lb._mainkey
-                        self._file_path = Path(AES(mainkey).decrypt(v).decode('utf-8'))
+                        self._file_path = Path(AES(mainkey).decrypt(v).decode())
                     else:
                         logger.debug(
                             '''Updated metadata contains efile_path, however, '''
@@ -2695,7 +2695,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         new_file_path = changes.pop('file_path', None)
         if isinstance(new_file_path, bytes):
-            new_file_path = new_file_path.decode(encoding='utf-8')
+            new_file_path = new_file_path.decode()
 
         if new_file_path:
             directory = await dlb._make_local_path(Path(new_file_path))

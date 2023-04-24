@@ -1733,7 +1733,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                         elif k == 'efile_path':
                             if self._mainkey:
                                 file_path = AES(self._mainkey).decrypt(v)
-                                self._file_path = Path(file_path.decode('utf-8'))
+                                self._file_path = Path(file_path.decode())
                             else:
                                 logger.debug(
                                     '''Updated metadata contains efile_path, but '''
@@ -2002,7 +2002,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         new_file_path = changes.pop('file_path', None)
         if isinstance(new_file_path, bytes):
-            new_file_path = new_file_path.decode(encoding='utf-8')
+            new_file_path = new_file_path.decode()
 
         if new_file_path:
             directory = await dlb._make_local_path(Path(new_file_path))
