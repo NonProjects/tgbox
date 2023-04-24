@@ -1604,6 +1604,10 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         return self._file_path
 
     def set_file_path(self, file_path: Path) -> None:
+        """
+        Will change self._file_path to file_path.
+        In most cases you don't need to use this
+        """
         self._file_path = file_path
 
     @property
@@ -1723,7 +1727,25 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
                 for k,v in tuple(edited_metadata.items()):
                     if k in self.__required_metadata:
-                        setattr(self, f'_{k}', v)
+                        if k == 'cattrs':
+                            setattr(self, f'_{k}', PackedAttributes.unpack(v))
+
+                        elif k == 'efile_path':
+                            if self._mainkey:
+                                file_path = AES(self._mainkey).decrypt(v)
+                                self._file_path = Path(file_path.decode('utf-8'))
+                            else:
+                                logger.debug(
+                                    '''Updated metadata contains efile_path, but '''
+                                    '''this DecryptedRemoteBoxFile wasn\'t '''
+                                    '''decrypted with MainKey, so we will ignore it'''
+                                )
+                        else:
+                            # str attributes
+                            if k in ('mime', 'file_name'):
+                                setattr(self, f'_{k}', v.decode())
+                            else:
+                                setattr(self, f'_{k}', v)
                     else:
                         self._residual_metadata[k] = v
 
@@ -1958,9 +1980,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             - There is a file caption (and so updated metadata)
               limit: 1KB and 2KB for a Premium Telegram users.
 
-            - You can replace file's path by specifying a
-              ``file_path`` key with appropriate value. Also,
-              you **will need** to specify a ``DecryptedLocalBox``
+            - You can replace file's path by specifying a ``file_path``
+              key with appropriate path (str/bytes). Also, you
+              **will need** to specify a ``DecryptedLocalBox``
               as ``dlb`` so we can create a new *LocalBoxDirectory*
               from your path. Without it you will get a ``ValueError``
         """
@@ -1989,7 +2011,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
                 (directory.part_id, self._id)
             ))
-            efile_path = AES(self._mainkey).encrypt(new_file_path.encode())
+            efile_path = AES(dlb._mainkey).encrypt(new_file_path.encode())
             changes['efile_path'] = efile_path
 
         updates.update(changes)
@@ -2023,8 +2045,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 self._residual_metadata[k] = v
 
         if dlb:
-            dlbfi = await dlb.get_file(self._id)
-            await dlbfi.refresh_metadata(_updated_metadata=updates_encoded)
+            dlbf = await dlb.get_file(self._id)
+            await dlbf.refresh_metadata(_updated_metadata=updates_encoded)
 
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """
