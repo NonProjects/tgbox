@@ -425,6 +425,9 @@ class EncryptedLocalBox:
         """Will fetch and parse data from Database."""
         logger.debug('EncryptedLocalBox initialization...')
 
+        if not self._tgbox_db.initialized:
+            await self._tgbox_db.init()
+
         if not await self._tgbox_db.BOX_DATA.count_rows():
             raise NotInitializedError('Table is empty.')
         else:

@@ -154,6 +154,8 @@ class TgboxDB:
 
         self._aiosql_db = None
         self._aiosql_db_is_closed = None
+        self._initialized = False
+
         self._name = self._db_path.name
 
         if self._db_path.is_dir():
@@ -168,6 +170,11 @@ class TgboxDB:
     def db_path(self) -> PathLike:
         """Returns path to TgboxDB file"""
         return self._db_path
+
+    @property
+    def initialized(self) -> bool:
+        """Will return True if TgboxDB is initialized"""
+        return self._initialized
 
     @property
     def closed(self) -> bool:
@@ -252,4 +259,5 @@ class TgboxDB:
         for table in (await tables.fetchall()):
             setattr(self, table[0], SqlTableWrapper(self._aiosql_db, table[0]))
 
+        self._initialized = True
         return self
