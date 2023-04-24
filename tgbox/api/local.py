@@ -14,8 +14,8 @@ from io import BytesIO
 from time import time
 
 from hashlib import sha256
-from base64 import urlsafe_b64decode
 from asyncio import iscoroutinefunction, gather
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 
 from telethon.tl.types import (
     Photo, Document, ChannelParticipantsAdmins
@@ -2397,9 +2397,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         if self._mainkey and not self._efilekey:
             logger.debug('Decrypting efile_path with the MainKey')
-            self._file_path = AES(self._mainkey).decrypt(
-                secret_metadata['efile_path']
-            )
+            self._file_path = AES(self._mainkey).decrypt(self._efile_path) # pylint: disable=no-member
             self._file_path = Path(self._file_path.decode())
         else:
             logger.warning(
@@ -2408,6 +2406,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
             )
             self._file_path = self._defaults.DEF_NO_FOLDER
+
+        del self._efile_path # pylint: disable=no-member
 
         for attr in self.__required_metadata:
             secret_metadata.pop(attr)
@@ -2432,24 +2432,23 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 )
                 updates = PackedAttributes.unpack(updates)
             except Exception as e:
-                logger.debug('Failed to unpack updated metadata. Ignoring..')
+                logger.debug(f'Failed to unpack updated metadata {e}. Ignoring..')
             else:
                 for k,v in tuple(updates.items()):
                     if k in self.__required_metadata:
                         if k == 'cattrs':
                             setattr(self, f'_{k}', PackedAttributes.unpack(v))
 
-                        elif k == 'file_name':
-                            setattr(self, f'_{k}', v.decode())
-
                         elif k == 'efile_path':
                             if self._mainkey and not self._efilekey:
                                 self._file_path = AES(self._mainkey).decrypt(v)
                                 self._file_path = Path(self._file_path.decode())
-                            else:
-                                self._file_path = self._defaults.DEF_NO_FOLDER
                         else:
-                            setattr(self, f'_{k}', v)
+                            # str attributes
+                            if k in ('mime', 'file_name'):
+                                setattr(self, f'_{k}', v.decode())
+                            else:
+                                setattr(self, f'_{k}', v)
                     else:
                         self._residual_metadata[k] = v
 
@@ -2587,6 +2586,146 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             'UPDATE FILES SET UPDATED_METADATA=? WHERE ID=?',
             (_updated_metadata, self._id)
         ))
+        for k,v in tuple(updates.items()):
+            if k in self.__required_metadata:
+                if k == 'cattrs':
+                    setattr(self, f'_{k}', PackedAttributes.unpack(v))
+
+                elif k == 'efile_path':
+                    if isinstance(self._lb, DecryptedLocalBox) or self._mainkey:
+                        mainkey = self._mainkey if self._mainkey else self._lb._mainkey
+                        self._file_path = Path(AES(mainkey).decrypt(v).decode('utf-8'))
+                    else:
+                        logger.debug(
+                            '''Updated metadata contains efile_path, however, '''
+                            '''DecryptedLocalBoxFile that you trying to update '''
+                            '''doesn\'t have a MainKey and wasn\'t decrypted with '''
+                            '''the DecryptedLocalBox, so we will ignore new path.''')
+                else:
+                    # str attributes
+                    if k in ('mime', 'file_name'):
+                        setattr(self, f'_{k}', v.decode())
+                    else:
+                        setattr(self, f'_{k}', v)
+            else:
+                self._residual_metadata[k] = v
+
+    async def update_metadata(
+            self, changes: Dict[str, Union[bytes, None]],
+            dlb: Optional['DecryptedLocalBox'] = None,
+            drb: Optional['DecryptedRemoteBox'] = None
+        ):
+        """This method will "update" file metadata attributes
+
+        In most cases you will want to use the same method on
+        the ``DecryptedRemoteBoxFile`` and then refresh
+        metadata of the ``DecryptedLocalBoxFile`` via the
+        ``refresh_metadata()`` method. This way you will
+        update metadata of the Remote **and** Local file.
+
+        However, you may want to update file metadata in
+        the **LocalBox only**, and left the RemoteBox
+        **untouched**. For such case use this method only.
+
+        Arguments:
+            changes (``Dict[str, Union[bytes, None]]``):
+                Metadata changes. You can specify a
+                ``None`` as value to remove key from updates.
+
+            dlb (``DecryptedLocalBox``, optional):
+                If current local file wasn't decrypted with the
+                DecryptedLocalBox/MainKey then we can't decrypt
+                the efile_path (the new file_path) if it's
+                present. You can specify a ``DecryptedLocalBox``
+                to fix this. You don't need to worry about this
+                if you receive files from the ``DecryptedLocalBox``
+
+            drb (``DecryptedRemoteBox``, optional):
+                ``DecryptedRemoteBox`` associated with
+                this ``DecryptedLocalBox``. Will auto
+                refresh your updates in remote. Don't
+                specify this if you want to update
+                metadata in the LocalBox only.
+
+        E.g: This code will replace ``file_name`` metadata
+        attribute of the ``DecryptedLocalBoxFile``
+
+        .. code-block:: python
+
+                ... # Most code is omited, see help(tgbox.api)
+                dlbf = await dlb.get_file(dlb.get_last_file_id())
+                await dlbf.update_metadata({'file_name': b'new.txt'})
+
+                print(dlbf.file_name) # new.txt
+
+        .. note::
+            - Your RemoteBox will NOT know about this update,
+              so you should specify here ``drb``.
+
+            - Not a *default* metadata (default is file_name, mime, etc)
+              will be placed to the ``residual_metadata`` property dict.
+
+            - LocalBox doesn't have any limit on the CAttrs size, but in
+              RemoteBox there is a file caption (and so updated metadata)
+              limit: 1KB and 2KB for a Premium Telegram users. Don't
+              specify ``drb`` if you want to update LocalBox only.
+
+            - You can replace file's path by specifying a
+              `file_path`` key with appropriate path (str/bytes).
+        """
+        if 'file_path' in changes and not dlb\
+            and not isinstance(self._lb, DecryptedLocalBox):
+                raise ValueError('You can\'t change file_path without specifying dlb!')
+
+        if 'efile_path' in changes:
+            raise ValueError('The "changes" should not contain efile_path')
+
+        logger.debug(f'Applying changes {changes} to the ID{self._id}...')
+
+        dlb = dlb if dlb else self._lb
+        try:
+            old_updates = await dlb._tgbox_db.FILES.select_once(sql_tuple=(
+                'SELECT UPDATED_METADATA FROM FILES WHERE ID=?',
+                (self._id,)
+            ))
+            updates = AES(self._filekey).decrypt(old_updates)
+            updates = PackedAttributes.unpack(updates)
+        except (ValueError, TypeError):
+            updates = {}
+
+        new_file_path = changes.pop('file_path', None)
+        if isinstance(new_file_path, bytes):
+            new_file_path = new_file_path.decode(encoding='utf-8')
+
+        if new_file_path:
+            directory = await dlb._make_local_path(Path(new_file_path))
+
+            await dlb._tgbox_db.FILES.execute((
+                'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
+                (directory.part_id, self._id)
+            ))
+            efile_path = AES(dlb._mainkey).encrypt(new_file_path.encode())
+            changes['efile_path'] = efile_path
+
+        updates.update(changes)
+
+        for k,v in tuple(updates.items()):
+            if not v:
+                del updates[k]
+
+                if k in self._residual_metadata:
+                    del self._residual_metadata[k]
+
+        updates_packed = PackedAttributes.pack(**updates)
+        updates_encrypted = AES(self._filekey).encrypt(updates_packed)
+        updates_encoded = urlsafe_b64encode(updates_encrypted).decode()
+
+        await self.refresh_metadata(_updated_metadata=updates_encoded)
+
+        if drb:
+            drbf = await drb.get_file(self._id)
+            await drbf.update_metadata(changes)
+
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """
         Returns ``ShareKey`` for this file. You should
