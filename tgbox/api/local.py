@@ -519,7 +519,7 @@ class EncryptedLocalBox:
             ))
             sfpid = [i[0] for i in await root_pids.fetchall()]
 
-        logger.info(f'*LocalBox.contents(), {sfpid=}')
+        logger.info(f'*LocalBox.contents(), sfpid={sfpid}')
 
         for pid in sfpid:
             if isinstance(self, DecryptedLocalBox):
