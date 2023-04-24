@@ -2022,7 +2022,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         if dlb:
             dlbfi = await dlb.get_file(self._id)
-            await dlbfi.refresh_metadata(_updated_metada=updates_encoded)
+            await dlbfi.refresh_metadata(_updated_metadata=updates_encoded)
 
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """
