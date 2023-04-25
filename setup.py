@@ -35,7 +35,10 @@ setup(
             'cryptography',
             'cryptg==0.4.0'
         ],
-        'doc': ['sphinx-rtd-theme==1.2.0']
+        'doc': [
+            'sphinx-rtd-theme==1.2.0',
+            'sphinxcontrib-jquery==4.1'
+        ]
     },
     classifiers = [
         'Development Status :: 5 - Production/Stable',
