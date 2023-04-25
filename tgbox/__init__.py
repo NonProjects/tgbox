@@ -2,7 +2,7 @@
 Encrypted cloud storage API based on Telegram
 https://github.com/NonProjects/tgbox
 """
-__version__ = '1.2+indev'
+__version__ = '1.2.0+indev'
 
 __author__ = 'https://github.com/NonProjects'
 __maintainer__ = 'https://github.com/NotStatilko'

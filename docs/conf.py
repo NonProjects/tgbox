@@ -26,7 +26,7 @@ copyright = '2023, NonProjects'
 author = 'NonProjects'
 
 # The full version, including alpha/beta/rc tags
-release = '1.2+indev'
+release = '1.2.0+indev'
 
 
 # -- General configuration ---------------------------------------------------
