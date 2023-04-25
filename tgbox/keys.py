@@ -53,11 +53,17 @@ class Phrase:
     def __init__(self, phrase: Union[bytes, str]):
         if isinstance(phrase, str):
             self._phrase = phrase.encode()
-        else:
+
+        elif isinstance(phrase, bytes):
             self._phrase = phrase
+        else:
+            raise TypeError('phrase must be Union[bytes, str]')
 
     def __repr__(self) -> str:
         return f'Phrase({repr(self._phrase)}) # at {hex(id(self))}'
+
+    def __str__(self) -> str:
+        return self._phrase.decode()
 
     def __hash__(self) -> int:
         # Without 22 hash of bytes will be equal to object's
@@ -72,7 +78,7 @@ class Phrase:
         return self._phrase
 
     @classmethod
-    def generate(cls, words_count: int=12) -> 'Phrase':
+    def generate(cls, words_count: int=6) -> 'Phrase':
         """
         Generates passphrase
 
