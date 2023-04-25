@@ -1,65 +1,60 @@
 TGBOX: encrypted cloud storage based on Telegram
 ================================================
-.. image:: https://readthedocs.org/projects/tgbox/badge/?version=latest
+.. epigraph::
+        | This repository contains a set of classes and functions used to manage TGBOX.
+        | Try the `tgbox-cli <https://github.com/NotStatilko/tgbox-cli>`__  if you're interested in working implementation!
 
 .. code-block:: python
 
-        from tgbox.api import (
-            TelegramClient,
-            make_remotebox,
-            make_localbox
-        )
         from asyncio import run as asyncio_run
-        from tgbox.keys import Phrase, make_basekey
         from getpass import getpass # Hidden input
 
-        # Phone number linked to your Telegram account
-        PHONE_NUMBER = '+10000000000'
+        from tgbox.api import TelegramClient, make_remotebox, make_localbox
+        from tgbox.keys import Phrase, make_basekey
 
         # This two will not work. Get your own at https://my.telegram.org
         API_ID, API_HASH = 1234567, '00000000000000000000000000000000'
+        # Simple progress callback to track upload/download state
+        PROGRESS_CALLBACK = lambda c,t: print(round(c/t*100),'%')
 
         async def main():
+            phone = input('Phone number: ')
+
             tc = TelegramClient(
-                phone_number = PHONE_NUMBER,
+                phone_number = phone,
                 api_id = API_ID,
                 api_hash = API_HASH
             )
-            await tc.connect() # Connecting with Telegram
+            await tc.connect() # Connecting to Telegram
             await tc.send_code() # Requesting login code
 
-            await tc.log_in(
-                code = int(input('Code: ')),
-                password = getpass('Pass: ')
-            )
-            # Generating your passphrase
-            p = Phrase.generate()
-            print(p.phrase.decode())
+            code = int(input('Login code: '))
+            password = getpass('Your password: ')
+
+            # Login to your Telegram account
+            await tc.log_in(password, code)
+
+            # Generate and show your Box phrase
+            print(phrase := Phrase.generate())
 
             # WARNING: This will use 1GB of RAM for a
             # couple of seconds. See help(make_basekey)
-            basekey = make_basekey(p)
+            basekey = make_basekey(phrase)
 
-            # Make EncryptedRemoteBox
-            erb = await make_remotebox(tc)
-            # Make DecryptedLocalBox
-            dlb = await make_localbox(erb, basekey)
-            # Obtain DecryptedRemoteBox
-            drb = await erb.decrypt(dlb=dlb)
+            erb = await make_remotebox(tc) # Make EncryptedRemoteBox
+            dlb = await make_localbox(erb, basekey) # Make DecryptedLocalBox
+            drb = await erb.decrypt(dlb=dlb) # Obtain DecryptedRemoteBox
 
-            # CATTRS is a File's CustomAttributes. You
-            # can specify any you want. Here we will add
-            # a "comment" attr with a true statement :^)
-            cattrs = {'comment': b'Cats are cool B-)'}
+            # Write a file path to upload to your Box
+            file_to_upload = input('File to upload (path): ')
 
-            # Preparing file for upload. This will return a PreparedFile object
-            pf = await dlb.prepare_file(open('cats.png','rb'), cattrs=cattrs)
+            # Preparing for upload. Will return a PreparedFile object
+            pf = await dlb.prepare_file(open(file_to_upload,'rb'))
 
-            # Uploading PreparedFile to the RemoteBox
-            # and return DecryptedRemoteBoxFile
-            drbf = await drb.push_file(pf)
+            # Uploading PreparedFile to Remote and getting DecryptedRemoteBoxFile
+            drbf = await drb.push_file(pf, progress_callback=PROGRESS_CALLBACK)
 
-            # Retrieving some info from the RemoteBoxFile
+            # Retrieving some info from the RemoteBox file
             print('File size:', drbf.size, 'bytes')
             print('File name:', drbf.file_name)
 
@@ -67,11 +62,11 @@ TGBOX: encrypted cloud storage based on Telegram
             # the RemoteBoxFile you need from the LocalBox
             dlbf = await dlb.get_file(drbf.id)
 
+            print('File size:', dlbf.size)
             print('File path:', dlbf.file_path)
-            print('Custom Attributes:', dlbf.cattrs)
 
-            # Downloading file back.
-            await drbf.download()
+            # Downloading your [already uploaded] file from Remote.
+            await drbf.download(progress_callback=PROGRESS_CALLBACK)
 
             # Close all connections
             # after work was done
