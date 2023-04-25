@@ -106,6 +106,7 @@ async def make_localbox(
         AES(basekey).encrypt(erb._tc.session.save().encode()),
         AES(mainkey).encrypt(int_to_bytes(erb._tc._api_id)),
         AES(mainkey).encrypt(bytes.fromhex(erb._tc._api_hash)),
+        None # FAST_SYNC_LAST_EVENT_ID
     )
     return await EncryptedLocalBox(tgbox_db).decrypt(basekey)
 
