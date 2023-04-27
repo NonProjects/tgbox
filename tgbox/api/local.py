@@ -1115,7 +1115,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             # Here we will remove all local files which ID is between
             # the previous_drbf2.id <...X...> drbf1.id and also
             # between the drbf1.id <...X...> drbf2.id
-            for pair in pairs := ((previous_drbf2, drbf1), (drbf1, drbf2)):
+            for pair in (pairs := ((previous_drbf2, drbf1), (drbf1, drbf2))):
                 if None in pair or (pair[1].id - pair[0].id) < 2:
                     continue
 
