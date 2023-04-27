@@ -36,14 +36,14 @@ from ..keys import (
 from ..defaults import PREFIX, VERBYTE, DEF_TGBOX_NAME
 
 from ..errors import (
-    InUseException, AESError, PreviewImpossible,
     LimitExceeded, DurationImpossible, InvalidFile,
     NotEnoughRights, IncorrectKey, FingerprintExists,
-    NotInitializedError, AlreadyImported, RemoteFileNotFound
+    NotInitializedError, AlreadyImported, RemoteFileNotFound,
+    InUseException, AESError, PreviewImpossible, RemoteBoxInaccessible
 )
 from ..tools import (
-    PackedAttributes, ppart_id_generator,
     int_to_bytes, bytes_to_int, SearchFilter,
+    PackedAttributes, ppart_id_generator, anext,
     get_media_duration, prbg, make_media_preview
 )
 from .utils import (
@@ -899,6 +899,244 @@ class DecryptedLocalBox(EncryptedLocalBox):
         else:
             raise FingerprintExists(FingerprintExists.__doc__) from None
 
+    async def _fast_sync(
+            self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
+            progress_callback: Optional[Callable[[int, str], None]] = None):
+        """
+        This method will make a fast synchronization of
+        your LocalBox with the RemoteBox. See help on
+        DecryptedLocalBox.sync method for more info.
+
+        drb (``DecryptedRemoteBox``):
+            *RemoteBox* associated with this LocalBox.
+
+        progress_callback (``Callable[[int, str], None]``, optional):
+            A callback function accepting two
+            parameters: (file_id, action<str>).
+
+            Don't treat this as progressbar. The code
+            will call/await the specified callback
+            with one of the arguments from below:
+                * ``fast_progress_callback(22, 'deleted')`` OR
+                * ``fast_progress_callback(22, 'imported')`` OR
+                * ``fast_progress_callback(22, 'metadata edited')``
+        """
+        drb_box_name = await drb.get_box_name()
+        logger.info(f'Fast syncing {self._tgbox_db.db_path} with {drb_box_name}...')
+
+        delete_canidates = []
+        try:
+            box_admins = await drb.tc.get_participants(
+                entity = drb.box_channel,
+                filter = ChannelParticipantsAdmins
+            )
+        except ChatAdminRequiredError as e:
+            err_msg = (
+                """You don't have enough rights (access to Admin Log) """
+                """to make a fast box synchronization. Ask a RemoteBox """
+                """owner to make You (at least) Admin with 0 rights or """
+                """use a deep syncing by specifying "deep" flag. Specify """
+                """"start_from" ID to fasten deep syncing."""
+            )
+            raise NotEnoughRights(err_msg) from e
+
+        box_admins = [admin.id for admin in box_admins]
+        box_admins.remove((await drb.tc.get_entity('me')).id)
+
+        last_event_id = None
+
+        if not box_admins:
+            logger.debug('No Admins except You found. Fast sync ignored.')
+
+        if box_admins:
+            admin_log_gen = drb.tc.iter_admin_log(
+                entity = drb.box_channel,
+                delete=True, edit=True,
+                admins = box_admins
+            )
+            async for event in admin_log_gen:
+                if event.id == self._fast_sync_last_event_id:
+                    break
+
+                elif last_event_id is None:
+                    last_event_id = event.id
+
+                if event.deleted_message:
+                    delete_canidates.append(event.old.id)
+                    action = 'deleted'
+
+                elif event.changed_message:
+                    drbf = await drb.get_file(event.old.id)
+
+                    if drbf is None:
+                        continue
+                    try:
+                        logger.debug(f'Trying to import ID{drbf.id}...')
+                        await self.import_file(drbf)
+                        action = 'imported'
+                    except AlreadyImported:
+                        logger.debug(
+                           f'''ID{event.old.id} is already imported. '''
+                            '''Checking for updated metadata...''')
+                        try:
+                            dlbf = await self.get_file(drbf.id)
+                            await dlbf.refresh_metadata(drbf=drbf)
+                            action = 'metadata updated'
+                        except Exception as e:
+                            logger.debug(f'Caption metadata is invalid: {e}')
+
+                if progress_callback:
+                    if iscoroutinefunction(progress_callback):
+                        await progress_callback(event.old.id, action)
+                    else:
+                        progress_callback(event.old.id, action)
+
+            if delete_canidates:
+                await self.delete_files(lbf_ids=delete_canidates)
+
+            if last_event_id and self._fast_sync_last_event_id != last_event_id:
+                self._fast_sync_last_event_id = last_event_id
+
+                last_event_id = AES(self._mainkey).encrypt(
+                    int_to_bytes(last_event_id)
+                )
+                logger.debug(
+                    '''UPDATE BOX_DATA SET FAST_SYNC_'''
+                   f'''LAST_EVENT_ID={last_event_id}'''
+                )
+                await self._tgbox_db.BOX_DATA.execute((
+                    'UPDATE BOX_DATA SET FAST_SYNC_LAST_EVENT_ID=?',
+                    (last_event_id,)
+                ))
+
+    async def _deep_sync(
+            self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
+            start_from: Optional[int] = None,
+            progress_callback: Optional[Callable[[int, int], None]] = None):
+        """
+        This method will make a deep synchronization of
+        your LocalBox with the RemoteBox. See help on
+        DecryptedLocalBox.sync method for more info.
+
+        drb (``DecryptedRemoteBox``):
+            *RemoteBox* associated with this LocalBox.
+
+        start_from (``int``, optional):
+            Will check files that > start_from [ID].
+
+        progress_callback (``Callable[[int, int], None]``, optional):
+            A callback function accepting two
+            parameters: (current_id, last_id).
+        """
+        drb_box_name = await drb.get_box_name()
+        logger.info(f'Deep syncing {self._tgbox_db.db_path} with {drb_box_name}...')
+
+        # This will yield the first uploaded to RemoteBox file
+        first_drbf = await anext(drb.files(reverse=True), None)
+
+        if not first_drbf:
+            logging.debug(f'RemoteBox {drb_box_name} is empty. Clearing local...')
+
+            await self._tgbox_db.FILES.execute(
+                sql_tuple=('DELETE FROM FILES', ()))
+            await self._tgbox_db.PATH_PARTS.execute(
+                sql_tuple=('DELETE FROM PATH_PARTS', ()))
+
+            return
+
+        # This will yield the last uploaded to RemoteBox file
+        last_drbf = await anext(drb.files())
+
+        logger.debug(
+            '''Removing all files from LocalBox which ID is less '''
+            '''than the first RemoteBox file...'''
+        )
+        await self._tgbox_db.FILES.execute(sql_tuple=(
+            'DELETE FROM FILES WHERE ID < ?',
+            (first_drbf.id,)
+        ))
+
+        drbf_generator = drb.files(
+            min_id=start_from, reverse=True,
+            cache_preview=False,
+            return_imported_as_erbf=True
+        )
+        # This is drbf2 from the previous loop cycle
+        previous_drbf2 = None
+
+        while True:
+            drbf1 = await anext(drbf_generator, None)
+            drbf2 = await anext(drbf_generator, None)
+
+            if not any((drbf1, drbf2)):
+                # previous_drbf2 will be None only if
+                # we're at the first loop cycle. If
+                # drbf1 & drbf2 is None too, then
+                # "start_from" arg is incorrect
+                if not previous_drbf2:
+                    raise RemoteFileNotFound(
+                        '''Can not init sync() with start_from='''
+                       f'''{start_from}: message doesn\'t exists '''
+                       '''or "start_from" equals last file id.'''
+                    )
+                sql_tuple = ('DELETE FROM FILES WHERE ID > ?', (previous_drbf2.id,))
+                logger.debug(f'self._tgbox_db.FILES.execute(sql_tuple={sql_tuple})')
+
+                await self._tgbox_db.FILES.execute(sql_tuple=sql_tuple)
+                break
+
+            if progress_callback:
+                progress = drbf2.id if drbf2 else last_drbf.id
+
+                if iscoroutinefunction(progress_callback):
+                    await progress_callback(progress, last_drbf.id)
+                else:
+                    progress_callback(progress, last_drbf.id)
+
+            for drbfx in (drbf1, drbf2):
+                # We check here does file with the same ID is
+                # exists in LocalBox (already imported) or not
+                if drbfx and not (elbfx := await self._elb.get_file(drbfx.id)):
+                    # If not, we check if drbfx is actually an
+                    # EncryptedRemoteBoxFile (it can be such if
+                    # LocalBox doesn't have FileKey to it,
+                    # probably because file is from other remote)
+                    if hasattr(drbfx, '_filekey'):
+                        # We import file if it's DecryptedRemoteBoxFile,
+                        # EncryptedRemoteBoxFile doesn't have _filekey
+                        logger.debug(f'Importing ID{drbfx.id} from {drb_box_name}')
+                        await self.import_file(drbfx)
+                    else:
+                        logger.debug(
+                            '''We don\'t have a FileKey to ID'''
+                           f'''{drbfx.id}. Skipping.'''
+                        )
+
+            # Here we will remove all local files which ID is between
+            # the previous_drbf2.id <...X...> drbf1.id and also
+            # between the drbf1.id <...X...> drbf2.id
+            for pair in pairs := ((previous_drbf2, drbf1), (drbf1, drbf2)):
+                if None in pair or (pair[1].id - pair[0].id) < 2:
+                    continue
+
+                sql_tuple = (
+                    'DELETE FROM FILES WHERE ID > ? AND ID < ?',
+                    (pair[0].id, pair[1].id)
+                )
+                logger.debug(f'self._tgbox_db.FILES.execute(sql_tuple={sql_tuple})')
+                await self._tgbox_db.FILES.execute(sql_tuple=sql_tuple)
+
+            if drbf2: # Not a last cycle
+                previous_drbf2 = drbf2
+            else:
+                # On last cycle we remove all files from Local
+                # which ID is > than the last file in Remote
+                sql_tuple = ('DELETE FROM FILES WHERE ID > ?', (drbf1.id,))
+                logger.debug(f'self._tgbox_db.FILES.execute(sql_tuple={sql_tuple})')
+
+                await self._tgbox_db.FILES.execute(sql_tuple=sql_tuple)
+                break
+
     async def sync(
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
             deep: Optional[bool] = False,
@@ -928,7 +1166,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         fast_progress_callback (``Callable[[int, str], None]``, optional):
             A callback function accepting two
-            parameters: (file_id, action).
+            parameters: (file_id, action<str>).
             Will be used only on fast syncing.
 
             Don't treat this as progressbar. The code
@@ -950,287 +1188,14 @@ class DecryptedLocalBox(EncryptedLocalBox):
             * In fast syncing we will fetch updates to
               Box only from other admins.
         """
-        drb_box_name = await drb.get_box_name()
-
-        if not deep:
-            logger.info(f'Fast syncing {self._tgbox_db.db_path} with {drb_box_name}...')
-
-            delete_canidates = []
-            try:
-                box_admins = await drb.tc.get_participants(
-                    entity = drb.box_channel,
-                    filter = ChannelParticipantsAdmins
-                )
-            except ChatAdminRequiredError as e:
-                err_msg = (
-                    """You don't have enough rights (access to Admin Log) """
-                    """to make a fast box synchronization. Ask a RemoteBox """
-                    """owner to make You (at least) Admin with 0 rights or """
-                    """use a deep syncing by specifying "deep" flag. Specify """
-                    """"start_from" ID to fasten deep syncing."""
-                )
-                raise NotEnoughRights(err_msg) from e
-
-            box_admins = [admin.id for admin in box_admins]
-            box_admins.remove((await drb.tc.get_entity('me')).id)
-
-            last_event_id = None
-
-            if not box_admins:
-                logger.debug('No Admins except You found. Fast sync ignored.')
-
-            if box_admins:
-                admin_log_gen = drb.tc.iter_admin_log(
-                    entity = drb.box_channel,
-                    delete=True, edit=True,
-                    admins = box_admins
-                )
-                async for event in admin_log_gen:
-                    if event.id == self._fast_sync_last_event_id:
-                        break
-
-                    elif last_event_id is None:
-                        last_event_id = event.id
-
-                    if event.deleted_message:
-                        delete_canidates.append(event.old.id)
-                        action = 'deleted'
-
-                    elif event.changed_message:
-                        drbf = await drb.get_file(event.old.id)
-
-                        if drbf is None:
-                            continue
-                        try:
-                            logger.debug(f'Trying to import ID{drbf.id}...')
-                            await self.import_file(drbf)
-                            action = 'imported'
-                        except AlreadyImported:
-                            logger.debug(
-                               f'''ID{event.old.id} is already imported. '''
-                                '''Checking for updated metadata...''')
-                            try:
-                                dlbf = await self.get_file(drbf.id)
-                                await dlbf.refresh_metadata(drbf=drbf)
-                                action = 'metadata updated'
-                            except Exception as e:
-                                logger.debug(f'Caption metadata is invalid: {e}')
-
-                    if fast_progress_callback:
-                        if iscoroutinefunction(fast_progress_callback):
-                            await fast_progress_callback(event.old.id, action)
-                        else:
-                            fast_progress_callback(event.old.id, action)
-
-                if delete_canidates:
-                    await self.delete_files(lbf_ids=delete_canidates)
-
-                if last_event_id and self._fast_sync_last_event_id != last_event_id:
-                    self._fast_sync_last_event_id = last_event_id
-
-                    last_event_id = AES(self._mainkey).encrypt(
-                        int_to_bytes(last_event_id)
-                    )
-                    logger.debug(
-                        '''UPDATE BOX_DATA SET FAST_SYNC_'''
-                       f'''LAST_EVENT_ID={last_event_id}'''
-                    )
-                    await self._tgbox_db.BOX_DATA.execute((
-                        'UPDATE BOX_DATA SET FAST_SYNC_LAST_EVENT_ID=?',
-                        (last_event_id,)
-                    ))
+        if self.box_channel_id != drb.box_channel_id:
+            raise RemoteBoxInaccessible(
+                '''LocalBox ID != RemoteBox ID (is different). You should '''
+                '''sync LocalBox only from the associated RemoteBox.''')
+        if deep:
+            await self._deep_sync(drb, start_from, deep_progress_callback)
         else:
-            logger.info(f'Deep syncing {self._tgbox_db.db_path} with {drb_box_name}...')
-
-            async def _get_file(n=start_from):
-                iter_over = drb.files(
-                    min_id=n, reverse=True,
-                    cache_preview=False,
-                    return_imported_as_erbf=True
-                )
-                async for drbf in iter_over:
-                    return drbf
-
-            def difference(sql_tuple_ids: tuple) -> bool:
-                """
-                This local func will sort out useless SQL
-                querys, like DELETE FROM FILES WHERE ID > 5 AND ID < 5
-                """
-                if sql_tuple_ids[0] == sql_tuple_ids[1] \
-                    or sql_tuple_ids[0]+1 == sql_tuple_ids[1]:
-                        return False
-                return True
-
-            async for drbf in drb.files(cache_preview=False):
-                last_drbf_id = drbf.id; break
-
-            rbfiles, last_pushed_progress = [], None
-
-            while True:
-                current = 0
-
-                if not rbfiles:
-                    rbfiles.append(await _get_file())
-
-                    if rbfiles[0] is None:
-                        # The first requested file was not found. This can
-                        # be either because of the empty RemoteBox (not a
-                        # single file was uploaded before or all files was
-                        # removed) (1) or because the "start_from" argument
-                        # is more than the last file id (2). User can cause
-                        # a (2) scenario, so we *must* verify that Box is
-                        # really empty. (1) will result in clearing LocalBox.
-
-                        logger.debug(
-                           f'''It seems that {drb_box_name} doesn\'t have any files OR '''
-                            '''"start_from" argument is incorrect. Will try to verify '''
-                            '''that this isn\'t a second scenario...'''
-                        )
-                        test_msg = await drb._tc.send_message(drb._box_channel, '.', silent=True)
-                        await drb.delete_files(rbf_ids=[test_msg.id])
-
-                        # The "start_from" is invalid
-                        if test_msg.id <= start_from:
-                            raise RemoteFileNotFound(
-                               f'''start_from={start_from} is invalid '''
-                               f'''for {drb_box_name}. Exit sync()...'''
-                            )
-
-                        logger.debug(
-                            '''The "start_from" is < than last file id. We will '''
-                            '''try to verify that RemoteBox is really empty...'''
-                        )
-                        test_drbf = None
-                        async for drbf in drb.files(offset_id=test_msg.id, reverse=False):
-                            test_drbf = drbf; break
-
-                        # RemoteBox has at least one
-                        # DecryptedRemoteBoxFile, so
-                        # "start_from" is invalid
-                        if test_drbf:
-                            raise RemoteFileNotFound(
-                                '''Can not init sync() with start_from='''
-                               f'''{start_from}: message doesn\'t exists '''
-                               '''or "start_from" equals last file id.'''
-                            )
-
-                        logger.debug(f'{drb_box_name} doesn\'t have any files, clearing local...')
-
-                        await self._tgbox_db.FILES.execute(
-                            sql_tuple=('DELETE FROM FILES', ()))
-                        await self._tgbox_db.PATH_PARTS.execute(
-                            sql_tuple=('DELETE FROM PATH_PARTS', ()))
-                        break
-
-                    rbfiles.append(await _get_file(rbfiles[0].id))
-                    last_id = rbfiles[0].id
-
-                    logger.debug(
-                        '''Removing all files from LocalBox which ID is less '''
-                        '''than the first RemoteBox file...'''
-                    )
-                    await self._tgbox_db.FILES.execute(sql_tuple=(
-                        'DELETE FROM FILES WHERE ID < ?',
-                        ((await _get_file(0)).id,)
-                    ))
-                else:
-                    rbfiles.append(await _get_file(rbfiles[1].id))
-                    if None in rbfiles: break
-
-                    rbfiles.append(await _get_file(rbfiles[2].id-1))
-                    if None in rbfiles: break
-
-                    rbfiles.pop(0)
-                    rbfiles.pop(1)
-
-                while True:
-                    if deep_progress_callback and last_pushed_progress != last_id:
-                        if iscoroutinefunction(deep_progress_callback):
-                            await deep_progress_callback(last_id, last_drbf_id)
-                        else:
-                            deep_progress_callback(last_id, last_drbf_id)
-
-                        last_pushed_progress = last_id
-
-                    if current == 2 or not rbfiles[current]:
-                        break
-                    try:
-                        lbfi_id = await self._tgbox_db.FILES.select_once(
-                            sql_tuple = (
-                                'SELECT ID FROM FILES WHERE ID=?',
-                                (rbfiles[current].id,)
-                            )
-                        )
-                    except StopAsyncIteration:
-                        lbfi_id = None
-
-                    if lbfi_id or 'Encrypted' in repr(rbfiles[current]):
-                        current += 1
-                    else:
-                        await self.import_file(rbfiles[current])
-
-                        if current == 0:
-                            rbfiles[0] = rbfiles[1]
-
-                        if None in rbfiles:
-                            break
-
-                        rbfiles[1] = await _get_file(rbfiles[0].id)
-
-                        if rbfiles[0] and not rbfiles[1]:
-                            if current == 0:
-                                try:
-                                    # Imported files returned as EncryptedRemoteBoxFile,
-                                    # skip it as we don't have a FileKey in LocalBox
-                                    if 'Encrypted' in repr(rbfiles[current]):
-                                        logger.debug(
-                                            '''We don\'t have a FileKey to ID'''
-                                           f'''{rbfiles[current].id}. Skipping.'''
-                                        )
-                                    else:
-                                        logger.debug(
-                                            f'''Importing ID{rbfiles[current].id} '''
-                                            f'''from {drb_box_name}'''
-                                        )
-                                        await self.import_file(rbfiles[current])
-                                except AlreadyImported:
-                                    pass # Last file may be already in Box, so skip
-
-                            rbfiles[1] = rbfiles[0]
-                            break
-                        else:
-                            last_id = rbfiles[1].id
-
-                if rbfiles[0] is None:
-                    break
-
-                sql_tuple = (
-                    'DELETE FROM FILES WHERE ID > ? AND ID < ?',
-                    (last_id, rbfiles[0].id)
-                )
-                if difference(sql_tuple[1]):
-                    logger.debug(f'self._tgbox_db.FILES.execute(sql_tuple={sql_tuple})')
-                    await self._tgbox_db.FILES.execute(sql_tuple=sql_tuple)
-
-                last_id = rbfiles[1].id if rbfiles[1] else None
-
-                if last_id:
-                    sql_tuple = (
-                        'DELETE FROM FILES WHERE ID > ? AND ID < ?',
-                        (rbfiles[0].id, rbfiles[1].id)
-                    )
-                    if difference(sql_tuple[1]):
-                        logger.debug(f'self._tgbox_db.FILES.execute(sql_tuple={sql_tuple})')
-                        await self._tgbox_db.FILES.execute(sql_tuple=sql_tuple)
-                else:
-                    sql_tuple = (
-                        'DELETE FROM FILES WHERE ID = ?',
-                        (rbfiles[0].id,)
-                    )
-                    logger.debug(f'self._tgbox_db.FILES.execute(sql_tuple={sql_tuple})')
-
-                    await self._tgbox_db.FILES.execute(sql_tuple=sql_tuple)
-                    break
+            await self._fast_sync(drb, fast_progress_callback)
 
     async def replace_session(
             self, basekey: BaseKey, tc: TelegramClient) -> None:
