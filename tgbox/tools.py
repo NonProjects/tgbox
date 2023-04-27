@@ -39,7 +39,6 @@ __all__ = [
     'make_media_preview',
     'ppart_id_generator'
 ]
-anext = lambda agen: agen.__anext__()
 
 class _TypeList:
     """
@@ -449,6 +448,16 @@ def int_to_bytes(
 def bytes_to_int(bytes_: bytes, signed: Optional[bool] = False) -> int:
     """Converts bytes to int with Big byteorder."""
     return int.from_bytes(bytes_, 'big', signed=signed)
+
+
+async def anext(aiterator, default=...):
+    """Analogue to Python 3.10+ anext()"""
+    try:
+        return await aiterator.__anext__()
+    except StopAsyncIteration as e:
+        if default is not Ellipsis:
+            return default
+        raise e
 
 async def get_media_duration(file_path: str) -> int:
     """Returns video/audio duration with ffmpeg in seconds."""
