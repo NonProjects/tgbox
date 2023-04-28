@@ -158,11 +158,12 @@ Abstract tgbox file of **v1.X** has **13** attributes:
 Versioning
 ----------
 
-We offer **two** Git branches:
+The TGBOX will try to follow the well known `Semantic Versioning <https://semver.org/>`_. Development cycle:
 
-1. **Indev**. This branch used for active developing. Modules almost not tested, not stable, but errors are fixed faster.
-2. **Main**. This branch has tested bugfixes and new features from *Indev*. Can be still some minor errors.
+1. We will increment *Version* (*minor*) and push all updates to the default ``indev`` branch
+2. While developing, we will increment the alpha/beta tags of Version and make pre-release
+3. When all updates will be commited & tested, we will make a *branch of Version*
 
-The most **stable** releases should be presented **on the PyPi**, and can be installed via ``pip``. This rule doesn't work for releases < 1.0 because early we used a different versioning system.
+In future (*when needed*) we will push patches to the *Version* branch and make release of it.
 
-The ``VERBYTE`` define compatibility. While it's not incremented, all new updates **MUST** support previous file formats, methods, etc. Except *Version byte* there can be lower versions, like ``1.1``, ``1.1.1``, etc. Verbyte= ``b'\x00'`` and Verbyte= ``b'\x01'`` **shouldn't** be compatible, otherwise we can use a lower version, i.e ``1.1``.
+The ``tgbox.defaults.VERBYTE`` define compatibility, it is the *major version*. While it's not incremented, all new updates **MUST** support previous file formats, methods, etc. Except *Version byte* there can be lower versions, like ``v1.1``, ``v1.1.1``, etc. Verbyte= ``b'\x00'`` and Verbyte= ``b'\x01'`` **shouldn't** be compatible, otherwise we can use a lower version (*minor*/*patch*), i.e ``v1.1``. Typically we will update ``VERBYTE`` only on the breaking API changes.
