@@ -2649,6 +2649,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         if 'efile_path' in changes:
             raise ValueError('The "changes" should not contain efile_path')
 
+        changes = changes.copy()
+
         logger.debug(f'Applying changes {changes} to the ID{self._id}...')
 
         dlb = dlb if dlb else self._lb

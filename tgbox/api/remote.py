@@ -1992,6 +1992,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         if 'file_path' in changes and not dlb:
             raise ValueError('You can\'t change file_path without specifying dlb!')
 
+        changes = changes.copy()
+
         logger.debug(f'Applying changes {changes} to the ID{self._id}...')
         try:
             message_caption = urlsafe_b64decode(self._message.message)
