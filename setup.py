@@ -15,7 +15,7 @@ setup(
     author           = 'NonProjects',
     author_email     = 'thenonproton@pm.me',
     url              = 'https://github.com/NonProjects/tgbox',
-    download_url     = f'https://github.com/NonProjects/tgbox/archive/refs/tags/{version}.tar.gz',
+    download_url     = f'https://github.com/NonProjects/tgbox/archive/refs/tags/v{version}.tar.gz',
 
     long_description_content_type='text/x-rst',
 
