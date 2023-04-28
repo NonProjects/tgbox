@@ -2,7 +2,6 @@
 Encrypted cloud storage API based on Telegram
 https://github.com/NonProjects/tgbox
 """
-__version__ = '1.2.0+indev'
 
 __author__ = 'https://github.com/NonProjects'
 __maintainer__ = 'https://github.com/NotStatilko'
@@ -18,6 +17,7 @@ __all__ = [
     'errors',
     'keys',
     'tools',
+    'version',
     'sync',
 ]
 import logging; logger = logging.getLogger(__name__)
@@ -45,6 +45,9 @@ from . import crypto
 from . import errors
 from . import keys
 from . import tools
+from . import version
+
+__version__ = version.VERSION
 
 
 def sync(coroutine: Coroutine):

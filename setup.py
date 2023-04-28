@@ -1,16 +1,17 @@
 from setuptools import setup
+from tgbox.version import VERSION
 
 setup(
     name             = 'tgbox',
     packages         = ['tgbox', 'tgbox.api'],
-    version          = '1.2.0+indev',
+    version          = VERSION,
     license          = 'LGPL-2.1',
     description      = 'Encrypted cloud storage API based on a Telegram API',
     long_description = open('README.rst', encoding='utf-8').read(),
     author           = 'NonProjects',
     author_email     = 'thenonproton@pm.me',
     url              = 'https://github.com/NonProjects/tgbox',
-    download_url     = 'https://github.com/NonProjects/tgbox/archive/refs/tags/v1.2.0.tar.gz',
+    download_url     = f'https://github.com/NonProjects/tgbox/archive/refs/tags/{VERSION}.tar.gz',
 
     long_description_content_type='text/x-rst',
 

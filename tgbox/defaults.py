@@ -4,12 +4,12 @@ import logging
 
 from enum import IntEnum
 from pathlib import Path
-from . import __version__
-
 try:
     from sys import _MEIPASS
 except ImportError:
     _MEIPASS = None
+
+from .version import VERSION
 
 __all__ = [
     'Limits',
@@ -65,7 +65,6 @@ class Scrypt(IntEnum):
 # Path that will be used to save downloaded files.
 DOWNLOAD_PATH: Path=Path('DownloadsTGBOX')
 
-VERSION: str=__version__
 VERBYTE: bytes=b'\x01'
 
 DEF_TGBOX_NAME:   str='TGBOX'

@@ -21,12 +21,14 @@ sys.path.insert(0, os.path.abspath('..'))
 
 # -- Project information -----------------------------------------------------
 
+from tgbox.version import VERSION
+
 project = 'tgbox'
 copyright = '2023, NonProjects'
 author = 'NonProjects'
 
 # The full version, including alpha/beta/rc tags
-release = '1.2.0+indev'
+release = VERSION
 
 
 # -- General configuration ---------------------------------------------------
