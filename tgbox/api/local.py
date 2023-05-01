@@ -768,7 +768,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 # Session information by people who also have mainkey
                 # of the same box. So there is decryption with basekey.
                 self._session = AES(key).decrypt(elb._session).decode()
-            except UnicodeDecodeError:
+            except (UnicodeDecodeError, ValueError):
                 raise IncorrectKey('Can\'t decrypt Session. Invalid Basekey?')
 
         elif isinstance(key, MainKey):
@@ -1213,7 +1213,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         """
         try:
             AES(basekey).decrypt(self._elb._session).decode()
-        except UnicodeDecodeError:
+        except (UnicodeDecodeError, ValueError):
             raise IncorrectKey(
                 'BaseKey doesn\'t match with BaseKey of LocalBox') from None
         else:
