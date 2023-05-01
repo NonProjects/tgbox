@@ -3,7 +3,7 @@ from ast import literal_eval
 
 
 with open('tgbox/version.py', encoding='utf-8') as f:
-    version = literal_eval(f.read().split('=')[1].strip())
+    version = literal_eval(f.read().split('=',1)[1].strip())
 
 setup(
     name             = 'tgbox',
