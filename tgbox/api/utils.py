@@ -23,8 +23,8 @@ from telethon.tl.functions.auth import ResendCodeRequest
 
 
 from ..defaults import VERSION
-from ..tools import anext, SearchFilter
 from ..fastelethon import download_file
+from ..tools import anext, SearchFilter, _TypeList
 
 from .db import TABLES, TgboxDB
 
@@ -239,9 +239,41 @@ async def search_generator(
     if it_messages:
         iter_from = it_messages
     else:
-        min_id = sf.in_filters['min_id'][-1] if sf.in_filters['min_id'] else None
-        max_id = sf.in_filters['max_id'][-1] if sf.in_filters['max_id'] else None
-        iter_from = lb.files(min_id=min_id, max_id=max_id, cache_preview=cache_preview)
+        if sf.in_filters['scope']:
+            async def scope_generator(scope: Union[str, list]):
+                scope = scope if isinstance(scope, _TypeList) else [scope]
+
+                for current_scope in scope:
+                    if hasattr(current_scope, '_part_id'):
+                        directory = current_scope
+
+                    elif not (directory := await lb.get_directory(current_scope)):
+                        return
+
+                    async for content in directory.iterdir():
+                        if hasattr(content, '_part_id'):
+                            # This is DecryptedLocalBoxDirectory
+                            if str(content) in sf.ex_filters['scope']:
+                                continue # This directory is excluded
+
+                            async for dlbf in scope_generator(content):
+                                yield dlbf # This is DecryptedLocalBoxFile
+                        else:
+                            yield content # This is DecryptedLocalBoxFile
+
+            iter_from = scope_generator(sf.in_filters['scope'])
+        else:
+            min_id = sf.in_filters['min_id'][-1]\
+                if sf.in_filters['min_id'] else None
+
+            max_id = sf.in_filters['max_id'][-1]\
+                if sf.in_filters['max_id'] else None
+
+            iter_from = lb.files(
+                min_id = min_id,
+                max_id = max_id,
+                cache_preview = cache_preview
+            )
 
     if not iter_from:
         raise ValueError('At least it_messages or lb must be specified.')
