@@ -1,5 +1,6 @@
 """Module with API functions and classes for LocalBox."""
 
+from __future__ import annotations
 import logging
 
 from typing import (
@@ -44,7 +45,8 @@ from ..errors import (
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter,
     PackedAttributes, ppart_id_generator, anext,
-    get_media_duration, prbg, make_media_preview
+    get_media_duration, prbg, make_media_preview,
+    make_general_path
 )
 from .utils import (
     DirectoryRoot, search_generator, PreparedFile,
@@ -1527,6 +1529,33 @@ class DecryptedLocalBox(EncryptedLocalBox):
         pf.set_upload_time(drbf._upload_time)
 
         return await self._make_local_file(pf)
+
+    async def get_directory(self, path: Union[Path, str])\
+            -> Union[DecryptedLocalBoxDirectory, None]:
+        """
+        This method will make ``DecryptedLocalBoxDirectory``
+        from your ``path``. If such path is not presented in
+        LocalBox, then ``None`` will be returned.
+
+        Arguments:
+            path (``Path``, ``str``):
+                Absolute path from which you want to
+                make an ``DecryptedLocalBoxDirectory``.
+        """
+        ppidg = ppart_id_generator(
+            path = make_general_path(path),
+            mainkey = self._mainkey
+        )
+        part_id = None
+        for part in ppidg:
+            part_id = part[2]
+        try:
+            return await EncryptedLocalBoxDirectory(
+                self._elb, part_id).decrypt(dlb=self)
+        except StopAsyncIteration:
+            # StopAsyncIteration will be raised on parsing the SELECT
+            # results if specified dir is not presented in LocalBox
+            return None
 
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """
