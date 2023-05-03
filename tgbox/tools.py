@@ -125,6 +125,28 @@ class SearchFilter:
       & ``SearchFilter.exclude(...)`` methods after initialization.
 
     All filters:
+        * **scope** *str*: Define a path as search scope:
+            The *scope* is an absolute directory in which
+            we will search your file by other *filters*. By
+            default, the ``tgbox.api.utils.search_generator``
+            will search over the entire *LocalBox*. This can
+            be slow if you're have too many files.
+
+            **Example**: let's imagine that You're a Linux user which
+            share it's *Box* with the Windows user. In this case,
+            Your *LocalBox* will contain a path parts on the
+            ``'/'`` (Linux) and ``'C:\\'`` (Windows) roots. If You
+            know that some file was uploaded by Your friend,
+            then You can specify a ``scope='C:\\'`` to ignore
+            all files uploaded from the Linux machine. This
+            will significantly fasten the search process,
+            because almost all filters require to select
+            row from the LocalBox DB, decrypt Metadata and
+            compare its values with ones from ``SearchFilter``.
+
+            !: The ``scope`` will be ignored on *RemoteBox* search.
+            !: The ``min_id`` & ``max_id`` will be ignored if ``scope`` used.
+
         * **id** *integer*: File ID
 
         * **cattrs** *dict*: File CustomAttributes:
@@ -133,7 +155,7 @@ class SearchFilter:
             E.g: If *file* ``cattrs={b'comment': b'hi!'}``, then
             *filter* ``cattrs={b'comment': b'h'}`` will match.
 
-            By default, ``tgbox.tools.search_generator`` will
+            By default, ``tgbox.api.utils.search_generator`` will
             use an ``in``, like ``b'h' in b'hi!'``, but you
             can set a ``re`` flag to use regular expressions,
             so *filter* ``cattrs={b'comment': b'hi(.)'}`` will match.
@@ -158,6 +180,7 @@ class SearchFilter:
     """
     def __init__(self, **kwargs):
         self.in_filters = {
+            'scope':     _TypeList(str),
             'cattrs':    _TypeList(dict),
             'file_path': _TypeList(str),
             'file_name': _TypeList(str),
