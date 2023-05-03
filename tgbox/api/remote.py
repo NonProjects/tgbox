@@ -1831,7 +1831,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             # to use a '/' symbol in filename, so instead of / we use
             # a '@' while creating path. You can refer to it as root.
             path = str(self._defaults.DEF_NO_FOLDER if not path else path)
-            path = make_general_path(path) # To support Windows path on UNIX
+            path = str(make_general_path(path)) # To support Windows path on UNIX
             #
             if path.startswith('/'):
                 path = str(Path('@', path.lstrip('/')))
