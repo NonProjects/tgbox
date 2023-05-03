@@ -50,7 +50,6 @@ TGBOX: encrypted cloud storage based on Telegram
 
             # Preparing for upload. Will return a PreparedFile object
             pf = await dlb.prepare_file(open(file_to_upload,'rb'))
-
             # Uploading PreparedFile to Remote and getting DecryptedRemoteBoxFile
             drbf = await drb.push_file(pf, progress_callback=PROGRESS_CALLBACK)
 
@@ -62,7 +61,7 @@ TGBOX: encrypted cloud storage based on Telegram
             # the RemoteBoxFile you need from the LocalBox
             dlbf = await dlb.get_file(drbf.id)
 
-            print('File size:', dlbf.size)
+            print('File size:', dlbf.size, 'bytes')
             print('File path:', dlbf.file_path)
 
             # Downloading your [already uploaded] file from Remote.
@@ -70,7 +69,7 @@ TGBOX: encrypted cloud storage based on Telegram
 
             # Close all connections
             # after work was done
-            await erb.done()
+            await drb.done()
             await dlb.done()
 
         asyncio_run(main())
