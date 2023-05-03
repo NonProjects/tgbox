@@ -8,16 +8,21 @@ from pprint import pformat
 from hashlib import sha256
 from random import randrange
 
+from typing import (
+    BinaryIO, Optional, Dict,
+    Generator, Union
+)
 from subprocess import PIPE, run as subprocess_run
-from typing import BinaryIO, Optional, Dict, Generator
 
 from io import BytesIO
 from os import PathLike
-from pathlib import Path
 from functools import partial
 
 from re import search as re_search
 from os import remove as remove_file
+
+from platform import system as platform_system
+from pathlib import PureWindowsPath, Path
 
 from .errors import (
     ConcatError,
@@ -449,6 +454,22 @@ def bytes_to_int(bytes_: bytes, signed: Optional[bool] = False) -> int:
     """Converts bytes to int with Big byteorder."""
     return int.from_bytes(bytes_, 'big', signed=signed)
 
+def make_general_path(path: Union[str, Path]) -> Path:
+    """
+    This function will make a valid
+    UNIX-like Path from the Windows-like
+    on the UNIX-like systems.
+    """
+    # Windows can support UNIX-like paths
+    if platform_system().lower() == 'windows':
+        return Path(path) if isinstance(path, str) else path
+
+    path = path if isinstance(path, str) else str(path)
+
+    if (win_path := PureWindowsPath(path)).drive:
+        return Path(*win_path.parts)
+
+    return Path(path)
 
 async def anext(aiterator, default=...):
     """Analogue to Python 3.10+ anext()"""
