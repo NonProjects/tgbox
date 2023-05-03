@@ -6,7 +6,7 @@ from typing import (
     BinaryIO, Union, NoReturn, Callable,
     AsyncGenerator, List, Dict, Optional
 )
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 
 from os import PathLike
 from traceback import format_exc
@@ -59,7 +59,8 @@ from ..errors import (
 )
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter, OpenPretender,
-    pad_request_size, PackedAttributes, prbg, anext
+    pad_request_size, PackedAttributes, prbg, anext,
+    make_general_path
 )
 from .utils import (
     TelegramClient, RemoteBoxDefaults,
@@ -1826,18 +1827,11 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             path = self._defaults.DEF_UNK_FOLDER if hide_folder else self._file_path
             # The first '/' symbol in '/home/non/' is also path part,
             # so we need to create a folders like / -> home -> non,
-            # however, Linux (and i believe all Unix) OS doesn't allow
+            # however, Linux (and i believe all UNIX) OS doesn't allow
             # to use a '/' symbol in filename, so instead of / we use
             # a '@' while creating path. You can refer to it as root.
             path = str(self._defaults.DEF_NO_FOLDER if not path else path)
-            # Here we will check if file path is Windows-
-            # like path, and if it is, then we will
-            # reconstruct it from its parts. This
-            # will make a correct download Path
-            # if we're on a Unix-like system
-            win_path = PureWindowsPath(path)
-            if win_path.drive:
-                path = str(Path(*win_path.parts))
+            path = make_general_path(path) # To support Windows path on UNIX
             #
             if path.startswith('/'):
                 path = str(Path('@', path.lstrip('/')))
