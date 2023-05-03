@@ -1830,7 +1830,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             # however, Linux (and i believe all UNIX) OS doesn't allow
             # to use a '/' symbol in filename, so instead of / we use
             # a '@' while creating path. You can refer to it as root.
-            path = str(self._defaults.DEF_NO_FOLDER if not path else path)
+            path = self._defaults.DEF_NO_FOLDER if not path else path
             path = str(make_general_path(path)) # To support Windows path on UNIX
             #
             if path.startswith('/'):
