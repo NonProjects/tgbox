@@ -144,8 +144,8 @@ class SearchFilter:
             row from the LocalBox DB, decrypt Metadata and
             compare its values with ones from ``SearchFilter``.
 
-            !: The ``scope`` will be ignored on *RemoteBox* search.
-            !: The ``min_id`` & ``max_id`` will be ignored if ``scope`` used.
+            | !: The ``scope`` will be ignored on *RemoteBox* search.
+            | !: The ``min_id`` & ``max_id`` will be ignored if ``scope`` used.
 
         * **id** *integer*: File ID
 

@@ -239,18 +239,29 @@ async def search_generator(
     if it_messages:
         iter_from = it_messages
     else:
-        if sf.in_filters['scope']:
+        if any((sf.in_filters['scope'], sf.ex_filters['scope'])):
+            if not sf.in_filters['scope']:
+                lbf = await anext(lb.files(), None)
+                if not lbf: return # Local doesn't have files
+
             async def scope_generator(scope: Union[str, list]):
+                scope = scope if scope else DirectoryRoot
                 scope = scope if isinstance(scope, _TypeList) else [scope]
 
                 for current_scope in scope:
-                    if hasattr(current_scope, '_part_id'):
-                        directory = current_scope
+                    if current_scope is DirectoryRoot:
+                        iterdir = lbf.directory.iterdir(ppid=current_scope)
 
-                    elif not (directory := await lb.get_directory(current_scope)):
-                        return
+                    elif hasattr(current_scope, '_part_id'):
+                        iterdir = current_scope.iterdir()
 
-                    async for content in directory.iterdir():
+                    else:
+                        iterdir = await lb.get_directory(current_scope)
+                        if not iterdir:
+                            return
+                        iterdir = iterdir.iterdir()
+
+                    async for content in iterdir:
                         if hasattr(content, '_part_id'):
                             # This is DecryptedLocalBoxDirectory
                             if str(content) in sf.ex_filters['scope']:
