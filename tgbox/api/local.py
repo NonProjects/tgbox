@@ -50,7 +50,7 @@ from ..tools import (
 )
 from .utils import (
     DirectoryRoot, search_generator, PreparedFile,
-    _TelegramVirtualFile, TelegramClient,
+    TelegramVirtualFile, TelegramClient,
     DefaultsTableWrapper, RemoteBoxDefaults
 )
 from .db import TgboxDB
@@ -1248,7 +1248,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     yield file
 
     async def prepare_file(
-            self, file: Union[BinaryIO, bytes, Document, Photo],
+            self, file: Union[BinaryIO, bytes, TelegramVirtualFile],
             file_size: Optional[int] = None,
             file_path: Optional[Path] = None,
             cattrs: Optional[Dict[str, Union[bytes]]] = None,
@@ -1257,7 +1257,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         Prepares your file for ``RemoteBox.push_file``
 
         Arguments:
-            file (``BinaryIO``, ``BytesIO``):
+            file (``BinaryIO``, ``bytes``, ``TelegramVirtualFile``):
                 ``file`` data to add to the LocalBox. In most
                 cases it's just opened file. If you want to upload
                 something else, then you need to implement class
@@ -1305,20 +1305,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
         file_salt, file_iv = get_rnd_bytes(32), get_rnd_bytes(16)
         filekey = make_filekey(self._mainkey, file_salt)
 
-        if isinstance(file, (Document, Photo)):
+        if isinstance(file, TelegramVirtualFile):
             logger.info('Trying to make a PreparedFile from Telegram file...')
-
-            if not self._session:
-                raise NotEnoughRights(
-                    '''You need to decrypt LocalBox with BaseKey, '''
-                    '''MainKey is not enough. Session is None.'''
-                )
-            file = _TelegramVirtualFile(
-                file, self._session,
-                self._api_id, self._api_hash
-            )
-            # We will call get_preview
-            make_preview = False
 
         if file_path is None:
             if hasattr(file,'name') and file.name:
@@ -1343,7 +1331,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         await self._check_fingerprint(file_fingerprint)
 
         if not file_size:
-            if isinstance(file, _TelegramVirtualFile):
+            if isinstance(file, TelegramVirtualFile):
                 file_size = file.size
             else:
                 logger.debug('file_size is not specified')
@@ -1382,7 +1370,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         if file_size <= 0:
             raise InvalidFile('Specified file is empty or file_size in invalid')
 
-        if isinstance(file, _TelegramVirtualFile):
+        if isinstance(file, TelegramVirtualFile):
             if file.mime:
                 mime_type = file.mime
                 file_type = mime_type.split('/')[0]
@@ -1403,23 +1391,25 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         preview, duration = b'', 0
 
-        if isinstance(file, _TelegramVirtualFile):
-            preview = await file.get_preview()
-            duration = file.duration
-        else:
-            if make_preview and file_type in ('audio','video','image'):
-                try:
-                    logger.debug(f'Trying to make_media_preview({file.name})...')
-                    preview = (await make_media_preview(file.name)).read()
-                except PreviewImpossible:
-                    logger.debug(f'Failed! Probably because {file.name} is not a media.')
+        if isinstance(file, TelegramVirtualFile):
+            if make_preview:
+                preview = await file.get_preview()
 
-                if file_type in ('audio','video'):
-                    try:
-                        logger.debug(f'Trying to get_media_duration({file.name})...')
-                        duration = await get_media_duration(file.name)
-                    except DurationImpossible:
-                        logger.debug(f'Failed! Probably because {file.name} is not a media.')
+            duration = file.duration
+
+        elif make_preview and file_type in ('audio','video','image'):
+            try:
+                logger.debug(f'Trying to make_media_preview({file.name})...')
+                preview = (await make_media_preview(file.name)).read()
+            except PreviewImpossible:
+                logger.debug(f'Failed! Probably because {file.name} is not a media.')
+
+            if file_type in ('audio','video'):
+                try:
+                    logger.debug(f'Trying to get_media_duration({file.name})...')
+                    duration = await get_media_duration(file.name)
+                except DurationImpossible:
+                    logger.debug(f'Failed! Probably because {file.name} is not a media.')
 
         # --- Start constructing metadata here --- #
 

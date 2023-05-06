@@ -63,8 +63,9 @@ from ..tools import (
     make_general_path
 )
 from .utils import (
-    TelegramClient, RemoteBoxDefaults,
-    DefaultsTableWrapper, search_generator
+    TelegramClient, TelegramVirtualFile,
+    RemoteBoxDefaults, DefaultsTableWrapper,
+    search_generator
 )
 __all__ = [
     'make_remotebox',

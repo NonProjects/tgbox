@@ -185,6 +185,51 @@ class TelegramClient(TTelegramClient):
         return await self(ResendCodeRequest(
             self._phone_number, sent_code.phone_code_hash)
         )
+
+class TelegramVirtualFile:
+    """
+    You can use this class for re-upload to RemoteBox
+    files that already was uploaded to any other
+    Telegram chat. Wrap it over ``Document`` and
+    specify in the ``DecryptedLocalBox.prepare_file``
+    """
+    def __init__(self, document: Union[Photo, Document], tc: TelegramClient):
+        self.tc = tc
+        self.document = document
+
+        file = File(document)
+
+        self.name = file.name
+        self.size = file.size
+        self.mime = file.mime_type
+
+        self.duration = file.duration\
+            if file.duration else 0
+
+        self._downloader = None
+
+    async def get_preview(self, quality: int=1) -> bytes:
+        if hasattr(self.document,'sizes')\
+            and not self.document.sizes:
+                return b''
+
+        if hasattr(self.document,'thumbs')\
+            and not self.document.thumbs:
+                return b''
+
+        return await self.tc.download_media(
+            message = self.document,
+            thumb = quality, file = bytes
+        )
+    async def read(self, size: int=-1) -> bytes:
+        """Will return <= 512KiB of data. 'size' ignored"""
+        if not self._downloader:
+            self._downloader = download_file(
+                self.tc, self.document
+            )
+        chunk = await anext(self._downloader)
+        return chunk
+
 @dataclass
 class PreparedFile:
     """
@@ -475,66 +520,6 @@ async def search_generator(
         else:
             logger.debug(f'SearchFilter mismatch ID{file.id} [{yield_result}]')
             continue
-
-class _TelegramVirtualFile:
-    """
-    We use this class for re-upload to RemoteBox
-    files that already was uploaded to any other
-    Telegram chat. That's only for internal use.
-    """
-    def __init__(
-            self, document: Union[Photo, Document],
-            session: StringSession,
-            api_id: int, api_hash: str):
-
-        self.downloader = None
-        self.document = document
-
-        self.tc = TelegramClient(
-            session=session,
-            api_id=api_id,
-            api_hash=api_hash
-        )
-        self.tc = self.tc.connect()
-        self._client_initialized = False
-
-        file = File(document)
-
-        self.name = file.name
-        self.size = file.size
-        self.mime = file.mime_type
-
-        self.duration = file.duration\
-            if file.duration else 0
-
-    async def get_preview(self, quality: int=1) -> bytes:
-        if not self._client_initialized:
-            self.tc = await self.tc # connect
-            self._client_initialized = True
-
-        if hasattr(self.document,'sizes')\
-            and not self.document.sizes:
-                return b''
-
-        if hasattr(self.document,'thumbs')\
-            and not self.document.thumbs:
-                return b''
-
-        return await self.tc.download_media(
-            message = self.document,
-            thumb = quality, file = bytes
-        )
-    async def read(self, size: int) -> bytes:
-        if not self._client_initialized:
-            self.tc = await self.tc
-            self._client_initialized = True
-
-        if not self.downloader:
-            self.downloader = download_file(
-                self.tc, self.document
-            )
-        chunk = await anext(self.downloader)
-        return chunk
 
 class DefaultsTableWrapper:
     """
