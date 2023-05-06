@@ -1,5 +1,13 @@
 from setuptools import setup
 from ast import literal_eval
+from sys import version_info
+
+
+CURRENT_PYTHON = version_info[:2]
+REQUIRED_PYTHON = (3, 8)
+
+if CURRENT_PYTHON < REQUIRED_PYTHON:
+    raise RuntimeError('The \'tgbox\' library require Python v3.8+')
 
 
 with open('tgbox/version.py', encoding='utf-8') as f:
