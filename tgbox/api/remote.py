@@ -1061,7 +1061,7 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
         self._dlb = dlb
 
         if self._dlb:
-            logger.debug('DecryptedLocalBox is decrypted with the DLB')
+            logger.debug('DecryptedRemoteBox is decrypted with the DLB')
             self._mainkey = self._dlb._mainkey
             self._defaults = self._dlb._defaults
         else:
@@ -1069,10 +1069,10 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
                 raise ValueError('Must be specified at least key or dlb')
 
             if isinstance(key, (MainKey, ImportKey)):
-                logger.debug('DecryptedLocalBox is decrypted with the MainKey')
+                logger.debug('DecryptedRemoteBox is decrypted with the MainKey')
                 self._mainkey = MainKey(key.key)
             elif isinstance(key, BaseKey):
-                logger.debug('DecryptedLocalBox is decrypted with the BaseKey>MainKey')
+                logger.debug('DecryptedRemoteBox is decrypted with the BaseKey->MainKey')
                 self._mainkey = make_mainkey(key, self._box_salt)
             else:
                 raise IncorrectKey('key is not Union[MainKey, ImportKey, BaseKey]')
