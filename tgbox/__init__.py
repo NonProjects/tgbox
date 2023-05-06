@@ -20,7 +20,10 @@ __all__ = [
     'version',
     'sync',
 ]
-import logging; logger = logging.getLogger(__name__)
+import logging
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 
 import sys
 
