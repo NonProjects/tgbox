@@ -552,7 +552,8 @@ class EncryptedLocalBox:
     async def files(
             self, cache_preview: bool=True,
             min_id: Optional[int] = None,
-            max_id: Optional[int] = None)\
+            max_id: Optional[int] = None,
+            ids: Optional[int, list] = None)\
             -> Union[
                 'DecryptedLocalBoxFile',
                 'EncryptedLocalBoxFile', None
@@ -573,14 +574,24 @@ class EncryptedLocalBox:
 
             max_id (``bool``, optional):
                 Will iterate up to this ID.
+
+            ids (``int``, ``list``, optional):
+                ID or list with IDs you want to
+                fetch. If specified, The min_id
+                and max_id args will be ignored
         """
-        min_id = f'ID >= {min_id}' if min_id else ''
-        max_id = f'ID <= {max_id}' if max_id else ''
+        if ids:
+            ids = str(tuple(ids)) if len(ids) > 1 else f'({ids[0]})'
+            sql_query = f'SELECT ID FROM FILES WHERE ID IN {ids}'
+        else:
+            min_id = f'ID >= {min_id}' if min_id else ''
+            max_id = f'ID <= {max_id}' if max_id else ''
 
-        min_id = min_id + ' AND' if all((min_id,max_id)) else min_id
-        where = 'WHERE' if any((min_id, max_id)) else ''
+            min_id = min_id + ' AND' if all((min_id,max_id)) else min_id
+            where = 'WHERE' if any((min_id, max_id)) else ''
 
-        sql_query = f'SELECT ID FROM FILES {where} {min_id} {max_id}'
+            sql_query = f'SELECT ID FROM FILES {where} {min_id} {max_id}'
+
         logger.debug(sql_query)
         cursor = await self._tgbox_db.FILES.execute((sql_query ,()))
 

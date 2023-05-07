@@ -64,6 +64,9 @@ class _TypeList:
     def __bool__(self):
         return bool(self.list)
 
+    def __len__(self):
+        return len(self.list)
+
     def __iter__(self):
         for i in self.list:
             yield i
