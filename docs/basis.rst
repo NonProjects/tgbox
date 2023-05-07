@@ -25,7 +25,7 @@ Abstract Box
 Encryption keys hierarchy
 -------------------------
 
-0. The user should provide a password to his Box. We can recommend him to use inbuilt in TGBOX *Phrase*, which is 12 random mnemonic words that can be generated via ``tgbox.keys.Phrase.generate()``. With the user's phrase (or password) we make the first encryption Key, – ``BaseKey``;
+0. The user should provide a password to his Box. We can recommend him to use inbuilt in TGBOX *Phrase*, which is 6 random mnemonic words that can be generated via ``tgbox.keys.Phrase.generate()``. With the user's phrase (or password) we make the first encryption Key, – ``BaseKey``;
 
 1. By default in API for ``BaseKey`` creation we use the ``tgbox.keys.make_basekey`` function, which utilize a *Scrypt* KDF under the hood. It's configured to use a **1GB** of RAM for key creation for a couple of seconds. We use such configuration for purpose of making user's phrase bruteforce **a lot** harder. The Scrypt KDF requires *salt*, and we use the one defined in the ``defaults.Scrypt.SALT``. Specifying different scrypt_salt on ``BaseKey`` creation will make bruteforce impossible if you will keep it secret. In the end we hash a Scrypt result with a ``sha256``. Please note that you can use any KDF you want, we don't force developers to use Scrypt, just make sure that resulted key is 32-byte long and wrapped in the ``tgbox.keys.BaseKey`` class. We see a Scrypt and our configuration as a safe and good standart. We use ``BaseKey`` for encrypting Telegram session and making the next key: ``MainKey``;
 
@@ -76,8 +76,8 @@ Let's analyze *RemoteBox* sharing, there is no difference with file sharing.
 - **2. B gets EncryptedRemoteBox and calls get_requestkey on it**
 
   Every *RemoteBox* has *BoxSalt*. The *RemoteBox* store it in
-  channel description, encoded by url safe base64. From concated
-  *BoxSalt* and B's new ``BaseKey`` we make a `sha256 hash <https://en.wikipedia.org/wiki/SHA-2#Test_vectors>`_. This
+  channel description, encoded by UrlSafeBase64. From concated
+  *BoxSalt* and B's new ``BaseKey`` we make a `SHA256 hash <https://en.wikipedia.org/wiki/SHA-2#Test_vectors>`_. This
   hash acts as *private key* for ECDH on `secp256k1 curve <https://en.bitcoin.it/wiki/Secp256k1>`_. We
   create *public key* from this *private key*, `compress it <https://bitcoin.stackexchange.com/a/69322>`_,
   and return (``get_requestkey``) ``RequestKey(compressed_pubkey)``. Generally,
@@ -85,29 +85,32 @@ Let's analyze *RemoteBox* sharing, there is no difference with file sharing.
 
 - **3. A receives RequestKey from B**
 
-  Can be done with Telethon / Telegram or any other
+  Can be done with Telegram or **any other**
   insecure communication canal.
 
 - **4. A makes ShareKey with B's RequestKey and sends it to B**
 
-  1. A makes own *private key* similarly to B, with
-     ``sha256(a_mainkey + box_salt)``, extracts B's pubkey from
-     ``RequestKey`` and makes a shared 32byte-secret with
-     ``ECDH(a_privkey, b_pubkey, secp256k1)``. This is
-     encryption key for AES CBC;
+  1. A creates her own *private key* similarly to B, with the difference
+     only in the salt. While Bob makes a *private key* and then
+     *public key* (= ``RequestKey``) from the ``BaseKey`` concated
+     with the *BoxSalt*, the Alice makes *private key* from the
+     ``sha256(a_mainkey + sha256(box_salt + b_requestkey))``. Then
+     she extracts *pubkey* from B's ``RequestKey`` and makes a
+     shared 32 byte-secret with ``ECDH(a_privkey, b_pubkey, secp256k1)``.
+     **Shared secret hashed with SHA256**. This is encryption key for AES CBC;
 
-  2. A makes sha256 hash from B's ``RequestKey`` and takes
-     first 16 bytes from result, this is IV.
+  2. A makes SHA256 hash from B's ``RequestKey`` and takes
+     first 16 bytes from result, this is AES-CBC IV.
 
   3. A encrypts her ``MainKey`` with shared secret and IV. Let's call
      result as *eMainKey*. After this she constructs ``ShareKey`` as
      follows: ``ShareKey(e_mainkey + a_pubkey)``. We don't concat
-     IV to the ``ShareKey`` because Bob can extract it from ``RequestKey``.
+     IV to the ``ShareKey`` because B can extract it from ``RequestKey``.
 
-- **5. B makes ImportKey with A's ShareKey, decrypts EncryptedRemoteBox and clones it.**
+- **5. B make ImportKey with A's ShareKey, decrypt EncryptedRemoteBox and clone it.**
 
   Bob repeats second step, extracts IV and receives b_privkey. After,
-  makes shared secret as 4.1 and decrypts ``eMainKey``. This can be
+  makes shared secret (as 4.1) and decrypts ``eMainKey``. This can be
   done with ``keys.make_importkey`` function. Transfer complete.
 
 A bit about PackedAttributes
