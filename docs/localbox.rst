@@ -9,7 +9,7 @@ The *LocalBox* store **metadata** of the uploaded to the :doc:`remotebox` *Remot
 Tables
 ------
 
-*LocalBox* have 3 tables: *BOX_DATA*, *FILES*, *PATH_PARTS*.
+*LocalBox* have 4 tables: *BOX_DATA*, *FILES*, *PATH_PARTS* and *DEFAULTS*.
 
 BOX_DATA
 ^^^^^^^^
@@ -71,3 +71,21 @@ Our file in *LocalBox* will store last PartID of the *Documents* folder: H(*3*) 
 
 .. warning::
    In a previous versions we stored just encrypted file paths and *FolderID*. With this, navigation over files was a **really** awfull but this had a little benefit: there was a **zero** information about the file directory structure (because it wasn't :)). Now, if attacker will have a full access to your ``EncryptedLocalBox`` he can read that our *file.txt* have ``ENCRYPTED/ENCRYPTED/ENCRYPTED/ENCRYPTED/ENCRYPTED_FILE`` (the first ``ENCRYPTED`` is ``/``) absolute path and **nothing more**. He will also know that first path part (H(*0*)) is probably ``/`` or ``C:\\`` (anchors), but can't guarantee this. Attacker without your decryption key **will not** know **any** info about the files or folders, even its names. AES CBC that we're using in TGBOX is **resistant** to the *Known-plaintext attack*, so knowing that there might be ``/`` **will not** give any critical information like decryption key.
+
+DEFAULTS
+^^^^^^^^
+
+*DEFAULTS* store some of the default TGBOX values
+
+============ ============= ============= ============= ==============
+METADATA_MAX FILE_PATH_MAX DOWNLOAD_PATH DEF_NO_FOLDER DEF_UNK_FOLDER
+============ ============= ============= ============= ==============
+INTEGER      INTEGER       TEXT          TEXT          TEXT
+============ ============= ============= ============= ==============
+
+.. note::
+   - ``METADATA_MAX`` is the bytesize limit of the TGBOX file metadata
+   - ``FILE_PATH_MAX`` is the bytesize limit of the file path
+   - ``DOWNLOAD_PATH`` is the default download path
+   - ``DEF_NO_FOLDER`` is the default folder when file path is not specified on uploading/importing
+   - ``DEF_UNK_FOLDER`` is the default folder to which files will be placed on download if ``hide_folder`` is ``True``
