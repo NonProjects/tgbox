@@ -7,7 +7,7 @@ from typing import (
     AsyncGenerator, List, Dict, Optional
 )
 from pathlib import Path
-from asyncio import gather
+from asyncio import gather, sleep
 
 from os import PathLike
 from traceback import format_exc
@@ -483,17 +483,22 @@ class EncryptedRemoteBox:
 
     async def files(
             self, key: Optional[Union[MainKey, FileKey]] = None,
-            dlb: Optional['DecryptedLocalBox'] = None, *,
+            dlb: Optional['DecryptedLocalBox'] = None,
+            *,
             ignore_errors: bool=True,
             return_imported_as_erbf: bool=False,
             limit: Optional[int] = None,
-            offset_id: int=0, max_id: int=0,
-            min_id: int=0, add_offset: int=0,
+            offset_id: int=0,
+            max_id: int=0,
+            min_id: int=0,
+            add_offset: int=0,
             search: Optional[str] = None,
             from_user: Optional[Union[str, int]] = None,
             wait_time: Optional[float] = None,
             ids: Optional[Union[int, List[int]]] = None,
-            reverse: bool=False, decrypt: bool=True,
+            reverse: bool=False,
+            decrypt: bool=True,
+            timeout: int=10,
             cache_preview: bool=True,
             erase_encrypted_metadata: bool=True) -> AsyncGenerator[
                 Union['EncryptedRemoteBoxFile',
@@ -591,6 +596,11 @@ class EncryptedRemoteBox:
                 parameter is reversed, although ``offset_id`` still be exclusive.
                 ``min_id`` becomes equivalent to ``offset_id`` instead of being ``max_id``
                 as well since files are returned in ascending order.
+
+            timeout (``int``, optional):
+                How many seconds generator will sleep at every 1000 file.
+                By default it's 10 seconds. Don't use too low timeouts,
+                you will receive FloodWaitError otherwise (TGBOX).
 
             decrypt (``bool``, optional):
                 Returns ``DecryptedRemoteBoxFile`` if ``True`` (default),
@@ -737,7 +747,13 @@ class EncryptedRemoteBox:
                             m, self._tc, cache_preview=cache_preview,
                             defaults=self._defaults).decrypt(dlb_file._filekey)
 
+        processed_messages = 0
         while True:
+            # Sleep `timeout` seconds every 1000 files
+            if processed_messages % 1000 == 0:
+                logger.debug(f'Sleep {timeout=} seconds...')
+                await sleep(timeout)
+
             logger.debug('Receiving the new chunk of messages...')
 
             messages_chunk = []
@@ -747,6 +763,7 @@ class EncryptedRemoteBox:
                 except StopAsyncIteration:
                     break
 
+            processed_messages += len(messages_chunk)
             logger.debug(f'Chunk length = {len(messages_chunk)}')
 
             if not messages_chunk:
