@@ -728,12 +728,16 @@ class EncryptedRemoteBox:
                             defaults=self._defaults).decrypt(dlb_file._filekey)
 
         while True:
+            logger.debug('Receiving the new chunk of messages...')
+
             messages_chunk = []
             for _ in range(100):
                 try:
                     messages_chunk.append(rbf_wrapper(await anext(it_messages)))
                 except StopAsyncIteration:
                     break
+
+            logger.debug(f'Chunk length = {len(messages_chunk)}')
 
             if not messages_chunk:
                 break
