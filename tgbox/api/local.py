@@ -37,10 +37,10 @@ from ..keys import (
 from ..defaults import PREFIX, VERBYTE, DEF_TGBOX_NAME
 
 from ..errors import (
-    LimitExceeded, DurationImpossible, InvalidFile,
-    NotEnoughRights, IncorrectKey, FingerprintExists,
-    NotInitializedError, AlreadyImported, RemoteFileNotFound,
-    InUseException, AESError, PreviewImpossible, RemoteBoxInaccessible
+    LimitExceeded, DurationImpossible, NotEnoughRights,
+    IncorrectKey, FingerprintExists, NotInitializedError,
+    AlreadyImported, RemoteFileNotFound, InUseException,
+    AESError, PreviewImpossible, RemoteBoxInaccessible
 )
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter,
