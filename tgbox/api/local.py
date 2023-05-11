@@ -1396,9 +1396,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
                         file = BytesIO(rb)
                         del rb
 
-        if file_size <= 0:
-            raise InvalidFile('Specified file is empty or file_size in invalid')
-
         if isinstance(file, TelegramVirtualFile):
             if file.mime:
                 mime_type = file.mime
