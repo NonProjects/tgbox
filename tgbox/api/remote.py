@@ -7,6 +7,7 @@ from typing import (
     AsyncGenerator, List, Dict, Optional
 )
 from pathlib import Path
+from asyncio import gather
 
 from os import PathLike
 from traceback import format_exc
@@ -620,125 +621,125 @@ class EncryptedRemoteBox:
             search=search, from_user=from_user, wait_time=wait_time,
             ids=ids, reverse=reverse
         )
-        async for m in it_messages:
-            if not m and ignore_errors:
-                continue
+        async def rbf_wrapper(m):
+            if not m or not m.document:
+                return
 
-            elif not m and not ignore_errors:
-                raise RemoteFileNotFound('One of requsted by you file doesn\'t exist')
+            if not decrypt:
+                logger.debug(
+                    '''Decryption is disabled, will try to '''
+                    '''yield EncryptedRemoteBoxFile''')
+                try:
+                    return await EncryptedRemoteBoxFile(
+                        m, self._tc, cache_preview=cache_preview,
+                        defaults=self._defaults).init()
 
-            if m.document:
-                logger.debug(f'Found Document: {m.file.name[:12]}...(ID{m.id})')
-
-                if not decrypt:
+                except NotATgboxFile:
                     logger.debug(
-                        '''Decryption is disabled, will try to '''
-                        '''yield EncryptedRemoteBoxFile''')
+                       f'''Document: {m.file.name[:12]}...(ID{m.id}) '''
+                        '''is not a TGBOX file, skipping.'''
+                    )
+                    return
+
+            logger.debug(
+                '''Decryption is enabled, will try to '''
+                '''yield DecryptedRemoteBoxFile''')
+            try:
+                return await EncryptedRemoteBoxFile(
+                    m, self._tc, cache_preview=cache_preview,
+                    defaults=self._defaults).decrypt(
+                        key, erase_encrypted_metadata)
+
+            except Exception as e: # In case of imported file
+                logger.debug(
+                    '''Failed to decrypt EncryptedRemoteBoxFile '''
+                   f'''(ID{m.id}), it seems that file is imported/'''
+                   f'''non-TGBOX [{e}]'''
+                )
+                if return_imported_as_erbf and not dlb:
+                    logger.debug(
+                        '''return_imported_as_erbf is True & DLB '''
+                        '''is not specified, so will return ERBF''')
                     try:
-                        rbf = await EncryptedRemoteBoxFile(
+                        return await EncryptedRemoteBoxFile(
                             m, self._tc, cache_preview=cache_preview,
                             defaults=self._defaults).init()
 
-                    except NotATgboxFile as e:
-                        if ignore_errors:
-                            logger.debug(
-                               f'''Document: {m.file.name[:12]}...(ID{m.id}) '''
-                                '''is not a TGBOX file, skipping.'''
-                            )
-                            continue
-                        raise e
-                else:
-                    logger.debug(
-                        '''Decryption is enabled, will try to '''
-                        '''yield DecryptedRemoteBoxFile''')
-                    try:
-                        rbf = await EncryptedRemoteBoxFile(
-                            m, self._tc, cache_preview=cache_preview,
-                            defaults=self._defaults).decrypt(
-                                key, erase_encrypted_metadata)
-
-                    except Exception as e: # In case of imported file
+                    except NotATgboxFile:
                         logger.debug(
-                            '''Failed to decrypt EncryptedRemoteBoxFile '''
-                           f'''(ID{m.id}), it seems that file is imported/'''
-                           f'''non-TGBOX [{e}]'''
+                           f'''Document: {m.file.name[:12]}...(ID{m.id}) '''
+                            '''is not a TGBOX file, skipping.'''
                         )
-                        if return_imported_as_erbf and not dlb:
-                            logger.debug(
-                                '''return_imported_as_erbf is True & DLB '''
-                                '''is not specified, so will return ERBF''')
+                        return
+
+                elif ignore_errors and not dlb:
+                    logger.debug(
+                        '''return_imported_as_erbf is False & DLB '''
+                        '''is not specified, ignore_errors is True '''
+                        '''so we will continue iteration for other.'''
+                    )
+                    return
+
+                elif not ignore_errors and not dlb:
+                    raise IncorrectKey(
+                        'File is imported. Try to specify dlb?') from None
+
+                elif dlb:
+                    logger.debug('DLB is specified, will try to fetch FileKey from it.')
+                    # We try to fetch FileKey of imported file from DLB.
+                    dlb_file = await dlb.get_file(m.id, cache_preview=False)
+
+                    # If we haven't imported this file to DLB
+                    if not dlb_file:
+                        if return_imported_as_erbf:
                             try:
-                                rbf = await EncryptedRemoteBoxFile(
+                                logger.debug(
+                                   f'''DLB is specified, but FileKey to {m.id} is not '''
+                                    '''present in it. return_imported_as_erbf is True, '''
+                                    '''so we will return ERBF.'''
+                                )
+                                return await EncryptedRemoteBoxFile(
                                     m, self._tc, cache_preview=cache_preview,
                                     defaults=self._defaults).init()
 
-                            except NotATgboxFile as exc:
-                                if ignore_errors:
-                                    logger.debug(
-                                       f'''Document: {m.file.name[:12]}...(ID{m.id}) '''
-                                        '''is not a TGBOX file, skipping.'''
-                                    )
-                                    continue
-                                raise exc
+                            except NotATgboxFile:
+                                logger.debug(
+                                   f'''Document: {m.file.name[:12]}...(ID{m.id}) '''
+                                    '''is not a TGBOX file, skipping.'''
+                                )
+                                return
 
-                        elif ignore_errors and not dlb:
+                        elif ignore_errors:
                             logger.debug(
-                                '''return_imported_as_erbf is False & DLB '''
-                                '''is not specified, ignore_errors is True '''
-                                '''so we will continue iteration for other.'''
+                               f'''DLB is specified, but FileKey to ID{m.id} is not '''
+                                '''present in it. return_imported_as_erbf is False, '''
+                                '''so we will skip it and continue iteration.'''
                             )
-                            continue
-
-                        elif not ignore_errors and not dlb:
-                            raise IncorrectKey(
-                                'File is imported. Try to specify dlb?') from None
-                        elif dlb:
-                            logger.debug('DLB is specified, will try to fetch FileKey from it.')
-                            # We try to fetch FileKey of imported file from DLB.
-                            dlb_file = await dlb.get_file(m.id, cache_preview=False)
-
-                            # If we haven't imported this file to DLB
-                            if not dlb_file:
-                                if return_imported_as_erbf:
-                                    try:
-                                        logger.debug(
-                                           f'''DLB is specified, but FileKey to {m.id} is not '''
-                                            '''present in it. return_imported_as_erbf is True, '''
-                                            '''so we will return ERBF.'''
-                                        )
-                                        rbf = await EncryptedRemoteBoxFile(
-                                            m, self._tc, cache_preview=cache_preview,
-                                            defaults=self._defaults).init()
-
-                                    except NotATgboxFile as exc:
-                                        if ignore_errors:
-                                            logger.debug(
-                                               f'''Document: {m.file.name[:12]}...(ID{m.id}) '''
-                                                '''is not a TGBOX file, skipping.'''
-                                            )
-                                            continue
-                                        raise exc
-
-                                elif ignore_errors:
-                                    logger.debug(
-                                       f'''DLB is specified, but FileKey to ID{m.id} is not '''
-                                        '''present in it. return_imported_as_erbf is False, '''
-                                        '''so we will skip it and continue iteration.'''
-                                    )
-                                    continue
-                                else:
-                                    raise NotImported(
-                                        """You don\'t have FileKey for this file. """
-                                        """Set to True ``return_imported_as_erbf``?"""
-                                    ) from None
-                            else:
-                                # We already imported file, so DLB contains a FileKey
-                                rbf = await EncryptedRemoteBoxFile(
-                                    m, self._tc, cache_preview=cache_preview,
-                                    defaults=self._defaults).decrypt(dlb_file._filekey)
+                            return
                         else:
-                            raise e # Unknown Exception
-                yield rbf
+                            raise NotImported(
+                                """You don\'t have FileKey for this file. """
+                                """Set to True ``return_imported_as_erbf``?"""
+                            ) from None
+                    else:
+                        # We already imported file, so DLB contains a FileKey
+                        return await EncryptedRemoteBoxFile(
+                            m, self._tc, cache_preview=cache_preview,
+                            defaults=self._defaults).decrypt(dlb_file._filekey)
+
+        while True:
+            messages_chunk = []
+            for _ in range(100):
+                try:
+                    messages_chunk.append(rbf_wrapper(await anext(it_messages)))
+                except StopAsyncIteration:
+                    break
+
+            if not messages_chunk:
+                break
+
+            for drbf in (drbfiles := await gather(*messages_chunk)):
+                if drbf: yield drbf
 
     async def search_file(
             self,
