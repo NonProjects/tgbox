@@ -747,10 +747,10 @@ class EncryptedRemoteBox:
                             m, self._tc, cache_preview=cache_preview,
                             defaults=self._defaults).decrypt(dlb_file._filekey)
 
-        processed_messages = 1
+        processed_messages = 0
         while True:
             # Sleep `timeout` seconds every 1000 files
-            if processed_messages % 1000 == 0:
+            if processed_messages and processed_messages % 1000 == 0:
                 logger.debug(f'Sleep {timeout=} seconds...')
                 await sleep(timeout)
 
