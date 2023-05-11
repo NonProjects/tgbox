@@ -1078,7 +1078,17 @@ class DecryptedLocalBox(EncryptedLocalBox):
         # This is drbf2 from the previous loop cycle
         previous_drbf2 = None
 
+        # We will stack here files to import
+        drbf_to_import, IMPORT_WHEN = [], 100
+
+        async def import_stack(stack: list):
+            logger.debug(f'Importing new stack of files [{len(stack)}]')
+            await gather(*stack); stack.clear()
+
         while True:
+            if len(drbf_to_import) >= IMPORT_WHEN:
+                await import_stack(drbf_to_import)
+
             drbf1 = await anext(drbf_generator, None)
             drbf2 = await anext(drbf_generator, None)
 
@@ -1118,8 +1128,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     if hasattr(drbfx, '_filekey'):
                         # We import file if it's DecryptedRemoteBoxFile,
                         # EncryptedRemoteBoxFile doesn't have _filekey
-                        logger.debug(f'Importing ID{drbfx.id} from {drb_box_name}')
-                        await self.import_file(drbfx)
+                        logger.debug(f'Caching import ID{drbfx.id} from {drb_box_name}')
+                        drbf_to_import.append(self.import_file(drbfx))
                     else:
                         logger.debug(
                             '''We don\'t have a FileKey to ID'''
@@ -1150,6 +1160,10 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
                 await self._tgbox_db.FILES.execute(sql_tuple=sql_tuple)
                 break
+
+        # Awaiting remainder of import_file coros
+        if drbf_to_import:
+            await import_stack(drbf_to_import)
 
     async def sync(
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
