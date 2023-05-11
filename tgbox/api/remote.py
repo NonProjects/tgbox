@@ -38,8 +38,6 @@ from telethon.tl.types import (
     Channel, Message, PeerChannel,
     InputMessagesFilterDocument
 )
-from telethon import events
-
 from ..crypto import get_rnd_bytes
 from ..crypto import AESwState as AES
 
@@ -314,17 +312,6 @@ class EncryptedRemoteBox:
             isinstance(other, self.__class__),
             self._box_channel_id == other.box_channel_id
         ))
-    @property
-    def event(self) -> events.NewMessage:
-        """
-        Will return ``events.NewMessage`` for
-        ``Channel`` of this *RemoteBox*.
-
-        You can use it in Telethon's decorator,
-        see *"Events Reference"* in Telethon Docs.
-        """
-        return events.NewMessage(chats=self.box_channel)
-
     @property
     def defaults(self) -> Union[DefaultsTableWrapper, RemoteBoxDefaults]:
         """
