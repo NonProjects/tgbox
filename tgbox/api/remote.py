@@ -20,8 +20,10 @@ from asyncio import iscoroutinefunction
 
 from telethon.utils import resolve_id
 from telethon.tl.custom.file import File
-from telethon.tl.functions.messages import EditChatAboutRequest
 
+from telethon.tl.functions.messages import (
+    EditChatAboutRequest, SearchRequest
+)
 from telethon.errors import (
     ChatAdminRequiredError,
     MediaCaptionTooLongError,
@@ -33,7 +35,8 @@ from telethon.tl.functions.channels import (
     GetFullChannelRequest, DeleteChannelRequest
 )
 from telethon.tl.types import (
-    Channel, Message, PeerChannel
+    Channel, Message, PeerChannel,
+    InputMessagesFilterDocument
 )
 from telethon import events
 
@@ -354,6 +357,26 @@ class EncryptedRemoteBox:
             if msg.document:
                 return msg.id
         return 0
+
+    async def get_files_count(self) -> int:
+        """Returns a total number of files in this *RemoteBox"""
+
+        search = await self._tc(SearchRequest(
+            peer = self._box_channel,
+            filter = InputMessagesFilterDocument(),
+
+            q = '',
+            min_date = None,
+            max_date = None,
+
+            offset_id = 0,
+            add_offset = 0,
+            limit = 0,
+            max_id = 0,
+            min_id = 0,
+            hash = 0
+        ))
+        return search.count
 
     async def get_box_salt(self) -> bytes:
         """

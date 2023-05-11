@@ -424,6 +424,10 @@ class EncryptedLocalBox:
         except StopAsyncIteration:
             return 0
 
+    async def get_files_count(self) -> int:
+        """Returns a total number of files in this *LocalBox"""
+        return await self._tgbox_db.FILES.count_rows()
+
     async def init(self) -> 'EncryptedLocalBox':
         """Will fetch and parse data from Database."""
         logger.debug('EncryptedLocalBox initialization...')
