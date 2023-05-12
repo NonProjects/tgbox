@@ -62,7 +62,7 @@ from ..errors import (
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter, OpenPretender,
     pad_request_size, PackedAttributes, prbg, anext,
-    make_general_path, guess_path_type
+    make_safe_file_path
 )
 from .utils import (
     TelegramClient, TelegramVirtualFile,
@@ -1867,25 +1867,11 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             # In Windows paths [i.e C:\Users\user] the first path
             # part (anchor) is 'C:\\'. We will remove all but
             # letter to prevent strange behaviour on Windows
-            path = self._defaults.DEF_NO_FOLDER if not path else path
-
-            if str(path) in (self._defaults.DEF_UNK_FOLDER, self._defaults.DEF_NO_FOLDER):
-                path_type = None # DEF_UNK_FOLDER/DEF_NO_FOLDER is out of path types
-            else:
-                path_type = guess_path_type(path) # Can be windows || unix
-
-            path = make_general_path(path) # To support Windows path on UNIX
-
-            if path_type == 'unix':
-                # /home/non -> @/home/non
-                path = str(Path('@', str(path).lstrip('/')))
-
-            elif path_type == 'windows':
-                # C:\Users\user -> C\Users\User
-                drive_letter = path.parts[0][0]
-                path = str(Path(drive_letter, *path.parts[1:]))
-            else:
-                path = str(path) # NO_FOLDER/DEF_UNK_FOLDER
+            #
+            # The make_safe_file_path() func do this for us
+            if str(path) not in (self._defaults.DEF_NO_FOLDER,
+                    self._defaults.DEF_UNK_FOLDER):
+                path = make_safe_file_path(path)
 
             if hide_name:
                 name = prbg(16).hex() + Path(self._file_name).suffix
@@ -1894,6 +1880,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
             outfile = Path(outfile, path, name.lstrip('/'))
             outfile.parent.mkdir(exist_ok=True, parents=True)
+
             outfile = open(outfile,'wb')
 
         elif isinstance(outfile, BinaryIO) or hasattr(outfile, 'write'):
@@ -1904,7 +1891,6 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         logger.debug(f'outfile is {outfile}')
 
         use_slow_download_switch = 0
-
         while True:
             try:
                 # By default we will try to download file via the
