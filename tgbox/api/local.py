@@ -1030,7 +1030,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
     async def _deep_sync(
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
             start_from: Optional[int] = None,
-            progress_callback: Optional[Callable[[int, int], None]] = None):
+            progress_callback: Optional[Callable[[int, int], None]] = None,
+            timeout: Optional[int] = 15):
         """
         This method will make a deep synchronization of
         your LocalBox with the RemoteBox. See help on
@@ -1045,6 +1046,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
         progress_callback (``Callable[[int, int], None]``, optional):
             A callback function accepting two
             parameters: (current_id, last_id).
+
+        timeout (``int``, optional):
+            How many seconds generator will sleep at every 1000 file.
+            By default it's 15 seconds. Don't use too low timeouts or
+            you will receive FloodWaitError.
         """
         drb_box_name = await drb.get_box_name()
         logger.info(f'Deep syncing {self._tgbox_db.db_path} with {drb_box_name}...')
@@ -1075,9 +1081,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
         ))
 
         drbf_generator = drb.files(
-            min_id=start_from, reverse=True,
+            min_id=start_from,
+            reverse=True,
             cache_preview=False,
-            return_imported_as_erbf=True
+            return_imported_as_erbf=True,
+            timeout=timeout
         )
         # This is drbf2 from the previous loop cycle
         previous_drbf2 = None
@@ -1173,6 +1181,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
             deep: Optional[bool] = False,
             start_from: Optional[int] = 0,
+            timeout: Optional[int] = 15,
             deep_progress_callback: Optional[Callable[[int, int], None]] = None,
             fast_progress_callback: Optional[Callable[[int, str], None]] = None):
         """
@@ -1190,6 +1199,12 @@ class DecryptedLocalBox(EncryptedLocalBox):
         start_from (``int``, optional):
             Will check files that > start_from [ID].
             Will be used only on deep syncing.
+
+        timeout (``int``, optional):
+            How many seconds generator will sleep at every 1000 file.
+            By default it's 15 seconds. Don't use too low timeouts or
+            you will receive FloodWaitError. Will be used only on Deep
+            Sync, Fast Sync will ignore this argument.
 
         deep_progress_callback (``Callable[[int, int], None]``, optional):
             A callback function accepting two
@@ -1225,7 +1240,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 '''LocalBox ID != RemoteBox ID (is different). You should '''
                 '''sync LocalBox only from the associated RemoteBox.''')
         if deep:
-            await self._deep_sync(drb, start_from, deep_progress_callback)
+            await self._deep_sync(drb, start_from, deep_progress_callback, timeout)
         else:
             await self._fast_sync(drb, fast_progress_callback)
 

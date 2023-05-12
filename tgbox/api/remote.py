@@ -498,7 +498,7 @@ class EncryptedRemoteBox:
             ids: Optional[Union[int, List[int]]] = None,
             reverse: bool=False,
             decrypt: bool=True,
-            timeout: int=10,
+            timeout: int=15,
             cache_preview: bool=True,
             erase_encrypted_metadata: bool=True) -> AsyncGenerator[
                 Union['EncryptedRemoteBoxFile',
@@ -599,7 +599,7 @@ class EncryptedRemoteBox:
 
             timeout (``int``, optional):
                 How many seconds generator will sleep at every 1000 file.
-                By default it's 10 seconds. Don't use too low timeouts,
+                By default it's 15 seconds. Don't use too low timeouts,
                 you will receive FloodWaitError otherwise (TGBOX).
 
             decrypt (``bool``, optional):
