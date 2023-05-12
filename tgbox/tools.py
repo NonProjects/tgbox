@@ -44,7 +44,8 @@ __all__ = [
     'make_media_preview',
     'ppart_id_generator',
     'make_general_path',
-    'guess_path_type'
+    'guess_path_type',
+    'make_safe_file_path'
 ]
 
 class _TypeList:
@@ -509,6 +510,32 @@ def make_general_path(path: Union[str, Path]) -> Path:
         return Path(*win_path.parts)
 
     return Path(path)
+
+def make_safe_file_path(path: Union[str, Path]) -> Path:
+    """
+    This function will make a safe file path (a
+    file path that can be easily inserted into
+    another path). This is mostly for internal
+    purposes, i.e ``DecryptedRemoteBox.download()``
+
+    This function will make a
+        @/home/non/test from /home/non/test
+        C\\Users\\non\\test from C:\\Users\\non\\test
+
+    ...so this path can be easily inserted into
+    another, i.e DownloadsTGBOX/@/home/non/test
+    """
+    path_type = guess_path_type(path)
+    path = make_general_path(path)
+
+    if path_type == 'unix':
+        # /home/non -> @/home/non
+        return Path('@', str(path).lstrip('/'))
+
+    elif path_type == 'windows':
+        # C:\Users\user -> C\Users\User
+        drive_letter = path.parts[0][0]
+        return Path(drive_letter, *path.parts[1:])
 
 async def anext(aiterator, default=...):
     """Analogue to Python 3.10+ anext()"""
