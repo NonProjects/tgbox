@@ -1855,7 +1855,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         if isinstance(outfile, (str, PathLike)):
             outfile = Path(outfile)
-            outfile.mkdir(exist_ok=True)
+            outfile.mkdir(exist_ok=True, parents=True)
 
             path = self._defaults.DEF_UNK_FOLDER if hide_folder else self._file_path
             # The first '/' symbol in '/home/non/' is also path part,
