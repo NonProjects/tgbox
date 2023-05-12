@@ -524,13 +524,18 @@ def make_safe_file_path(path: Union[str, Path]) -> Path:
 
     ...so this path can be easily inserted into
     another, i.e DownloadsTGBOX/@/home/non/test
+
+    ``path`` *must* be absolute.
     """
     path_type = guess_path_type(path)
     path = make_general_path(path)
 
     if path_type == 'unix':
         # /home/non -> @/home/non
-        return Path(str(path).replace('/','@/',1))
+        if str(path)[0] == '/':
+            return Path(str(path).replace('/','@/',1))
+        else:
+            return Path(str(path).replace('\\','@\\',1))
 
     elif path_type == 'windows':
         # C:\Users\user -> C\Users\User
