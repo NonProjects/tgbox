@@ -1112,6 +1112,12 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
 
             self._defaults = erb._defaults
 
+    @staticmethod
+    async def decrypt() -> NoReturn:
+        raise AttributeError(
+            """This function was inherited from ``EncryptedRemoteBox`` """
+            """and cannot be used on ``DecryptedRemoteBox``."""
+        )
     async def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """
         Returns ``ShareKey`` for this Box.
@@ -1501,6 +1507,7 @@ class EncryptedRemoteBoxFile:
         """
         if not self.initialized:
             await self.init()
+
         return await DecryptedRemoteBoxFile(self, key).init(
             erase_encrypted_metadata=erase_encrypted_metadata)
 
@@ -1671,6 +1678,12 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         if not self._initialized:
             raise NotInitializedError('RemoteBoxFile must be initialized.')
 
+    @staticmethod
+    async def decrypt() -> NoReturn:
+        raise AttributeError(
+            """This function was inherited from ``EncryptedRemoteBoxFile`` """
+            """and cannot be used on ``DecryptedRemoteBoxFile``."""
+        )
     async def init(
             self, cache_preview: bool=True,
             erase_encrypted_metadata: Optional[bool] = True
