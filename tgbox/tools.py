@@ -42,7 +42,9 @@ __all__ = [
     'bytes_to_int',
     'get_media_duration',
     'make_media_preview',
-    'ppart_id_generator'
+    'ppart_id_generator',
+    'make_general_path',
+    'guess_path_type'
 ]
 
 class _TypeList:
@@ -479,6 +481,17 @@ def int_to_bytes(
 def bytes_to_int(bytes_: bytes, signed: Optional[bool] = False) -> int:
     """Converts bytes to int with Big byteorder."""
     return int.from_bytes(bytes_, 'big', signed=signed)
+
+def guess_path_type(path: Union[str, Path]) -> str:
+    """
+    This function will try to guess file path
+    type. It can be Windows-like or Unix-like
+
+    Returns 'windows' or 'unix'
+    """
+    if PureWindowsPath(path).drive:
+        return 'windows'
+    return 'unix'
 
 def make_general_path(path: Union[str, Path]) -> Path:
     """
