@@ -1869,9 +1869,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             # letter to prevent strange behaviour on Windows
             #
             # The make_safe_file_path() func do this for us
-            if str(path) not in (self._defaults.DEF_NO_FOLDER,
-                    self._defaults.DEF_UNK_FOLDER):
-                path = make_safe_file_path(path)
+            path = make_safe_file_path(path)
 
             if hide_name:
                 name = prbg(16).hex() + Path(self._file_name).suffix

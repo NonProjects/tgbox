@@ -530,7 +530,7 @@ def make_safe_file_path(path: Union[str, Path]) -> Path:
 
     if path_type == 'unix':
         # /home/non -> @/home/non
-        return Path('@', str(path).lstrip('/'))
+        return Path(str(path).replace('/','@/',1))
 
     elif path_type == 'windows':
         # C:\Users\user -> C\Users\User
