@@ -777,8 +777,12 @@ class EncryptedRemoteBox:
             sf: SearchFilter,
             mainkey: Optional[MainKey] = None,
             dlb: Optional['DecryptedLocalBox'] = None,
-            cache_preview: bool=True) ->\
-            AsyncGenerator[Union['EncryptedRemoteBoxFile', 'DecryptedRemoteBoxFile'], None]:
+            cache_preview: bool=True,
+            return_imported_as_erbf: bool=False) -> AsyncGenerator[
+                Union[
+                    'EncryptedRemoteBoxFile',
+                    'DecryptedRemoteBoxFile'
+                ], None]:
         """
         This method used to search for files in your ``RemoteBox``.
 
@@ -821,7 +825,8 @@ class EncryptedRemoteBox:
             min_id=min_id,
             max_id=max_id,
             reverse=True,
-            cache_preview=cache_preview
+            cache_preview=cache_preview,
+            return_imported_as_erbf = return_imported_as_erbf
         )
         sgen = search_generator(
             sf, lb=dlb,
