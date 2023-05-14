@@ -181,6 +181,8 @@ async def clone_remotebox(
     tgbox_db = await TgboxDB.create(box_path)
 
     if (await tgbox_db.BOX_DATA.count_rows()):
+        await tgbox_db.close()
+
         raise InUseException(
            f'''TgboxDB "{tgbox_db.name}" in use. Specify new box_path or '''
             '''if your clone process was interrupted for some reason '''
@@ -213,26 +215,30 @@ async def clone_remotebox(
         erase_encrypted_metadata=False
     )
     drbf_to_import, IMPORT_WHEN = [], 100
-    async for drbf in files_generator:
-        if progress_callback:
-            if iscoroutinefunction(progress_callback):
-                await progress_callback(drbf.id, last_file_id)
+    try:
+        async for drbf in files_generator:
+            if progress_callback:
+                if iscoroutinefunction(progress_callback):
+                    await progress_callback(drbf.id, last_file_id)
+                else:
+                    progress_callback(drbf.id, last_file_id)
+
+            if len(drbf_to_import) == IMPORT_WHEN:
+                logger.debug(f'Importing new stack of files [{len(drbf_to_import)}]')
+                await gather(*drbf_to_import)
+                drbf_to_import.clear()
             else:
-                progress_callback(drbf.id, last_file_id)
+                logger.info(f'Adding ID{drbf.id} from {drb_box_name} to import list')
+                drbf_to_import.append(dlb.import_file(drbf))
 
-        if len(drbf_to_import) == IMPORT_WHEN:
-            logger.debug(f'Importing new stack of files [{len(drbf_to_import)}]')
+        if drbf_to_import:
+            logger.debug(f'Importing remainder of files [{len(drbf_to_import)}]')
             await gather(*drbf_to_import)
-            drbf_to_import.clear()
-        else:
-            logger.info(f'Adding ID{drbf.id} from {drb_box_name} to import list')
-            drbf_to_import.append(dlb.import_file(drbf))
 
-    if drbf_to_import:
-        logger.debug(f'Importing remainder of files [{len(drbf_to_import)}]')
-        await gather(*drbf_to_import)
-
-    return dlb
+        return dlb
+    except Exception as e:
+        await dlb.done()
+        raise e
 
 class EncryptedLocalBox:
     """
