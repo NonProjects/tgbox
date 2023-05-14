@@ -2493,10 +2493,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                         if k == 'cattrs':
                             setattr(self, f'_{k}', PackedAttributes.unpack(v))
 
-                        elif k == 'efile_path':
-                            if self._mainkey and not self._efilekey:
-                                self._file_path = AES(self._mainkey).decrypt(v)
-                                self._file_path = Path(self._file_path.decode())
+                        elif k == 'efile_path' and self._mainkey:
+                            self._file_path = AES(self._mainkey).decrypt(v)
+                            self._file_path = Path(self._file_path.decode())
                         else:
                             # str attributes
                             if k in ('mime', 'file_name'):
