@@ -778,7 +778,8 @@ class EncryptedRemoteBox:
             mainkey: Optional[MainKey] = None,
             dlb: Optional['DecryptedLocalBox'] = None,
             cache_preview: bool=True,
-            return_imported_as_erbf: bool=False) -> AsyncGenerator[
+            return_imported_as_erbf: bool=False,
+            reverse: bool=True) -> AsyncGenerator[
                 Union[
                     'EncryptedRemoteBoxFile',
                     'DecryptedRemoteBoxFile'
@@ -800,9 +801,18 @@ class EncryptedRemoteBox:
             cache_preview (``bytes``, optional):
                 Will cache preview in file object if ``True``.
 
+            return_imported_as_erbf (``bool``, optional):
+                If specified, will yield files that generator can't
+                decrypt (imported) as ``EncryptedRemoteBoxFile``.
+
+            reverse (``bool``, optional):
+                If set to ``True`` (by default), the remote files
+                will be returned in reverse order (from oldest to
+                newest, instead of the default newest to oldest).
+
         .. note::
             - If ``dlb`` and ``mainkey`` not specified, then method\
-            will search on ``EncryptedRemoteBoxFile``.
+            will search only for ``EncryptedRemoteBoxFile``.
             - You may ignore this kwargs if you call this\
             method on ``DecryptedRemoteBox`` class.
         """
@@ -824,7 +834,7 @@ class EncryptedRemoteBox:
             ids=ids,
             min_id=min_id,
             max_id=max_id,
-            reverse=True,
+            reverse=reverse,
             cache_preview=cache_preview,
             return_imported_as_erbf = return_imported_as_erbf
         )
