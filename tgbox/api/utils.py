@@ -338,11 +338,15 @@ async def search_generator(
     async for file in iter_from:
         if hasattr(file, '_message'): # *RemoteBoxFile
             file_size = file.file_size
-            file_path = file.file_path if file.file_path else ''
+
+            if hasattr(file, 'file_path') and file.file_path:
+                file_path = str(file.file_path)
+            else:
+                file_path = ''
+
         elif hasattr(file, '_lb'): # *LocalBoxFile
             file_size = file.size
-            await file.directory.lload(full=True)
-            file_path = str(file.directory)
+            file_path = str(file.file_path) if file.file_path else ''
         else:
             continue
 
