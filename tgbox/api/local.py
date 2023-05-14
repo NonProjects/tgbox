@@ -147,7 +147,8 @@ async def clone_remotebox(
         drb: 'tgbox.api.remote.DecryptedRemoteBox',
         basekey: BaseKey,
         progress_callback: Optional[Callable[[int, int], None]] = None,
-        box_path: Optional[Union[PathLike, str]] = None) -> 'DecryptedLocalBox':
+        box_path: Optional[Union[PathLike, str]] = None,
+        timeout: Optional[int] = 15) -> 'DecryptedLocalBox':
     """
     This method makes ``LocalBox`` from ``RemoteBox`` and
     imports all RemoteBoxFiles to it.
@@ -168,18 +169,26 @@ async def clone_remotebox(
         box_path (``PathLike``, ``str``, optional):
             Direct path with filename included. If
             not specified, then ``RemoteBox`` name used.
+
+        timeout (``int``, optional):
+            How many seconds generator will sleep at every 1000 file.
+            By default it's 15 seconds. Don't use too low timeouts or
+            you will receive FloodWaitError.
     """
     drb_box_name = await drb.get_box_name()
     box_path = drb_box_name if not box_path else box_path
 
-    logger.info(
-        f'Cloning DecryptedRemoteBox {drb_box_name} to LocalBox {box_path}'
-    )
     tgbox_db = await TgboxDB.create(box_path)
 
     if (await tgbox_db.BOX_DATA.count_rows()):
-        raise InUseException(f'TgboxDB "{tgbox_db.name}" in use. Specify new.')
-
+        raise InUseException(
+           f'''TgboxDB "{tgbox_db.name}" in use. Specify new box_path or '''
+            '''if your clone process was interrupted for some reason '''
+            '''use the .sync(..., deep=True) on your LocalBox instead.'''
+        )
+    logger.info(
+        f'Cloning DecryptedRemoteBox {drb_box_name} to LocalBox {box_path}'
+    )
     last_file_id = 0
     async for erbf in drb.files(decrypt=False, return_imported_as_erbf=True):
         last_file_id = erbf.id; break
@@ -198,9 +207,12 @@ async def clone_remotebox(
 
     files_generator = drb.files(
         key=drb._mainkey,
-        decrypt=True, reverse=True,
+        decrypt=True,
+        reverse=True,
+        timeout=timeout,
         erase_encrypted_metadata=False
     )
+    drbf_to_import, IMPORT_WHEN = [], 100
     async for drbf in files_generator:
         if progress_callback:
             if iscoroutinefunction(progress_callback):
@@ -208,8 +220,17 @@ async def clone_remotebox(
             else:
                 progress_callback(drbf.id, last_file_id)
 
-        logger.info(f'Importing ID{drbf.id} from {drb_box_name} to {tgbox_db.name}')
-        await dlb.import_file(drbf)
+        if len(drbf_to_import) == IMPORT_WHEN:
+            logger.debug(f'Importing new stack of files [{len(drbf_to_import)}]')
+            await gather(*drbf_to_import)
+            drbf_to_import.clear()
+        else:
+            logger.info(f'Adding ID{drbf.id} from {drb_box_name} to import list')
+            drbf_to_import.append(dlb.import_file(drbf))
+
+    if drbf_to_import:
+        logger.debug(f'Importing remainder of files [{len(drbf_to_import)}]')
+        await gather(*drbf_to_import)
 
     return dlb
 
@@ -1038,7 +1059,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         DecryptedLocalBox.sync method for more info.
 
         drb (``DecryptedRemoteBox``):
-            *RemoteBox* associated with this LocalBox.
+            *RemoteBox* associated with this *LocalBox*.
 
         start_from (``int``, optional):
             Will check files that > start_from [ID].
@@ -1065,7 +1086,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 sql_tuple=('DELETE FROM FILES', ()))
             await self._tgbox_db.PATH_PARTS.execute(
                 sql_tuple=('DELETE FROM PATH_PARTS', ()))
-
             return
 
         # This will yield the last uploaded to RemoteBox file
