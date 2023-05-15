@@ -2606,9 +2606,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         You should specify at least one argument.
         """
-        assert any((drb, drbf, _updated_metadata)), 'Specify at least one'
+        assert any((drb, drbf, _updated_metadata is not None)), 'Specify at least one'
 
-        if _updated_metadata:
+        if _updated_metadata is not None:
             pass
 
         elif drbf:
@@ -2620,13 +2620,19 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         # === Verifying updated metadata for validity === #
 
-        _updated_metadata = urlsafe_b64decode(_updated_metadata)
-        assert _updated_metadata, 'empty after decode, invalid!'
+        if _updated_metadata:
+            _updated_metadata = urlsafe_b64decode(_updated_metadata)
+            assert _updated_metadata, 'empty after decode, invalid!'
 
-        updates = AES(self._filekey).decrypt(
-            _updated_metadata
-        )
-        updates = PackedAttributes.unpack(updates)
+            updates = AES(self._filekey).decrypt(
+                _updated_metadata
+            )
+            updates = PackedAttributes.unpack(updates)
+        else:
+            # _updated_metadata can be empty string (''),
+            # this means that user requested us to remove
+            # all updated metadata from the LocalBox
+            _updated_metadata, updates = None, {}
 
         # =============================================== #
 

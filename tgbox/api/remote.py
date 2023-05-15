@@ -27,6 +27,7 @@ from telethon.tl.functions.messages import (
 from telethon.errors import (
     ChatAdminRequiredError,
     MediaCaptionTooLongError,
+    MessageNotModifiedError,
     AuthKeyUnregisteredError,
     FilePartsInvalidError
 )
@@ -2070,6 +2071,12 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             efile_path = AES(dlb._mainkey).encrypt(new_file_path.encode())
             changes['efile_path'] = efile_path
 
+        # If new_file_path is empty string then it's should be
+        # a request to remove updated file_path attribute
+        # from the RemoteBox file and restore default
+        if new_file_path is not None:
+            updates.pop('efile_path', None)
+
         updates.update(changes)
 
         for k,v in tuple(updates.items()):
@@ -2079,16 +2086,23 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 if k in self._residual_metadata:
                     del self._residual_metadata[k]
 
-        updates_packed = PackedAttributes.pack(**updates)
-        updates_encrypted = AES(self._filekey).encrypt(updates_packed)
-        updates_encoded = urlsafe_b64encode(updates_encrypted).decode()
+        if updates:
+            updates_packed = PackedAttributes.pack(**updates)
+            updates_encrypted = AES(self._filekey).encrypt(updates_packed)
+            updates_encoded = urlsafe_b64encode(updates_encrypted).decode()
+        else:
+            updates_encoded = ''
         try:
             await self._message.edit(updates_encoded)
         except MediaCaptionTooLongError:
             raise NoPlaceLeftForMetadata(NoPlaceLeftForMetadata.__doc__) from None
         except ChatAdminRequiredError:
             raise NotEnoughRights(NotEnoughRights.__doc__) from None
-
+        except MessageNotModifiedError as e:
+            logger.debug(
+                '''Updates wasn\'t commited to your RemoteBox '''
+               f'''because of MessageNotModifiedError: {e}'''
+            )
         for k,v in tuple(updates.items()):
             if k in self.__required_metadata:
                 if k == 'cattrs':
