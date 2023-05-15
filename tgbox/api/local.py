@@ -223,13 +223,13 @@ async def clone_remotebox(
                 else:
                     progress_callback(drbf.id, last_file_id)
 
+            logger.info(f'Adding ID{drbf.id} from {drb_box_name} to import list')
+            drbf_to_import.append(dlb.import_file(drbf))
+
             if len(drbf_to_import) == IMPORT_WHEN:
                 logger.debug(f'Importing new stack of files [{len(drbf_to_import)}]')
                 await gather(*drbf_to_import)
                 drbf_to_import.clear()
-            else:
-                logger.info(f'Adding ID{drbf.id} from {drb_box_name} to import list')
-                drbf_to_import.append(dlb.import_file(drbf))
 
         if drbf_to_import:
             logger.debug(f'Importing remainder of files [{len(drbf_to_import)}]')
