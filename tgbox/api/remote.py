@@ -2047,9 +2047,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         if 'file_path' in changes and not dlb:
             raise ValueError('You can\'t change file_path without specifying dlb!')
 
-        changes = changes.copy()
+        current_changes = changes.copy()
 
-        logger.debug(f'Applying changes {changes} to the ID{self._id}...')
+        logger.debug(f'Applying changes {current_changes} to the ID{self._id}...')
         try:
             message_caption = urlsafe_b64decode(self._message.message)
             updates = AES(self._filekey).decrypt(message_caption)
@@ -2057,7 +2057,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         except (ValueError, TypeError):
             updates = {}
 
-        new_file_path = changes.pop('file_path', None)
+        new_file_path = current_changes.pop('file_path', None)
         if isinstance(new_file_path, bytes):
             new_file_path = new_file_path.decode()
 
@@ -2069,7 +2069,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 (directory.part_id, self._id)
             ))
             efile_path = AES(dlb._mainkey).encrypt(new_file_path.encode())
-            changes['efile_path'] = efile_path
+            current_changes['efile_path'] = efile_path
 
         # If new_file_path is empty string then it's should be
         # a request to remove updated file_path attribute
@@ -2077,7 +2077,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         if new_file_path is not None:
             updates.pop('efile_path', None)
 
-        updates.update(changes)
+        updates.update(current_changes)
 
         for k,v in tuple(updates.items()):
             if not v:

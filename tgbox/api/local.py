@@ -2453,6 +2453,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             logger.debug('Decrypting efile_path with the MainKey')
             self._file_path = AES(self._mainkey).decrypt(self._efile_path) # pylint: disable=no-member
             self._file_path = Path(self._file_path.decode())
+            self._original_file_path = self._file_path
         else:
             logger.warning(
                f'''We can\'t decrypt real file path of ID{self._id} because '''
@@ -2600,7 +2601,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 metadata. You can use it as alternative to
                 the "drb" argument here.
 
-            _updated_metadata (``bytes``, optional):
+            _updated_metadata (``str``, optional):
                 Updated metadata by itself. This is for
                 internal use, specify only ``drb``.
 
@@ -2634,6 +2635,21 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             # all updated metadata from the LocalBox
             _updated_metadata, updates = None, {}
 
+            # We also restore original PPATH_HEAD
+            self._file_path = self._original_file_path
+            #
+            if isinstance(self._lb, DecryptedLocalBox):
+                self._directory = await self._lb._make_local_path(self._file_path)
+
+                await self._lb._tgbox_db.FILES.execute((
+                    'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
+                    (self._directory.part_id, self._id)
+                ))
+            else:
+                logger.warning(
+                   f'''We can not restore the original PPATH_HEAD of the ID{self._id} '''
+                    '''because it wasn\'t decrypted with the DecryptedLocalBox.'''
+                )
         # =============================================== #
 
         logger.debug(
@@ -2655,7 +2671,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                         mainkey = self._mainkey if self._mainkey else self._lb._mainkey
                         self._file_path = Path(AES(mainkey).decrypt(v).decode())
                     else:
-                        logger.debug(
+                        logger.warning(
                             '''Updated metadata contains efile_path, however, '''
                             '''DecryptedLocalBoxFile that you trying to update '''
                             '''doesn\'t have a MainKey and wasn\'t decrypted with '''
@@ -2739,9 +2755,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         if 'efile_path' in changes:
             raise ValueError('The "changes" should not contain efile_path')
 
-        changes = changes.copy()
+        current_changes = changes.copy()
 
-        logger.debug(f'Applying changes {changes} to the ID{self._id}...')
+        logger.debug(f'Applying changes {current_changes} to the ID{self._id}...')
 
         dlb = dlb if dlb else self._lb
         try:
@@ -2754,21 +2770,33 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         except (ValueError, TypeError):
             updates = {}
 
-        new_file_path = changes.pop('file_path', None)
+        new_file_path = current_changes.pop('file_path', None)
         if isinstance(new_file_path, bytes):
             new_file_path = new_file_path.decode()
 
         if new_file_path:
-            directory = await dlb._make_local_path(Path(new_file_path))
+            self._directory = await dlb._make_local_path(Path(new_file_path))
 
             await dlb._tgbox_db.FILES.execute((
                 'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
-                (directory.part_id, self._id)
+                (self._directory.part_id, self._id)
             ))
             efile_path = AES(dlb._mainkey).encrypt(new_file_path.encode())
-            changes['efile_path'] = efile_path
+            current_changes['efile_path'] = efile_path
 
-        updates.update(changes)
+        elif new_file_path is not None:
+            # User requested us to remove updated file
+            # path from the LocalBox, so we need to
+            # restore the original PPATH_HEAD
+            self._file_path = self._original_file_path
+            self._directory = await dlb._make_local_path(self._original_file_path)
+
+            await dlb._tgbox_db.FILES.execute((
+                'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
+                (self._directory.part_id, self._id)
+            ))
+
+        updates.update(current_changes)
 
         for k,v in tuple(updates.items()):
             if not v:
@@ -2785,7 +2813,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         if drb:
             drbf = await drb.get_file(self._id)
-            await drbf.update_metadata(changes)
+            await drbf.update_metadata(changes, dlb=dlb)
 
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """
