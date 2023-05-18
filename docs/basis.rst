@@ -136,7 +136,7 @@ So we just make a string like ``0xFF<key-length>key<value-length>value<...>``.
 TGBOX File
 ----------
 
-Abstract tgbox file of **v1.X** has **13** attributes:
+Abstract tgbox file of **v1.X** has **14** attributes:
 
 - ``ID`` *(integer: required)* -- *Uploaded to Telegram file (message) ID*
 - ``FILE_SALT`` *(bytes: required)* -- *File's salt. Used for FileKey creation*
@@ -151,6 +151,7 @@ Abstract tgbox file of **v1.X** has **13** attributes:
 - ``PREVIEW`` *(bytes: optional, FFMPEG required)* -- *File's preview (if file is media)*
 - ``BOX_SALT`` *(bytes: required)* -- *Box salt. Used for MainKey creation*
 - ``CATTRS`` *(bytes)* -- *User's custom attributes packed with PackedAttributes*
+- ``FILE_FINGERPRINT`` *(bytes)* -- *A SHA256 of the File's path plus MainKey*
 
 .. note::
     ``FILEKEY`` is a *LocalBox*-only field. It will be non-empty if you imported ``DecryptedRemoteBoxFile`` from other's *RemoteBox*. In this case *FILEKEY* will be encrypted with ``MainKey`` of the recipient *Box*.
