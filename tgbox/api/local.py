@@ -138,7 +138,11 @@ async def get_localbox(
 
     if basekey:
         logger.info(f'Getting DecryptedLocalBox of {tgbox_db.db_path}')
-        return await EncryptedLocalBox(tgbox_db).decrypt(basekey)
+        try:
+            return await EncryptedLocalBox(tgbox_db).decrypt(basekey)
+        except IncorrectKey as e:
+            await tgbox_db.close()
+            raise e
     else:
         logger.info(f'Getting EncryptedLocalBox of {tgbox_db.db_path}')
         return await EncryptedLocalBox(tgbox_db).init()
