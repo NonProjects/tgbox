@@ -48,8 +48,8 @@ from ..keys import (
     make_filekey, make_requestkey, RequestKey
 )
 from ..defaults import (
-    Limits, PREFIX, DEF_UNK_FOLDER,
     VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME,
+    Limits, PREFIX, DEF_UNK_FOLDER, UploadLimits,
     REMOTEBOX_PREFIX, DEF_NO_FOLDER, DOWNLOAD_PATH
 )
 from ..fastelethon import upload_file, download_file
@@ -865,6 +865,18 @@ class EncryptedRemoteBox:
         """
         logger.info(f'Pushing {pf.file} to RemoteBox ID{pf.dlb._box_channel_id}...')
 
+        me = await self._tc.get_me()
+
+        if me.premium and pf.filesize > UploadLimits.PREMIUM:
+            raise LimitExceeded(
+                f'''Max allowed filesize for you is {UploadLimits.PREMIUM} '''
+                f'''bytes, your file is {pf.filesize} bytes in size.'''
+            )
+        if not me.premium and pf.filesize > UploadLimits.DEFAULT:
+            raise LimitExceeded(
+                f'''Max allowed filesize for you is {UploadLimits.DEFAULT} '''
+                f'''bytes, your file is {pf.filesize} bytes in size.'''
+            )
         # Last 16 bytes of metadata is IV
         aes_state = AES(pf.filekey, pf.metadata[-16:])
 

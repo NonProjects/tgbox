@@ -13,6 +13,7 @@ from .version import VERSION
 
 __all__ = [
     'Limits',
+    'UploadLimits',
     'Scrypt',
     'VERSION',
     'VERBYTE',
@@ -41,6 +42,11 @@ class Limits(IntEnum):
     # Max FILE_PATH length on Linux
     # is 4096 bytes (4KiB).
     FILE_PATH_MAX: int=4096
+
+class UploadLimits(IntEnum):
+    """Telegram filesize limits"""
+    DEFAULT = 2000000000
+    PREMIUM = 4000000000
 
 class Scrypt(IntEnum):
     """Default Scrypt KDF configuration"""

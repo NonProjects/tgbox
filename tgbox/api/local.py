@@ -34,8 +34,9 @@ from ..keys import (
     make_sharekey, MainKey, RequestKey,
     ShareKey, ImportKey, FileKey, BaseKey
 )
-from ..defaults import PREFIX, VERBYTE, DEF_TGBOX_NAME
-
+from ..defaults import (
+    PREFIX, VERBYTE, DEF_TGBOX_NAME, UploadLimits
+)
 from ..errors import (
     LimitExceeded, DurationImpossible, NotEnoughRights,
     IncorrectKey, FingerprintExists, NotInitializedError,
@@ -1522,7 +1523,15 @@ class DecryptedLocalBox(EncryptedLocalBox):
         constructed_metadata += metadata + file_iv
 
         total_file_size = len(constructed_metadata) + file_size
-
+        # We don't know if user has Premium or not, because
+        # we can't access TelegramClient from 'prepare_file',
+        # so here we check only against the maximum allowed
+        # size, and in 'push_file' we will check for actual
+        if total_file_size > UploadLimits.PREMIUM:
+            raise LimitExceeded(
+                f'''Max allowed filesize in Telegram is {UploadLimits.PREMIUM} '''
+                f'''bytes, your file is {total_file_size} bytes in size.'''
+            )
         return PreparedFile(
             dlb = self,
             file = file,
