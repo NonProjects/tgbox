@@ -19,8 +19,11 @@ from base64 import (
 )
 from .errors import IncorrectKey
 from .defaults import Scrypt, WORDS_PATH
-from .crypto import AESwState as AES, FAST_ENCRYPTION
 
+from .crypto import (
+    AESwState as AES, FAST_ENCRYPTION,
+    Salt, BoxSalt, FileSalt
+)
 if FAST_ENCRYPTION: # Is faster and more secure
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.hazmat.primitives.serialization import PublicFormat
@@ -60,7 +63,8 @@ class Phrase:
             raise TypeError('phrase must be Union[bytes, str]')
 
     def __repr__(self) -> str:
-        return f'Phrase({repr(self._phrase)}) # at {hex(id(self))}'
+        class_name = self.__class__.__name__
+        return f'{class_name}({repr(self._phrase)}) # at {hex(id(self))}'
 
     def __str__(self) -> str:
         return self._phrase.decode()
@@ -138,7 +142,9 @@ class Key:
     def __repr__(self) -> str:
         return f'{self._key_types[self._key_type]}({self._key}) # at {hex(id(self))}'
 
-    def __add__(self, other: bytes) -> bytes:
+    def __add__(self, other) -> bytes:
+        if isinstance(other, Salt):
+            return self._key + other.salt
         return self._key + other
 
     def __len__(self) -> int:
@@ -325,7 +331,7 @@ def make_basekey(
     )
     return BaseKey(sha256(scrypt_key).digest())
 
-def make_mainkey(basekey: BaseKey, box_salt: bytes) -> MainKey:
+def make_mainkey(basekey: BaseKey, box_salt: BoxSalt) -> MainKey:
     """
     Function for retrieving mainkey.
 
@@ -334,12 +340,12 @@ def make_mainkey(basekey: BaseKey, box_salt: bytes) -> MainKey:
             Key which you recieved with scrypt
             function or any other key you want.
 
-        box_salt (``bytes``):
+        box_salt (``BoxSalt``):
             Salt generated on LocalBox creation.
     """
     return MainKey(sha256(basekey + box_salt).digest())
 
-def make_filekey(mainkey: MainKey, file_salt: bytes) -> FileKey:
+def make_filekey(mainkey: MainKey, file_salt: FileSalt) -> FileKey:
     """
     Function for retrieving filekeys.
 
@@ -353,8 +359,8 @@ def make_filekey(mainkey: MainKey, file_salt: bytes) -> FileKey:
 
 def make_requestkey(
         key: Union[MainKey, BaseKey], *,
-        file_salt: Optional[bytes] = None,
-        box_salt: Optional[bytes] = None) -> RequestKey:
+        file_salt: Optional[FileSalt] = None,
+        box_salt: Optional[BoxSalt] = None) -> RequestKey:
     """
     Function to retrieve requestkeys.
 
@@ -395,11 +401,11 @@ def make_requestkey(
             ``MainKey`` of your *LocalBox*, otherwise
             specify ``BaseKey`` (for *RemoteBox* sharing)
 
-        file_salt (``bytes``, optional):
+        file_salt (``FileSalt``, optional):
             Alice's FileSalt. Should be
             specified if ``box_salt`` is ``None``.
 
-        box_salt (``bytes``, optional):
+        box_salt (``BoxSalt``, optional):
             Alice's BoxSalt.
             Should be specified if ``file_salt`` is ``None``.
     """
@@ -429,9 +435,9 @@ def make_requestkey(
 def make_sharekey(
      *, mainkey: Optional[MainKey] = None,
         requestkey: Optional[RequestKey] = None,
-        box_salt: Optional[bytes] = None,
+        box_salt: Optional[BoxSalt] = None,
         filekey: Optional[FileKey] = None,
-        file_salt: Optional[bytes] = None
+        file_salt: Optional[FileSalt] = None
         ) -> Union[ShareKey, ImportKey]:
     """
     Function for making ShareKeys.
@@ -470,11 +476,11 @@ def make_sharekey(
             ``RequestKey`` of Bob. With this must be specified
             ``file_salt`` or ``box_salt``.
 
-        file_salt (``bytes``, optional):
+        file_salt (``FileSalt``, optional):
             Salt (``FILE_SALT``) of the file. Must be specified with
             ``requestkey`` if ``box_salt`` is ``None``.
 
-        box_salt (``bytes``, optional):
+        box_salt (``BoxSalt``, optional):
             Box salt. Must be specified with
             ``requestkey`` if ``file_salt`` is ``None``.
     """
@@ -546,8 +552,8 @@ def make_sharekey(
 def make_importkey(
         key: Union[MainKey, BaseKey],
         sharekey: ShareKey, *,
-        box_salt: Optional[bytes] = None,
-        file_salt: Optional[bytes] = None) -> ImportKey:
+        box_salt: Optional[BoxSalt] = None,
+        file_salt: Optional[FileSalt] = None) -> ImportKey:
     """
     .. note::
         You may want to know what is ``RequestKey`` and
@@ -569,11 +575,11 @@ def make_importkey(
         sharekey (``ShareKey``):
             Alice's ``ShareKey``.
 
-        box_salt (``bytes``, optional):
+        box_salt (``BoxSalt``, optional):
             BoxSalt that was used in
             ``RequestKey`` creation.
 
-        file_salt (``bytes``, optional):
+        file_salt (``FileSalt``, optional):
             FileSalt that was used in
             ``RequestKey`` creation.
 

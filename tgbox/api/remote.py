@@ -39,9 +39,10 @@ from telethon.tl.types import (
     Channel, Message, PeerChannel,
     InputMessagesFilterDocument
 )
-from ..crypto import get_rnd_bytes
-from ..crypto import AESwState as AES
-
+from ..crypto import (
+    AESwState as AES,
+    BoxSalt, FileSalt, IV
+)
 from ..keys import (
     make_mainkey, make_sharekey, MainKey,
     ShareKey, ImportKey, FileKey, BaseKey,
@@ -85,7 +86,7 @@ async def make_remotebox(
         box_name: Optional[str] = DEF_TGBOX_NAME,
         rb_prefix: Optional[str] = REMOTEBOX_PREFIX,
         box_image: Optional[Union[PathLike, str]] = BOX_IMAGE_PATH,
-        box_salt: Optional[bytes] = None) -> 'EncryptedRemoteBox':
+        box_salt: Optional[BoxSalt] = None) -> 'EncryptedRemoteBox':
     """
     Function used for making ``RemoteBox``.
 
@@ -109,17 +110,15 @@ async def make_remotebox(
             Can be setted to ``None`` if you don't
             want to set ``Channel`` photo.
 
-        box_salt (``bytes``, optional):
+        box_salt (``BoxSalt``, optional):
             Random 32 bytes. Will be used in ``MainKey``
-            creation. Default is ``crypto.get_rnd_bytes()``.
+            creation. Default is ``BoxSalt.generate()``.
     """
     if box_salt and len(box_salt) != 32:
         raise ValueError('BoxSalt bytelength != 32')
 
-    box_salt = urlsafe_b64encode(
-        box_salt if box_salt else get_rnd_bytes()
-    )
-    box_salt = box_salt.decode()
+    box_salt = (box_salt if box_salt else BoxSalt.generate()).salt
+    box_salt = urlsafe_b64encode(box_salt).decode()
 
     channel_name = rb_prefix + box_name
 
@@ -366,14 +365,14 @@ class EncryptedRemoteBox:
         ))
         return search.count
 
-    async def get_box_salt(self) -> bytes:
+    async def get_box_salt(self) -> BoxSalt:
         """
-        Returns BoxSalt. Will be cached
+        Returns ``BoxSalt``. Will be cached
         after first method call.
         """
         if not self._box_salt:
             full_rq = await self._tc(GetFullChannelRequest(channel=self._box_channel))
-            self._box_salt = urlsafe_b64decode(full_rq.full_chat.about)
+            self._box_salt = BoxSalt(urlsafe_b64decode(full_rq.full_chat.about))
 
         return self._box_salt
 
@@ -887,7 +886,7 @@ class EncryptedRemoteBox:
             try:
                 ifile = await upload_file(
                     self._tc, oe,
-                    file_name=urlsafe_b64encode(pf.filesalt).decode(),
+                    file_name=urlsafe_b64encode(pf.filesalt.salt).decode(),
                     part_size_kb=512, file_size=pf.filesize,
                     progress_callback=progress_callback
                 )
@@ -902,10 +901,9 @@ class EncryptedRemoteBox:
             logger.warning(f'Fast upload FAILED, falling to SLOW!\n{format_exc()}')
 
             ifile = await self._tc.upload_file(
-                oe, file_name=urlsafe_b64encode(pf.filesalt).decode(),
+                oe, file_name=urlsafe_b64encode(pf.filesalt.salt).decode(),
                 part_size_kb=512, file_size=pf.filesize,
-                progress_callback=progress_callback
-            )
+                progress_callback=progress_callback)
         try:
             file_message = await self._tc.send_file(
                 self._box_channel, file=ifile,
@@ -1322,8 +1320,8 @@ class EncryptedRemoteBoxFile:
         return self._version_byte
 
     @property
-    def box_salt(self) -> Union[bytes, None]:
-        """Returns BoxSalt or ``None`` if not initialized"""
+    def box_salt(self) -> Union[BoxSalt, None]:
+        """Returns ``BoxSalt`` or ``None`` if not initialized"""
         return self._box_salt
 
     @property
@@ -1340,13 +1338,13 @@ class EncryptedRemoteBoxFile:
         return self._upload_time
 
     @property
-    def file_salt(self) -> Union[bytes, None]:
-        """Returns FileSalt or ``None`` if not initialized"""
+    def file_salt(self) -> Union[FileSalt, None]:
+        """Returns ``FileSalt`` or ``None`` if not initialized"""
         return self._file_salt
 
     @property
-    def file_iv(self) -> Union[bytes, None]:
-        """Returns File IV or ``None`` if not initialized"""
+    def file_iv(self) -> Union[IV, None]:
+        """Returns ``IV`` or ``None`` if not initialized"""
         return self._file_iv
 
     @property
@@ -1471,9 +1469,9 @@ class EncryptedRemoteBoxFile:
             # For backward compatibility only
             self._fingerprint = b''
 
-        self._file_salt = parsedm['file_salt']
-        self._box_salt = parsedm['box_salt']
-        self._file_iv = self._metadata[-16:]
+        self._file_salt = FileSalt(parsedm['file_salt'])
+        self._box_salt = BoxSalt(parsedm['box_salt'])
+        self._file_iv = IV(self._metadata[-16:])
 
         self._initialized = True
         return self
@@ -1650,8 +1648,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         return self._preview
 
     @property
-    def file_iv(self) -> Union[bytes, None]:
-        """Returns file IV or ``None`` if not initialized."""
+    def file_iv(self) -> Union[IV, None]:
+        """Returns ``IV`` or ``None`` if not initialized."""
         return self._file_iv
 
     @property
@@ -1685,8 +1683,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         return self._file_name
 
     @property
-    def file_salt(self) -> Union[bytes, None]:
-        """Returns file salt or ``None`` if not initialized."""
+    def file_salt(self) -> Union[FileSalt, None]:
+        """Returns ``FileSalt`` or ``None`` if not initialized."""
         return self._file_salt
 
     @property

@@ -25,9 +25,10 @@ from telethon.errors.rpcerrorlist import ChatAdminRequiredError
 
 from filetype import guess as filetype_guess
 
-from ..crypto import get_rnd_bytes
-from ..crypto import AESwState as AES
-
+from ..crypto import (
+    AESwState as AES,
+    BoxSalt, FileSalt, IV
+)
 from ..keys import (
     make_filekey, make_requestkey,
     EncryptedMainkey, make_mainkey,
@@ -412,8 +413,8 @@ class EncryptedLocalBox:
         return self._initialized
 
     @property
-    def box_salt(self) -> Union[bytes, None]:
-        """Returns BoxSalt or ``None`` if not initialized"""
+    def box_salt(self) -> Union[BoxSalt, None]:
+        """Returns ``BoxSalt`` or ``None`` if not initialized"""
         return self._box_salt
 
     @property
@@ -476,6 +477,8 @@ class EncryptedLocalBox:
             self._session, self._initialized = box_data[4], True
             self._api_id, self._api_hash = box_data[5], box_data[6]
             self._fast_sync_last_event_id = box_data[7]
+
+            self._box_salt = BoxSalt(self._box_salt)
 
             if self._mainkey:
                 logger.debug('Found EncryptedMainkey')
@@ -1377,7 +1380,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 Will try to add file preview to
                 the metadata if ``True`` (default).
         """
-        file_salt, file_iv = get_rnd_bytes(32), get_rnd_bytes(16)
+        file_salt, file_iv = FileSalt.generate(), IV.generate()
         filekey = make_filekey(self._mainkey, file_salt)
 
         if isinstance(file, TelegramVirtualFile):
@@ -1503,8 +1506,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
         secret_metadata = AES(filekey).encrypt(secret_metadata)
 
         metadata = PackedAttributes.pack(
-            box_salt = self._box_salt,
-            file_salt = file_salt,
+            box_salt = self._box_salt.salt,
+            file_salt = file_salt.salt,
             file_fingerprint = file_fingerprint,
             secret_metadata = secret_metadata
         )
@@ -1520,7 +1523,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         constructed_metadata =  PREFIX + VERBYTE
         constructed_metadata += metadata_bytesize
-        constructed_metadata += metadata + file_iv
+        constructed_metadata += metadata + file_iv.iv
 
         total_file_size = len(constructed_metadata) + file_size
         # We don't know if user has Premium or not, because
@@ -2153,7 +2156,7 @@ class EncryptedLocalBoxFile:
         return self._file_iv
 
     @property
-    def file_salt(self) -> Union[bytes, None]:
+    def file_salt(self) -> Union[FileSalt, None]:
         """
         Returns file salt or ``None``
         if file wasn't initialized
@@ -2161,7 +2164,7 @@ class EncryptedLocalBoxFile:
         return self._file_salt
 
     @property
-    def box_salt(self) -> Union[bytes, None]:
+    def box_salt(self) -> Union[BoxSalt, None]:
         """
         Returns box salt or ``None``
         if file wasn't initialized
@@ -2222,8 +2225,8 @@ class EncryptedLocalBoxFile:
             self._metadata[pattr_offset:-16]
         )
         self._file_iv = self._metadata[-16:]
-        self._file_salt = unpacked_metadata['file_salt']
-        self._box_salt = unpacked_metadata['box_salt']
+        self._file_salt = FileSalt(unpacked_metadata['file_salt'])
+        self._box_salt = BoxSalt(unpacked_metadata['box_salt'])
 
         if isinstance(self._defaults, DefaultsTableWrapper):
             if not self._defaults.initialized:

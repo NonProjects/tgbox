@@ -37,8 +37,74 @@ __all__ = [
     'FAST_TELETHON',
     'FAST_ENCRYPTION'
 ]
+class IV:
+    """This is a class-wrapper for AES IV"""
+    def __init__(self, iv: Union[bytes, memoryview]):
+        self.iv = iv if isinstance(iv, bytes) else bytes(iv)
+
+    def __repr__(self) -> str:
+        class_name = self.__class__.__name__
+        return f'{class_name}({repr(self.iv)}) # at {hex(id(self))}'
+
+    def __add__(self, other):
+        return self.iv + other
+
+    def __len__(self) -> int:
+        return len(self.iv)
+
+    @classmethod
+    def generate(cls, bytelength: Optional[int] = 16):
+        """
+        Generates AES IV by ``bytelength``
+
+        Arguments:
+            bytelength (``int``, optional):
+                Bytelength of IV. 16 bytes by default.
+        """
+        return cls(get_rnd_bytes(bytelength))
+
+    def hex(self) -> str:
+        """Returns IV as hexadecimal"""
+        return self.iv.hex()
+
+class Salt:
+    """This is a class-wrapper for some TGBOX salt"""
+    def __init__(self, salt: Union[bytes, memoryview]):
+        self.salt = salt if isinstance(salt, bytes) else bytes(salt)
+
+    def __repr__(self) -> str:
+        class_name = self.__class__.__name__
+        return f'{class_name}({repr(self.salt)}) # at {hex(id(self))}'
+
+    def __add__(self, other):
+        return self.salt + other
+
+    def __len__(self) -> int:
+        return len(self.salt)
+
+    @classmethod
+    def generate(cls, bytelength: Optional[int] = 32):
+        """
+        Generates Salt by ``bytelength``
+
+        Arguments:
+            bytelength (``int``, optional):
+                Bytelength of Salt. 32 bytes by default.
+        """
+        return cls(get_rnd_bytes(bytelength))
+
+    def hex(self) -> str:
+        """Returns Salt as hexadecimal"""
+        return self.salt.hex()
+
+class BoxSalt(Salt):
+    """This is a class-wrapper for BoxSalt"""
+
+class FileSalt(Salt):
+    """This is a class-wrapper for FileSalt"""
+
 class _PyaesState:
-    def __init__(self, key: Union[bytes, 'Key'], iv: Union[bytes, memoryview]):
+    def __init__(self, key: Union[bytes, 'Key'], iv: IV):
         """
         Class to wrap ``pyaes.AESModeOfOperationCBC``
         if there is no ``FAST_ENCRYPTION``.
@@ -51,13 +117,15 @@ class _PyaesState:
             key (``bytes``, ``Key``):
                 AES encryption/decryption Key.
 
-            iv (``bytes``):
+            iv (``IV``):
                 AES Initialization Vector.
         """
         key = key.key if hasattr(key, 'key') else key
+        self.iv = iv
 
         self._aes_state = AESModeOfOperationCBC( # pylint: disable=E0601
-            key = bytes(key), iv = bytes(iv)
+            key = bytes(key),
+            iv = self.iv.iv
         )
         self.__mode = None # encrypt mode is 1 and decrypt is 2
 
@@ -105,7 +173,7 @@ class _PyaesState:
 class AESwState:
     def __init__(
             self, key: Union[bytes, 'Key'],
-            iv: Optional[bytes] = None
+            iv: Optional[Union[IV, bytes]] = None
         ):
         """
         Wrap around AES CBC which saves state.
@@ -118,7 +186,7 @@ class AESwState:
             key (``bytes``, ``Key``):
                 AES encryption/decryption Key.
 
-            iv (``bytes``, optional):
+            iv (``IV``, ``bytes``, optional):
                 AES Initialization Vector.
 
                 If mode is *Encryption*, and
@@ -131,11 +199,14 @@ class AESwState:
         """
         self.key = key.key if hasattr(key, 'key') else key
         self.iv, self.__mode, self._aes_cbc = iv, None, None
+
+        if self.iv and not isinstance(self.iv, IV):
+            self.iv = IV(self.iv)
         self.__iv_concated = False
 
     def __init_aes_state(self, mode: int) -> None:
         if FAST_ENCRYPTION:
-            self._aes_cbc = Cipher(algorithms.AES(self.key), modes.CBC(self.iv))
+            self._aes_cbc = Cipher(algorithms.AES(self.key), modes.CBC(self.iv.iv))
 
             if mode == 1: # Encryption
                 self._aes_cbc = self._aes_cbc.encryptor()
@@ -144,7 +215,7 @@ class AESwState:
                 self._aes_cbc = self._aes_cbc.decryptor()
                 setattr(self._aes_cbc, 'decrypt', self._aes_cbc.update)
         else:
-            self._aes_cbc = _PyaesState(self.key, self.iv)
+            self._aes_cbc = _PyaesState(self.key, self.iv.iv)
 
     @property
     def mode(self) -> int:
@@ -164,7 +235,7 @@ class AESwState:
         if not self.__mode:
             self.__mode = 1
 
-            if not self.iv: self.iv = urandom(16)
+            if not self.iv: self.iv = IV.generate()
             self.__init_aes_state(self.__mode)
         else:
             if self.__mode != 1:
@@ -175,7 +246,7 @@ class AESwState:
 
         if concat_iv and not self.__iv_concated:
             self.__iv_concated = True
-            return self.iv + data
+            return self.iv.iv + data
 
         return data
 
@@ -190,7 +261,7 @@ class AESwState:
             self.__mode = 2
 
             if not self.iv:
-                self.iv, data = data[:16], data[16:]
+                self.iv, data = IV(data[:16]), data[16:]
             self.__init_aes_state(self.__mode)
         else:
             if self.__mode != 2:

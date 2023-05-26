@@ -243,7 +243,7 @@ class PreparedFile:
     filekey: 'tgbox.keys.FileKey'
     filesize: int
     filepath: PathLike
-    filesalt: bytes
+    filesalt: 'tgbox.crypto.FileSalt'
     fingerprint: bytes
     metadata: bytes
     imported: bool
