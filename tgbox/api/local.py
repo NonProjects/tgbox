@@ -32,8 +32,9 @@ from ..crypto import (
 from ..keys import (
     make_filekey, make_requestkey,
     EncryptedMainkey, make_mainkey,
-    make_sharekey, MainKey, RequestKey,
-    ShareKey, ImportKey, FileKey, BaseKey
+    make_sharekey, make_dirkey, MainKey,
+    RequestKey, ShareKey, ImportKey,
+    FileKey, BaseKey, DirectoryKey
 )
 from ..defaults import (
     PREFIX, VERBYTE, DEF_TGBOX_NAME, UploadLimits
@@ -142,7 +143,7 @@ async def get_localbox(
         logger.info(f'Getting DecryptedLocalBox of {tgbox_db.db_path}')
         try:
             return await EncryptedLocalBox(tgbox_db).decrypt(basekey)
-        except IncorrectKey as e:
+        except AESError as e:
             await tgbox_db.close()
             raise e
     else:
@@ -494,8 +495,11 @@ class EncryptedLocalBox:
         return self
 
     async def get_file(
-            self, id: int, decrypt: bool=True, cache_preview: bool=True)\
-            -> Union['DecryptedLocalBoxFile', 'EncryptedLocalBoxFile', None]:
+            self, id: int,
+            decrypt: Optional[bool] = None,
+            cache_preview: bool=True) -> Union[
+                'DecryptedLocalBoxFile',
+                'EncryptedLocalBoxFile', None]:
         """
         Returns ``EncryptedLocalBoxFile`` from ``EncryptedLocalBox``
         or ``DecryptedLocalBoxFile`` from ``DecryptedLocalBox`` if
@@ -506,7 +510,9 @@ class EncryptedLocalBox:
                 File ID.
 
             decrypt (``bool``, optional):
-                Force return EncryptedLocalBoxFile
+                Will return ``EncryptedLocalBoxFile`` if ``False``,
+                and ``DecryptedLocalBoxFile`` if ``True``. If
+                ``None``, will be determined by class.
 
             cache_preview (``bool``, optional):
                 Cache preview in class or not.
@@ -514,6 +520,12 @@ class EncryptedLocalBox:
         try:
             self.__raise_initialized()
             logger.info(f'File by ID{id} was requested from LocalBox')
+
+            if decrypt is None and isinstance(self, DecryptedLocalBox):
+                decrypt = True
+
+            elif decrypt is None and isinstance(self, EncryptedLocalBox):
+                decrypt = False
 
             if decrypt and self._mainkey and not\
                 isinstance(self._mainkey, EncryptedMainkey):
@@ -592,7 +604,8 @@ class EncryptedLocalBox:
             self, cache_preview: bool=True,
             min_id: Optional[int] = None,
             max_id: Optional[int] = None,
-            ids: Optional[int, list] = None)\
+            ids: Optional[int, list] = None,
+            decrypt: Optional[bool] = None)\
             -> Union[
                 'DecryptedLocalBoxFile',
                 'EncryptedLocalBoxFile', None
@@ -618,6 +631,11 @@ class EncryptedLocalBox:
                 ID or list with IDs you want to
                 fetch. If specified, The min_id
                 and max_id args will be ignored
+
+            decrypt (``bool``, optional):
+                Will return ``EncryptedLocalBoxFile`` if ``False``,
+                and ``DecryptedLocalBoxFile`` if ``True``. If
+                ``None``, will be determined by class.
         """
         if ids:
             ids = str(tuple(ids)) if len(ids) > 1 else f'({ids[0]})'
@@ -640,7 +658,10 @@ class EncryptedLocalBox:
             if not pending: return # No more files
 
             pending = [
-                self.get_file(file_id[0], cache_preview=cache_preview)
+                self.get_file(
+                    file_id[0], decrypt=decrypt,
+                    cache_preview=cache_preview
+                )
                 for file_id in pending
             ]
             pending = await gather(*pending)
@@ -713,7 +734,7 @@ class EncryptedLocalBox:
                 this key will be used for *Box* decryption.
         """
         self.__raise_initialized()
-        return make_requestkey(basekey, box_salt=self._box_salt)
+        return make_requestkey(basekey, self._box_salt)
 
     async def delete(self) -> None:
         """
@@ -821,7 +842,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 # of the same box. So there is decryption with basekey.
                 self._session = AES(key).decrypt(elb._session).decode()
             except (UnicodeDecodeError, ValueError):
-                raise IncorrectKey('Can\'t decrypt Session. Invalid Basekey?')
+                raise AESError ('Can\'t decrypt Session. Invalid Basekey?')
 
         elif isinstance(key, MainKey):
             self._mainkey = key
@@ -1357,9 +1378,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 it if you already know file size.
 
             file_path (``Path``, optional):
-                File path. You can specify here path
-                that isn't exists. If not specified, will
-                be used path from the ``BinaryIO``, if file
+                File path of *Box* file (file name must be
+                included). If not specified, will be used path
+                from the ``BinaryIO``, (``file`` arg) if file
                 is not a ``BinaryIO`` then will be used a
                 ``self.defaults.DEF_NO_FOLDER``.
 
@@ -1380,9 +1401,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 Will try to add file preview to
                 the metadata if ``True`` (default).
         """
-        file_salt, file_iv = FileSalt.generate(), IV.generate()
-        filekey = make_filekey(self._mainkey, file_salt)
-
         if isinstance(file, TelegramVirtualFile):
             logger.info('Trying to make a PreparedFile from Telegram file...')
 
@@ -1488,6 +1506,28 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         logger.debug(f'Constructing metadata for {file_path.name}')
 
+        file_salt, file_iv = FileSalt.generate(), IV.generate()
+
+        for path_part in ppart_id_generator(file_path.parent, self._mainkey):
+            ppath_head = path_part[2]
+
+        # DirectoryKey is the Key used to make a FileKey started
+        # from the v1.3. Instead of making FileKey with the
+        # MainKey, we can create a DirectoryKey, which will
+        # be identical for each file with the same file_path.
+        # This will give us ability to share the whole
+        # directory with the some user, we will just need
+        # to share DirectoryKey. DirectoryKey doesn't
+        # encrypt anything, we use it only to make keys
+        dirkey = make_dirkey(self._mainkey, ppath_head)
+        # FileKey is a Key that encrypts File and it's
+        # metadata (except the edirkey & efile_path).
+        filekey = make_filekey(dirkey, file_salt)
+
+        # We will store the DirectoryKey in encrypted
+        # (by MainKey) form in the public Metadata.
+        edirkey = AES(self._mainkey).encrypt(dirkey.key)
+
         # We should always encrypt FILE_PATH with MainKey.
         file_path_no_name = str(file_path.parent).encode()
         efile_path = AES(self._mainkey).encrypt(file_path_no_name)
@@ -1509,6 +1549,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             box_salt = self._box_salt.salt,
             file_salt = file_salt.salt,
             file_fingerprint = file_fingerprint,
+            edirkey = edirkey,
             secret_metadata = secret_metadata
         )
         if len(metadata) > self._defaults.METADATA_MAX:
@@ -1637,19 +1678,15 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         Arguments:
             reqkey (``RequestKey``, optional):
-                Other's ``RequestKey``. If isn't specified
+                Requester's ``RequestKey``. If isn't specified
                 returns ``ImportKey`` of this box without
                 encryption, so anyone with this key can
                 decrypt **ALL** files in your Boxes.
         """
         if reqkey:
-            return make_sharekey(
-                requestkey=reqkey,
-                mainkey=self._mainkey,
-                box_salt=self._box_salt
-            )
-        else:
-            return make_sharekey(mainkey=self._mainkey)
+            return make_sharekey(self._mainkey, self._box_salt, reqkey)
+
+        return make_sharekey(self._mainkey)
 
 class EncryptedLocalBoxDirectory:
     """
@@ -2010,6 +2047,29 @@ class DecryptedLocalBoxDirectory(EncryptedLocalBoxDirectory):
             """This function was inherited from ``EncryptedLocalBoxDirectory`` """
             """and cannot be used on ``DecryptedLocalBoxDirectory``."""
         )
+    def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
+        """
+        Returns ``ShareKey`` for this file. You should
+        use this method if you want to share **ALL**
+        files from this directory with other user.
+
+        Use the same method on the ``DecryptedLocalBoxFile``
+        to share **only one** file with some Requester.
+
+        Arguments:
+            reqkey (``RequestKey``, optional):
+                Requester's ``RequestKey``. If isn't specified,
+                returns ``ShareKey`` of this directory without
+                encryption, so ANYONE with this key can decrypt
+                files from this Directory in Local & Remote.
+        """
+        dirkey = make_dirkey(self._lb._mainkey, self._part_id)
+
+        if reqkey:
+            return make_sharekey(dirkey, self._part_id, reqkey)
+
+        return make_sharekey(dirkey)
+
 class EncryptedLocalBoxFile:
     """
     This class represents an encrypted local file. On
@@ -2062,8 +2122,8 @@ class EncryptedLocalBoxFile:
         self._fingerprint = None
         self._updated_metadata = None
 
+        self._directory = None
         self._ppath_head, self._upload_time = None, None
-        self._metadata, self._directory = None, None
         self._imported, self._efilekey = None, None
         self._file_salt, self._version_byte = None, None
 
@@ -2201,7 +2261,7 @@ class EncryptedLocalBoxFile:
             sql_tuple = ('SELECT * FROM FILES WHERE ID=?', (self._id,))
         ))
         self._updated_metadata = file_row.pop()
-        self._metadata = file_row.pop()
+        metadata = file_row.pop()
         self._fingerprint = file_row.pop()
         self._efilekey = file_row.pop()
         self._ppath_head = file_row.pop()
@@ -2215,18 +2275,23 @@ class EncryptedLocalBoxFile:
 
         self._imported = bool(self._efilekey)
 
-        self._prefix = self._metadata[:len(PREFIX)]
-        self._version_byte = self._metadata[
+        self._prefix = metadata[:len(PREFIX)]
+        self._version_byte = metadata[
             len(PREFIX) : len(VERBYTE) + len(PREFIX)
         ]
         pattr_offset = len(PREFIX) + len(VERBYTE) + 3
 
         unpacked_metadata = PackedAttributes.unpack(
-            self._metadata[pattr_offset:-16]
+            metadata[pattr_offset:-16]
         )
-        self._file_iv = self._metadata[-16:]
+        self._file_iv = metadata[-16:]
         self._file_salt = FileSalt(unpacked_metadata['file_salt'])
         self._box_salt = BoxSalt(unpacked_metadata['box_salt'])
+        self._secret_metadata = unpacked_metadata['secret_metadata']
+        # edirkey is encrypted DirectoryKey. If it's not in the
+        # public part of the metadata then we are dealing with
+        # the file that was uploaded with the TGBOX < v1.3.
+        self._edirkey = unpacked_metadata.get('edirkey', None)
 
         if isinstance(self._defaults, DefaultsTableWrapper):
             if not self._defaults.initialized:
@@ -2252,19 +2317,26 @@ class EncryptedLocalBoxFile:
         self._cache_preview = True
 
     async def decrypt(
-            self, key: Optional[Union[FileKey, MainKey]] = None,
-            dlb: Optional[DecryptedLocalBox] = None) -> 'DecryptedLocalBoxFile':
+            self, key: Optional[Union[FileKey, MainKey, ImportKey]] = None,
+            dlb: Optional[DecryptedLocalBox] = None,
+            erase_encrypted_metadata: bool=True) -> 'DecryptedLocalBoxFile':
         """
         Returns decrypted by ``key``/``dlb`` ``EncryptedLocalBoxFile``
 
         Arguments:
-            key (``FileKey``, ``MainKey``):
+            key (``FileKey``, ``MainKey``, ``ImportKey``):
                 Decryption key. Must be specified if
                 ``dlb`` argument is ``None``.
 
             dlb (``DecryptedLocalBox``, optional):
                 Decrypted LocalBox. Must be specified
                 if ``key`` argument is ``None``.
+
+            erase_encrypted_metadata (``bool``, optional):
+                Will remove metadata from the parent
+                ``EncryptedLocalBoxFile`` after decryption
+                to save more RAM if ``True``. You can call
+                ``.init()`` method on it to load it again.
         """
         if not any((key, dlb)):
             raise ValueError('You should specify at least key or dlb')
@@ -2272,7 +2344,8 @@ class EncryptedLocalBoxFile:
         if not self.initialized:
             await self.init()
 
-        return DecryptedLocalBoxFile(self, key=key, dlb=dlb)
+        return DecryptedLocalBoxFile(self, key=key, dlb=dlb,
+            erase_encrypted_metadata=erase_encrypted_metadata)
 
     async def delete(self) -> None:
         """
@@ -2299,7 +2372,7 @@ class EncryptedLocalBoxFile:
                 your own Box. Take key from it and specify here.
         """
         self.__raise_initialized()
-        return make_requestkey(mainkey, file_salt=self._file_salt)
+        return make_requestkey(mainkey, self._file_salt)
 
 class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
     """
@@ -2331,7 +2404,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             self, elbf: EncryptedLocalBoxFile,
             key: Optional[Union[FileKey, ImportKey, MainKey]] = None,
             dlb: Optional[DecryptedLocalBox] = None,
-            cache_preview: bool=True):
+            cache_preview: Optional[bool] = None,
+            erase_encrypted_metadata: bool=True):
         """
         Arguments:
             elbf (``EncryptedLocalBoxFile``):
@@ -2350,13 +2424,20 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 Must be specified if ``key` is ``None``.
 
             cache_preview (``bool``, optional):
-                Cache preview in class or not.
+                Cache preview in class or not. If it's
+                ``None`` (by default) will be inherited
+                the same ``cache_preview`` from parent.
+
+            erase_encrypted_metadata (``bool``, optional):
+                If ``True`` (by default) will remove the
+                encrypted ``secret_metadata`` Metadata
+                value from the parent class.
         """
         if not any((key, dlb)):
             raise ValueError('At least key or dlb must be specified')
 
         if not elbf._initialized:
-            raise NotInitializedError('You should init elbf firstly')
+            raise NotInitializedError('EncryptedLocalBoxFile must be initialized.')
 
         self._initialized = True
 
@@ -2389,28 +2470,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         else:
             self._cache_preview = cache_preview
 
-
-        if isinstance(key, (FileKey, ImportKey)):
-            logger.debug('Treating key as FileKey')
-            self._filekey = FileKey(key.key)
-
-        elif isinstance(key, MainKey) and self._efilekey:
-            logger.debug('Trying to decrypt encrypted FileKey with MainKey')
-            self._filekey = FileKey(
-                AES(self._key).decrypt(self._efilekey)
-            )
-        elif isinstance(self._lb, DecryptedLocalBox) and self._efilekey:
-            logger.debug('Trying to decrypt encrypted FileKey with DecryptedLocalBox')
-            self._filekey = FileKey(
-                AES(self._lb._mainkey).decrypt(self._efilekey)
-            )
-        elif isinstance(key, MainKey) and not self._efilekey:
-            logger.debug('Making FileKey from the MainKey and FileSalt')
-            self._filekey = make_filekey(self._key, self._file_salt)
-
-        elif isinstance(self._lb, DecryptedLocalBox):
-            logger.debug('We will use MainKey from DecryptedLocalBox')
-            self._filekey = make_filekey(self._lb._mainkey, self._file_salt)
+        self._erase_encrypted_metadata = erase_encrypted_metadata
 
 
         if isinstance(key, MainKey):
@@ -2425,26 +2485,75 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         else:
             self._mainkey = None
 
-        self._upload_time = AES(self._filekey).decrypt(elbf._upload_time)
+
+        if self._mainkey and elbf._edirkey:
+            # DirectoryKey should be presented in the
+            # public part of Metadata started with v1.3
+            dirkey = AES(self._mainkey).decrypt(elbf._edirkey)
+            self._dirkey = DirectoryKey(dirkey)
+        else:
+            # Otherwise, file was uploaded before
+            # the TGBOX version 1.3
+            self._dirkey = None
+
+
+        if isinstance(key, FileKey):
+            logger.debug('Treating key as FileKey')
+            self._filekey = FileKey(key.key)
+
+        elif isinstance(key, ImportKey):
+            try:
+                logger.debug('Trying to treat key as DirectoryKey...')
+
+                filekey = make_filekey(key, self._file_salt)
+                assert len(AES(filekey).decrypt(elbf._upload_time)) < 16
+                # ^ ImportKey can be DirectoryKey, so here we're try
+                #   to treat it as dirkey and make FileKey from it,
+                #   then, we try to decrypt some Metadata field to
+                #   check if decryption will fail or not. If not, --
+                #   it's definitely a DirectoryKey.
+                #
+                # | Decryption can fail with ValueError (invalid
+                #   padding bytes OR by `assert` statement. The
+                #   upload_time after decryption should be less
+                #   than 16 bytes in size (decryption failed)
+                self._filekey = filekey
+                self._dirkey = DirectoryKey(key)
+            except (ValueError, AssertionError):
+                logger.debug('ImportKey is not DirectoryKey, so treating as FileKey')
+                self._filekey = FileKey(key.key)
+
+        elif self._mainkey and self._efilekey:
+            logger.debug('Trying to decrypt encrypted FileKey with MainKey')
+            self._filekey = FileKey(AES(self._mainkey).decrypt(self._efilekey))
+
+        elif self._mainkey and not self._efilekey:
+            if self._dirkey:
+                logger.debug('Making FileKey from the DirectoryKey and FileSalt (>= v1.3)')
+                self._filekey = make_filekey(self._dirkey, self._file_salt)
+            else:
+                logger.debug('Making FileKey from the MainKey and FileSalt (< v1.3)')
+                self._filekey = make_filekey(self._mainkey, self._file_salt)
+
+        else:
+            raise ValueError('You need to specify FileKey | MainKey | DecryptedLocalBox')
+
+        try:
+            self._upload_time = AES(self._filekey).decrypt(elbf._upload_time)
+        except ValueError:
+            raise AESError('Can\'t decrypt Metadata attr. Incorrect key?')
+
         self._upload_time = bytes_to_int(self._upload_time)
-
-        pattr_offset = len(PREFIX) + len(VERBYTE) + 3
-
-        logger.debug(f'Unpacking public metadata of ID{self._id}...')
-
-        unpacked_metadata = PackedAttributes.unpack(
-            self._elbf._metadata[pattr_offset:-16]
-        )
 
         logger.debug(f'Decrypting & unpacking secret metadata of ID{self._id}...')
 
         secret_metadata = AES(self._filekey).decrypt(
-            unpacked_metadata['secret_metadata']
+            self._elbf._secret_metadata
         )
-        if len(secret_metadata) == len(unpacked_metadata['secret_metadata'])-16:
-            raise AESError('Metadata wasn\'t decrypted correctly. Incorrect key?')
-
         secret_metadata = PackedAttributes.unpack(secret_metadata)
+
+        if not secret_metadata: # secret_metadata can't be empty dict
+            raise AESError('Metadata wasn\'t decrypted correctly. Incorrect key?')
 
         self.__required_metadata = [
             'duration', 'file_size', 'file_name',
@@ -2522,9 +2631,10 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                     else:
                         self._residual_metadata[k] = v
 
-        self._elbf._initialized = False
-        self._elbf._metadata = None # To save RAM
-        self._elbf._updated_metadata = None
+        if self._erase_encrypted_metadata:
+            self._elbf._initialized = False
+            self._elbf._secret_metadata = None
+            self._elbf._updated_metadata = None
 
     @staticmethod
     async def init() -> NoReturn:
@@ -2839,15 +2949,12 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         Arguments:
             reqkey (``RequestKey``, optional):
-                Other's ``RequestKey``. If isn't specified
+                Requester's ``RequestKey``. If isn't specified
                 returns ``ShareKey`` of this file without
                 encryption, so ANYONE with this key can
                 decrypt this local & remote box file.
         """
         if reqkey:
-            return make_sharekey(
-                requestkey=reqkey, filekey=self._filekey,
-                file_salt=self._file_salt
-            )
-        else:
-            return make_sharekey(filekey=self._filekey)
+            return make_sharekey(self._filekey, self._file_salt, reqkey)
+
+        return make_sharekey(self._filekey)

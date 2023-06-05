@@ -46,7 +46,8 @@ from ..crypto import (
 from ..keys import (
     make_mainkey, make_sharekey, MainKey,
     ShareKey, ImportKey, FileKey, BaseKey,
-    make_filekey, make_requestkey, RequestKey
+    make_filekey, make_requestkey, RequestKey,
+    DirectoryKey
 )
 from ..defaults import (
     VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME,
@@ -405,7 +406,7 @@ class EncryptedRemoteBox:
             id: int,
             key: Optional[Union[MainKey, FileKey, ImportKey]] = None,
             dlb: Optional['DecryptedLocalBox'] = None,
-            decrypt: bool=True,
+            decrypt: Optional[bool] = None,
             ignore_errors: bool=True,
             return_imported_as_erbf: bool=False,
             cache_preview: bool=True) -> Union[
@@ -441,8 +442,9 @@ class EncryptedRemoteBox:
                 this file (tip: you need to import it with ``dlb.import_file``).
 
             decrypt (``bool``, optional):
-                Returns ``DecryptedRemoteBoxFile`` if ``True`` (default),
-                ``EncryptedRemoteBoxFile`` otherwise.
+                Returns ``DecryptedRemoteBoxFile`` if ``True``,
+                ``EncryptedRemoteBoxFile`` otherwise. If
+                ``None``, will be determined by class.
 
             ignore_errors (``bool``, optional):
                 Ignore all errors related to decryption of the
@@ -473,8 +475,7 @@ class EncryptedRemoteBox:
             key, dlb=dlb, decrypt=decrypt,
             ids=id, cache_preview=cache_preview,
             return_imported_as_erbf=return_imported_as_erbf,
-            ignore_errors=ignore_errors
-        )
+            ignore_errors=ignore_errors)
         try:
             return await anext(file_iter)
         # If there is no file by ``id``.
@@ -497,7 +498,7 @@ class EncryptedRemoteBox:
             wait_time: Optional[float] = None,
             ids: Optional[Union[int, List[int]]] = None,
             reverse: bool=False,
-            decrypt: bool=True,
+            decrypt: Optional[bool] = None,
             timeout: int=15,
             cache_preview: bool=True,
             erase_encrypted_metadata: bool=True) -> AsyncGenerator[
@@ -603,8 +604,9 @@ class EncryptedRemoteBox:
                 you will receive FloodWaitError otherwise (TGBOX).
 
             decrypt (``bool``, optional):
-                Returns ``DecryptedRemoteBoxFile`` if ``True`` (default),
-                ``EncryptedRemoteBoxFile`` otherwise.
+                Returns ``DecryptedRemoteBoxFile`` if ``True``,
+                ``EncryptedRemoteBoxFile`` otherwise. If
+                ``None``, will be determined by class.
 
             cache_preview (``bool``, optional):
                 Cache preview in yielded by generator
@@ -628,6 +630,12 @@ class EncryptedRemoteBox:
         if hasattr(self, '_dlb'):
             logger.debug('self have _dlb, will try to yield DecryptedRemoteBoxFile')
             dlb = self._dlb # pylint: disable=no-member
+
+        if decrypt is None and isinstance(self, DecryptedRemoteBox):
+            decrypt = True
+
+        elif decrypt is None and isinstance(self, EncryptedRemoteBox):
+            decrypt = False
 
         if decrypt and not any((key, dlb)):
             raise ValueError(
@@ -667,8 +675,8 @@ class EncryptedRemoteBox:
             try:
                 return await EncryptedRemoteBoxFile(
                     m, self._tc, cache_preview=cache_preview,
-                    defaults=self._defaults).decrypt(
-                        key, erase_encrypted_metadata)
+                    defaults=self._defaults).decrypt(key=key,
+                        erase_encrypted_metadata=erase_encrypted_metadata)
 
             except Exception as e: # In case of imported file
                 logger.debug(
@@ -745,7 +753,7 @@ class EncryptedRemoteBox:
                         # We already imported file, so DLB contains a FileKey
                         return await EncryptedRemoteBoxFile(
                             m, self._tc, cache_preview=cache_preview,
-                            defaults=self._defaults).decrypt(dlb_file._filekey)
+                            defaults=self._defaults).decrypt(key=dlb_file._filekey)
 
         processed_messages = 0
         while True:
@@ -1003,7 +1011,7 @@ class EncryptedRemoteBox:
                 this key will be used for *Box* decryption.
         """
         box_salt = await self.get_box_salt()
-        return make_requestkey(basekey, box_salt=box_salt)
+        return make_requestkey(basekey, box_salt)
 
     async def left(self) -> None:
         """
@@ -1152,20 +1160,17 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
 
         Arguments:
             reqkey (``RequestKey``, optional):
-                User's ``RequestKey``. If isn't specified
+                Requester's ``RequestKey``. If isn't specified
                 returns ``ShareKey`` of this box without
                 encryption, so anyone with this key can
                 decrypt **ALL** files in your ``RemoteBox``.
         """
         box_salt = await self.get_box_salt()
+
         if reqkey:
-            return make_sharekey(
-                requestkey=reqkey,
-                mainkey=self._mainkey,
-                box_salt=box_salt
-            )
-        else:
-            return make_sharekey(mainkey=self._mainkey)
+            return make_sharekey(self._mainkey, box_salt, reqkey)
+
+        return make_sharekey(self._mainkey)
 
 class EncryptedRemoteBoxFile:
     """
@@ -1221,7 +1226,6 @@ class EncryptedRemoteBoxFile:
         """
         self._initialized = False
 
-        self._metadata = None
         self._message = sended_file
 
         self._id = sended_file.id
@@ -1248,6 +1252,8 @@ class EncryptedRemoteBoxFile:
         self._prefix = None
         self._fingerprint = None
 
+        self._file_pos = None
+
         if self._message.fwd_from:
             self._imported = True
         else:
@@ -1261,8 +1267,7 @@ class EncryptedRemoteBoxFile:
                 FILE_PATH_MAX = Limits.FILE_PATH_MAX,
                 DEF_UNK_FOLDER = DEF_UNK_FOLDER,
                 DEF_NO_FOLDER = DEF_NO_FOLDER,
-                DOWNLOAD_PATH = DOWNLOAD_PATH,
-            )
+                DOWNLOAD_PATH = DOWNLOAD_PATH)
         else:
             logger.debug('ERBF: Found custom defaults, will try to use it')
             self._defaults = defaults
@@ -1458,20 +1463,26 @@ class EncryptedRemoteBoxFile:
         async for metadata in iter_down:
             m = self._prefix + self._version_byte
             m += int_to_bytes(metadata_size,3)
-            self._metadata = m + bytes(metadata[:metadata_size])
+            metadata = m + bytes(metadata[:metadata_size])
+            self._file_pos = len(metadata)
+            logger.debug(f'Actual encrypted filedata position: {self._file_pos}')
             break
 
-        parsedm = PackedAttributes.unpack(self._metadata[len(m):-16])
+        parsedm = PackedAttributes.unpack(metadata[len(m):-16])
 
-        if 'file_fingerprint' in parsedm:
-            self._fingerprint = parsedm['file_fingerprint']
-        else:
-            # For backward compatibility only
-            self._fingerprint = b''
+        self._file_iv = IV(metadata[-16:])
 
         self._file_salt = FileSalt(parsedm['file_salt'])
         self._box_salt = BoxSalt(parsedm['box_salt'])
-        self._file_iv = IV(self._metadata[-16:])
+        self._secret_metadata = parsedm['secret_metadata']
+        # Fingerprint was added in the v1.1. It's a SHA256 over
+        # absolute Box file_path and MainKey. If it's not
+        # presented in the Metadata, then it's a file of v1.0
+        self._fingerprint = parsedm.get('file_fingerprint', b'')
+        # edirkey is encrypted DirectoryKey. If it's not in the
+        # public part of the metadata then we are dealing with
+        # the file that was uploaded with the TGBOX < v1.3.
+        self._edirkey = parsedm.get('edirkey', None)
 
         self._initialized = True
         return self
@@ -1511,19 +1522,24 @@ class EncryptedRemoteBoxFile:
                 ``DecryptedLocalBox`` and specify it here.
         """
         self.__raise_initialized()
-        return make_requestkey(mainkey, file_salt=self._file_salt)
+        return make_requestkey(mainkey, self._file_salt)
 
     async def decrypt(
-            self, key: Union[MainKey, FileKey, ImportKey, BaseKey],
-            erase_encrypted_metadata: Optional[bool] = True
+            self, key: Optional[Union[MainKey, FileKey, ImportKey]] = None,
+            dlb: Optional['DecryptedLocalBox'] = None,
+            erase_encrypted_metadata: bool=True
             ) -> 'DecryptedRemoteBoxFile':
         """
         Returns ``DecryptedRemoteBoxFile``.
 
         Arguments:
-            key (``MainKey``, ``FileKey``, ``ImportKey``, ``BaseKey``):
-                Decryption key. All, except ``FileKey`` will be
-                used to make ``FileKey`` for this file.
+            key (``FileKey``, ``MainKey``, ``ImportKey``):
+                Decryption key. Must be specified if
+                ``dlb`` argument is ``None``.
+
+            dlb (``DecryptedLocalBox``, optional):
+                Decrypted LocalBox. Must be specified
+                if ``key`` argument is ``None``.
 
             erase_encrypted_metadata (``bool``, optional):
                 Will remove metadata from the parent
@@ -1534,7 +1550,7 @@ class EncryptedRemoteBoxFile:
         if not self.initialized:
             await self.init()
 
-        return await DecryptedRemoteBoxFile(self, key).init(
+        return DecryptedRemoteBoxFile(self, key=key, dlb=dlb,
             erase_encrypted_metadata=erase_encrypted_metadata)
 
 class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
@@ -1573,20 +1589,48 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
     """
     def __init__(
             self, erbf: EncryptedRemoteBoxFile,
-            key: Union[MainKey, FileKey, ImportKey]):
+            key: Optional[Union[FileKey, ImportKey, MainKey]] = None,
+            dlb: Optional['DecryptedLocalBox'] = None,
+            cache_preview: Optional[bool] = None,
+            erase_encrypted_metadata: bool=True):
         """
         Arguments:
             erbf (``EncryptedRemoteBoxFile``):
                 Instance of ``EncryptedRemoteBoxFile`` to decrypt.
 
-            key (``MainKey``, ``FileKey``, ``ImportKey``):
-                Decryption key.
+            key (``FileKey``, ``ImportKey``, ``MainKey``, optional):
+                Decryption key. Must be specified
+                if ``dlb`` argument is ``None``.
+
+            dlb (``DecryptedLocalBox``, optional):
+                Decrypted LocalBox associated with the
+                EncryptedRemoteBoxFile you want to decrypt.
+                Must be specified if ``key` is ``None``.
+
+            cache_preview (``bool``, optional):
+                Cache preview in class or not. If it's
+                ``None`` (by default) will be inherited
+                the same ``cache_preview`` from parent.
+
+            erase_encrypted_metadata (``bool``, optional):
+                If ``True`` (by default) will remove the
+                encrypted ``secret_metadata`` Metadata
+                value from the parent class.
         """
+        if not any((key, dlb)):
+            raise ValueError('At least key or dlb must be specified')
+
         if not erbf.initialized:
-            raise NotInitializedError('RemoteBoxFile must be initialized.')
+            raise NotInitializedError('EncryptedRemoteBoxFile must be initialized.')
 
         self._key = key
         self._erbf = erbf
+
+        # In DecryptedRemoteBoxFile, if '_lb is not None'
+        # then it must be 100% DecryptedLocalBox, while
+        # in DecryptedLocalBox it can be EncryptedLocalBox.
+        # We name it the same here to make API similar
+        self._lb = dlb
 
         self._initialized = False
 
@@ -1601,14 +1645,22 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         self._tc = erbf._tc
         self._defaults = erbf._defaults
-        self._cache_preview = erbf._cache_preview
+
+        if cache_preview is None:
+            self._cache_preview = erbf._cache_preview
+        else:
+            self._cache_preview = cache_preview
+
+        self._erase_encrypted_metadata = erase_encrypted_metadata
 
         self._box_channel = erbf._box_channel
         self._box_channel_id = erbf._box_channel_id
 
         self._box_salt = erbf._box_salt
         self._file_size = erbf._file_size
+
         self._fingerprint = erbf._fingerprint
+        self._edirkey = erbf._edirkey
 
         self._upload_time, self._size = erbf._upload_time, None
         self._file_iv, self._file_salt = erbf._file_iv, erbf._file_salt
@@ -1616,21 +1668,168 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._duration, self._version_byte = None, erbf._version_byte
 
         self._preview, self._imported = None, erbf._imported
-        self._prefix, self._file_pos = erbf._prefix, None
+        self._prefix, self._file_pos = erbf._prefix, erbf._file_pos
 
         self._file_file_name = erbf._file_file_name
         self._mime, self._file_name = None, None
         self._residual_metadata = None
 
-        if isinstance(key, (FileKey, ImportKey)):
-            self._filekey = FileKey(key.key)
-            self._mainkey = None
-        elif isinstance(key, BaseKey):
-            self._mainkey = make_mainkey(key, self._box_salt)
-            self._filekey = make_filekey(self._mainkey, self._file_salt)
+
+        if isinstance(key, MainKey):
+            logger.debug('key is MainKey, self._mainkey is present')
+            self._mainkey = key
+
+        elif self._lb:
+            logger.debug('We will take MainKey from DecryptedLocalBox')
+            self._mainkey = self._lb._mainkey
         else:
-            self._mainkey = self._key
-            self._filekey = make_filekey(self._key, self._file_salt)
+            self._mainkey = None
+
+
+        if self._mainkey and erbf._edirkey:
+            # DirectoryKey should be presented in the
+            # public part of Metadata started with v1.3
+            dirkey = AES(self._mainkey).decrypt(erbf._edirkey)
+            self._dirkey = DirectoryKey(dirkey)
+        else:
+            # Otherwise, file was uploaded before
+            # the TGBOX version 1.3
+            self._dirkey = None
+
+
+        secret_metadata = None
+
+        if isinstance(key, FileKey):
+            logger.debug('Treating key as FileKey')
+            self._filekey = FileKey(key.key)
+
+        elif isinstance(key, ImportKey):
+            try:
+                logger.debug('Trying to treat key as DirectoryKey...')
+
+                filekey = make_filekey(key, self._file_salt)
+
+                secret_metadata = AES(filekey).decrypt(
+                    self._erbf._secret_metadata
+                )
+                secret_metadata = PackedAttributes.unpack(secret_metadata)
+                assert secret_metadata # Shouldn't be empty dict.
+                # ^ ImportKey can be DirectoryKey, so here we're try
+                #   to treat it as dirkey and make FileKey from it,
+                #   then, we try to decrypt secret Metadata field to
+                #   check if decryption will fail or not. If not, --
+                #   it's definitely a DirectoryKey.
+                #
+                # | Decryption can fail with ValueError (invalid
+                #   padding bytes OR by `assert` statement.
+                self._filekey = filekey
+                self._dirkey = DirectoryKey(key)
+            except (ValueError, AssertionError):
+                logger.debug('ImportKey is not DirectoryKey, so treating as FileKey')
+                self._filekey = FileKey(key.key)
+
+        elif self._mainkey:
+            if self._dirkey:
+                logger.debug('Making FileKey from the DirectoryKey and FileSalt (>= v1.3)')
+                self._filekey = make_filekey(self._dirkey, self._file_salt)
+            else:
+                logger.debug('Making FileKey from the MainKey and FileSalt (< v1.3)')
+                self._filekey = make_filekey(self._mainkey, self._file_salt)
+
+        else:
+            raise ValueError('You need to specify FileKey | MainKey | DecryptedLocalBox')
+
+        logger.debug('Decrypting & Unpacking secret_metadata of ERBF metadata...')
+
+        if not secret_metadata:
+            try:
+                secret_metadata = AES(self._filekey).decrypt(
+                    self._erbf._secret_metadata
+                )
+            except ValueError:
+                raise AESError('Metadata wasn\'t decrypted correctly. Incorrect key?')
+
+            secret_metadata = PackedAttributes.unpack(secret_metadata)
+
+        if not secret_metadata: # secret_metadata can't be empty dict
+            raise AESError('Metadata wasn\'t decrypted correctly. Incorrect key?')
+
+        if self._cache_preview:
+            logger.debug('cache_preview is True, DRBF preview will be saved.')
+            self._preview = secret_metadata['preview']
+        else:
+            logger.debug('cache_preview is False, DRBF preview won\'t be saved.')
+            self._preview = b''
+
+        self._duration = bytes_to_int(secret_metadata['duration'])
+        self._size = bytes_to_int(secret_metadata['file_size'])
+        self._file_name = secret_metadata['file_name'].decode()
+        self._cattrs = PackedAttributes.unpack(secret_metadata['cattrs'])
+        self._mime = secret_metadata['mime'].decode()
+
+        if self._mainkey:
+            logger.debug('Decrypting efile_path with the MainKey')
+            self._file_path = AES(self._mainkey).decrypt(
+                secret_metadata['efile_path']
+            )
+            self._file_path = Path(self._file_path.decode())
+        else:
+            logger.warning(
+               f'''We can\'t decrypt real file path of ID{self._id} because '''
+                '''MainKey is not present. Try to decrypt EncryptedRemoteBoxFile '''
+                '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
+            )
+            self._file_path = self._defaults.DEF_NO_FOLDER
+
+        for attr in self.__required_metadata:
+            secret_metadata.pop(attr)
+
+        self._residual_metadata = secret_metadata
+
+        if self._message.message:
+            try:
+                edited_metadata = AES(self._filekey).decrypt(
+                    urlsafe_b64decode(self._message.message)
+                )
+                edited_metadata = PackedAttributes.unpack(edited_metadata)
+                logger.debug(f'Updates to metadata for ID{self._id} found. Applying...')
+
+                for k,v in tuple(edited_metadata.items()):
+                    if k in self.__required_metadata:
+                        if k == 'cattrs':
+                            setattr(self, f'_{k}', PackedAttributes.unpack(v))
+
+                        elif k == 'efile_path':
+                            if self._mainkey:
+                                file_path = AES(self._mainkey).decrypt(v)
+                                self._file_path = Path(file_path.decode())
+                            else:
+                                logger.debug(
+                                    '''Updated metadata contains efile_path, but '''
+                                    '''this DecryptedRemoteBoxFile wasn\'t '''
+                                    '''decrypted with MainKey, so we will ignore it'''
+                                )
+                        else:
+                            # str attributes
+                            if k in ('mime', 'file_name'):
+                                setattr(self, f'_{k}', v.decode())
+                            else:
+                                setattr(self, f'_{k}', v)
+                    else:
+                        self._residual_metadata[k] = v
+
+                    del edited_metadata[k]
+
+            except Exception:
+                logger.debug(
+                    f'''Updates to metadata for ID{self._id} failed. '''
+                    f'''Traceback:\n{format_exc()}'''
+                )
+        self._initialized = True
+
+        if self._erase_encrypted_metadata:
+            self._erbf._initialized = False
+            self._erbf._secret_metadata = None
 
     @property
     def size(self) -> Union[int, None]:
@@ -1705,138 +1904,17 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             raise NotInitializedError('RemoteBoxFile must be initialized.')
 
     @staticmethod
+    async def init() -> NoReturn:
+        raise AttributeError(
+            """This function was inherited from ``EncryptedRemoteBoxFile`` """
+            """and cannot be used on ``DecryptedRemoteBoxFile``."""
+        )
+    @staticmethod
     async def decrypt() -> NoReturn:
         raise AttributeError(
             """This function was inherited from ``EncryptedRemoteBoxFile`` """
             """and cannot be used on ``DecryptedRemoteBoxFile``."""
         )
-    async def init(
-            self, cache_preview: bool=True,
-            erase_encrypted_metadata: Optional[bool] = True
-        ) -> 'DecryptedRemoteBoxFile':
-        """
-        This method will decrypt and parse metadata from
-        the EncryptedRemoteBoxFile.
-
-        This method will remove metadata from
-        the parent EncryptedRemoteBoxFile
-        to save more RAM if ``erase_encrypted_metadata``
-        is specified. You can call .init() method
-        on it to load it again.
-
-        If ERBFI wasn't initialized, this
-        method will init it.
-
-        If ``cache_preview`` was disabled in the
-        parent class then you can set similar kwarg
-        here to ``True`` and method will save it.
-        """
-        logger.debug(f'Initializing DRBF ID({self._id})...')
-
-        if not self._erbf._initialized:
-            await self._erbf.init()
-
-        cache_preview = cache_preview if cache_preview else self._cache_preview
-        pattr_offset = len(PREFIX) + len(VERBYTE) + 3
-
-        logger.debug('Unpacking Public part of RBF metadata...')
-
-        unpacked_metadata = PackedAttributes.unpack(
-            bytes(self._erbf._metadata[pattr_offset:-16])
-        )
-        self._file_pos = len(self._erbf._metadata)
-        logger.debug(f'Actual encrypted filedata position: {self._file_pos}')
-
-        logger.debug('Unpacking Secret part of RBF metadata...')
-
-        secret_metadata = AES(self._filekey).decrypt(
-            unpacked_metadata['secret_metadata']
-        )
-        secret_metadata = PackedAttributes.unpack(secret_metadata)
-
-        if not secret_metadata: # secret_metadata can't be empty dict
-            raise AESError('Metadata wasn\'t decrypted correctly. Incorrect key?')
-
-        if cache_preview:
-            logger.debug('cache_preview is True, DRBF preview will be saved.')
-            self._preview = secret_metadata['preview']
-        else:
-            logger.debug('cache_preview is False, DRBF preview won\'t be saved.')
-            secret_metadata.pop('preview')
-            self._preview = b''
-
-        self._duration = bytes_to_int(secret_metadata['duration'])
-        self._size = bytes_to_int(secret_metadata['file_size'])
-        self._file_name = secret_metadata['file_name'].decode()
-        self._cattrs = PackedAttributes.unpack(secret_metadata['cattrs'])
-        self._mime = secret_metadata['mime'].decode()
-
-        if self._mainkey:
-            logger.debug('Decrypting efile_path with the MainKey')
-            self._file_path = AES(self._mainkey).decrypt(
-                secret_metadata['efile_path']
-            )
-            self._file_path = Path(self._file_path.decode())
-        else:
-            logger.warning(
-               f'''We can\'t decrypt real file path of ID{self._id} because '''
-                '''MainKey is not present. Try to decrypt EncryptedRemoteBoxFile '''
-                '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
-            )
-            self._file_path = self._defaults.DEF_NO_FOLDER
-
-        for attr in self.__required_metadata:
-            secret_metadata.pop(attr)
-
-        self._residual_metadata = secret_metadata
-
-        if self._message.message:
-            try:
-                edited_metadata = AES(self._filekey).decrypt(
-                    urlsafe_b64decode(self._message.message)
-                )
-                edited_metadata = PackedAttributes.unpack(edited_metadata)
-                logger.debug(f'Updates to metadata for ID{self._id} found. Applying...')
-
-                for k,v in tuple(edited_metadata.items()):
-                    if k in self.__required_metadata:
-                        if k == 'cattrs':
-                            setattr(self, f'_{k}', PackedAttributes.unpack(v))
-
-                        elif k == 'efile_path':
-                            if self._mainkey:
-                                file_path = AES(self._mainkey).decrypt(v)
-                                self._file_path = Path(file_path.decode())
-                            else:
-                                logger.debug(
-                                    '''Updated metadata contains efile_path, but '''
-                                    '''this DecryptedRemoteBoxFile wasn\'t '''
-                                    '''decrypted with MainKey, so we will ignore it'''
-                                )
-                        else:
-                            # str attributes
-                            if k in ('mime', 'file_name'):
-                                setattr(self, f'_{k}', v.decode())
-                            else:
-                                setattr(self, f'_{k}', v)
-                    else:
-                        self._residual_metadata[k] = v
-
-                    del edited_metadata[k]
-
-            except Exception:
-                logger.debug(
-                    f'''Updates to metadata for ID{self._id} failed. '''
-                    f'''Traceback:\n{format_exc()}'''
-                )
-        self._initialized = True
-
-        if erase_encrypted_metadata:
-            self._erbf._initialized = False
-            self._erbf._metadata = None
-
-        return self
-
     async def download(
             self, *, outfile: Optional[Union[str, BinaryIO, Path]] = None,
             hide_folder: bool=False, hide_name: bool=False,
@@ -2136,7 +2214,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         Arguments:
             reqkey (``RequestKey``, optional):
-                Other's ``RequestKey``. If isn't specified
+                Requester's ``RequestKey``. If isn't specified
                 returns ``ImportKey`` of this file without
                 encryption, so **ANYONE** with this key
                 can decrypt this remote file.
@@ -2144,9 +2222,6 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self.__raise_initialized()
 
         if reqkey:
-            return make_sharekey(
-                requestkey=reqkey, filekey=self._filekey,
-                file_salt=self._file_salt
-            )
-        else:
-            return make_sharekey(filekey=self._filekey)
+            return make_sharekey(self._filekey, self._file_salt, reqkey)
+
+        return make_sharekey(self._filekey)

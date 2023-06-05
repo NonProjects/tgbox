@@ -103,6 +103,7 @@ class BoxSalt(Salt):
 class FileSalt(Salt):
     """This is a class-wrapper for FileSalt"""
 
+
 class _PyaesState:
     def __init__(self, key: Union[bytes, 'Key'], iv: IV):
         """
