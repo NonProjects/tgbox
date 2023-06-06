@@ -37,7 +37,8 @@ from ..keys import (
     FileKey, BaseKey, DirectoryKey
 )
 from ..defaults import (
-    PREFIX, VERBYTE, DEF_TGBOX_NAME, UploadLimits
+    PREFIX, VERBYTE, DEF_TGBOX_NAME,
+    UploadLimits, MINOR_VERSION
 )
 from ..errors import (
     LimitExceeded, DurationImpossible, NotEnoughRights,
@@ -1533,6 +1534,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         efile_path = AES(self._mainkey).encrypt(file_path_no_name)
 
         cattrs = PackedAttributes.pack(**cattrs) if cattrs else b''
+        minor_version = int_to_bytes(MINOR_VERSION)
 
         secret_metadata = PackedAttributes.pack(
             preview = preview,
@@ -1550,6 +1552,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             file_salt = file_salt.salt,
             file_fingerprint = file_fingerprint,
             edirkey = edirkey,
+            minor_version = minor_version,
             secret_metadata = secret_metadata
         )
         if len(metadata) > self._defaults.METADATA_MAX:
@@ -2122,10 +2125,13 @@ class EncryptedLocalBoxFile:
         self._fingerprint = None
         self._updated_metadata = None
 
-        self._directory = None
+        self._directory, self._prefix = None, None
         self._ppath_head, self._upload_time = None, None
         self._imported, self._efilekey = None, None
         self._file_salt, self._version_byte = None, None
+        self._file_iv, self._box_salt = None, None
+        self._secret_metadata, self._minor_version = None, None
+        self._edirkey = None
 
     def __hash__(self) -> int:
         return hash((self._id, 22))
@@ -2165,6 +2171,15 @@ class EncryptedLocalBoxFile:
         ``None`` if class wasn't initialized
         """
         return self._version_byte
+
+    @property
+    def minor_version(self) -> Union[int, None]:
+        """Returns Minor Version of this file or
+        ``None`` if class wasn't initialized. If
+        it's a -1, then file was uploaded before
+        the version 1.3.0 and minor is unknown.
+        """
+        return self._minor_version
 
     @property
     def defaults(self) -> Union[DefaultsTableWrapper, RemoteBoxDefaults]:
@@ -2288,10 +2303,19 @@ class EncryptedLocalBoxFile:
         self._file_salt = FileSalt(unpacked_metadata['file_salt'])
         self._box_salt = BoxSalt(unpacked_metadata['box_salt'])
         self._secret_metadata = unpacked_metadata['secret_metadata']
-        # edirkey is encrypted DirectoryKey. If it's not in the
-        # public part of the metadata then we are dealing with
-        # the file that was uploaded with the TGBOX < v1.3.
-        self._edirkey = unpacked_metadata.get('edirkey', None)
+        # Metadata include the minor_version field started from
+        # the version 1.3.0. We use it to enable a more
+        # straightforward backward compatibility
+        self._minor_version = unpacked_metadata.get('minor_version', -1)
+        if isinstance(self._minor_version, bytes):
+            self._minor_version = bytes_to_int(self._minor_version)
+
+        if self._minor_version >= 3:
+            # edirkey is encrypted DirectoryKey. It is should
+            # be presented in public Metadata from version 1.3
+            self._edirkey = unpacked_metadata['edirkey']
+        else:
+            self._edirkey = None
 
         if isinstance(self._defaults, DefaultsTableWrapper):
             if not self._defaults.initialized:
@@ -2464,6 +2488,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         self._file_iv = elbf._file_iv
         self._file_salt = elbf._file_salt
         self._box_salt = elbf._box_salt
+        self._minor_version = elbf._minor_version
 
         if cache_preview is None:
             self._cache_preview = elbf._cache_preview

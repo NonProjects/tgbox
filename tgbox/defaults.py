@@ -11,11 +11,16 @@ except ImportError:
 
 from .version import VERSION
 
+# Used to check minor protocol version for
+# the available features in TGBOX
+MINOR_VERSION = int(VERSION.split('.')[1])
+
 __all__ = [
     'Limits',
     'UploadLimits',
     'Scrypt',
     'VERSION',
+    'MINOR_VERSION',
     'VERBYTE',
     'DEF_TGBOX_NAME',
     'REMOTEBOX_PREFIX',

@@ -1251,7 +1251,9 @@ class EncryptedRemoteBoxFile:
         self._version_byte = None
         self._prefix = None
         self._fingerprint = None
-
+        self._secret_metadata = None
+        self._edirkey = None
+        self._minor_version = None
         self._file_pos = None
 
         if self._message.fwd_from:
@@ -1323,6 +1325,15 @@ class EncryptedRemoteBoxFile:
     def version_byte(self) -> Union[bytes, None]:
         """Returns Verbyte or ``None`` if not initialized"""
         return self._version_byte
+
+    @property
+    def minor_version(self) -> Union[int, None]:
+        """Returns Minor Version of this file or
+        ``None`` if class wasn't initialized. If
+        it's a -1, then file was uploaded before
+        the version 1.3.0 and minor is unknown.
+        """
+        return self._minor_version
 
     @property
     def box_salt(self) -> Union[BoxSalt, None]:
@@ -1479,10 +1490,20 @@ class EncryptedRemoteBoxFile:
         # absolute Box file_path and MainKey. If it's not
         # presented in the Metadata, then it's a file of v1.0
         self._fingerprint = parsedm.get('file_fingerprint', b'')
-        # edirkey is encrypted DirectoryKey. If it's not in the
-        # public part of the metadata then we are dealing with
-        # the file that was uploaded with the TGBOX < v1.3.
-        self._edirkey = parsedm.get('edirkey', None)
+
+        # Metadata include the minor_version field started from
+        # the version 1.3.0. We use it to enable a more
+        # straightforward backward compatibility
+        self._minor_version = parsedm.get('minor_version', -1)
+        if isinstance(self._minor_version, bytes):
+            self._minor_version = bytes_to_int(self._minor_version)
+
+        if self._minor_version >= 3:
+            # edirkey is encrypted DirectoryKey. It is should
+            # be presented in public Metadata from version 1.3
+            self._edirkey = parsedm['edirkey']
+        else:
+            self._edirkey = None
 
         self._initialized = True
         return self
@@ -1661,6 +1682,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         self._fingerprint = erbf._fingerprint
         self._edirkey = erbf._edirkey
+        self._minor_version = erbf._minor_version
 
         self._upload_time, self._size = erbf._upload_time, None
         self._file_iv, self._file_salt = erbf._file_iv, erbf._file_salt
