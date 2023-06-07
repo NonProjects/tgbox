@@ -606,7 +606,8 @@ class EncryptedLocalBox:
             min_id: Optional[int] = None,
             max_id: Optional[int] = None,
             ids: Optional[int, list] = None,
-            decrypt: Optional[bool] = None)\
+            decrypt: Optional[bool] = None,
+            reverse: Optional[bool] = False)\
             -> Union[
                 'DecryptedLocalBoxFile',
                 'EncryptedLocalBoxFile', None
@@ -637,6 +638,11 @@ class EncryptedLocalBox:
                 Will return ``EncryptedLocalBoxFile`` if ``False``,
                 and ``DecryptedLocalBoxFile`` if ``True``. If
                 ``None``, will be determined by class.
+
+            reverse (``bool``, optional):
+                If set to ``True``, the local files will be returned in reverse
+                order (from newest to oldest, instead of the default oldest
+                to newest).
         """
         if ids:
             ids = str(tuple(ids)) if len(ids) > 1 else f'({ids[0]})'
@@ -645,10 +651,13 @@ class EncryptedLocalBox:
             min_id = f'ID >= {min_id}' if min_id else ''
             max_id = f'ID <= {max_id}' if max_id else ''
 
-            min_id = min_id + ' AND' if all((min_id,max_id)) else min_id
+            min_id = min_id + ' AND' if all((min_id, max_id)) else min_id
             where = 'WHERE' if any((min_id, max_id)) else ''
 
-            sql_query = f'SELECT ID FROM FILES {where} {min_id} {max_id}'
+            sql_query = f'SELECT ID FROM FILES {where} {min_id} {max_id} '
+
+        order = 'DESC' if reverse else 'ASC'
+        sql_query += f'ORDER BY ID {order}'
 
         logger.debug(sql_query)
         cursor = await self._tgbox_db.FILES.execute((sql_query ,()))
@@ -1330,7 +1339,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
     async def search_file(
             self, sf: SearchFilter,
-            cache_preview: bool=True) -> AsyncGenerator[
+            cache_preview: bool=True,
+            reverse: bool=False) -> AsyncGenerator[
                 'DecryptedLocalBoxFile', None
             ]:
         """
@@ -1342,10 +1352,18 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
             cache_preview (``bool``, optional):
                 Will cache preview in file object if ``True``.
+
+            reverse (``bool``, optional):
+                If set to ``True``, the local files will be searched in reverse
+                order (from newest to oldest, instead of the default oldest
+                to newest).
         """
-        async for file in search_generator(
-                sf, lb=self, cache_preview=cache_preview):
-                    yield file
+        sgen = search_generator(
+            sf=sf, lb=self, reverse=reverse,
+            cache_preview=cache_preview
+        )
+        async for file in sgen:
+            yield file
 
     async def prepare_file(
             self, file: Union[BinaryIO, bytes, TelegramVirtualFile],

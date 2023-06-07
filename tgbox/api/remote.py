@@ -592,8 +592,8 @@ class EncryptedRemoteBox:
 
             reverse (``bool``, optional):
                 If set to ``True``, the remote files will be returned in reverse
-                order (from oldest to newest, instead of the default newest
-                to oldest). This also means that the meaning of ``offset_id``
+                order (from newest to oldest, instead of the default oldest
+                to newest). This also means that the meaning of ``offset_id``
                 parameter is reversed, although ``offset_id`` still be exclusive.
                 ``min_id`` becomes equivalent to ``offset_id`` instead of being ``max_id``
                 as well since files are returned in ascending order.
@@ -619,6 +619,13 @@ class EncryptedRemoteBox:
                 ``.init()`` method on it to load it again.
         """
         logger.info(f'*RemoteBox.files generator started, ids={ids}')
+
+        # The *RemoteBox.files(...) by default will return files
+        # in the ascending order (from oldest to newest) as well
+        # as in *LocalBox.files(...), but Telethon's default
+        # iter_messages behaviour is opposite (from newest
+        # to oldest) so here we flip `reverse` only for this.
+        reverse = (not reverse)
 
         if key:
             logger.debug('Custom key specified, will try to use it to decrypt files')
@@ -787,7 +794,7 @@ class EncryptedRemoteBox:
             dlb: Optional['DecryptedLocalBox'] = None,
             cache_preview: bool=True,
             return_imported_as_erbf: bool=False,
-            reverse: bool=True) -> AsyncGenerator[
+            reverse: bool=False) -> AsyncGenerator[
                 Union[
                     'EncryptedRemoteBoxFile',
                     'DecryptedRemoteBoxFile'
@@ -814,9 +821,9 @@ class EncryptedRemoteBox:
                 decrypt (imported) as ``EncryptedRemoteBoxFile``.
 
             reverse (``bool``, optional):
-                If set to ``True`` (by default), the remote files
-                will be returned in reverse order (from oldest to
-                newest, instead of the default newest to oldest).
+                If set to ``True``, the remote files will be
+                returned in reverse order (from newest to
+                oldest, instead of the default oldest to newest).
 
         .. note::
             - If ``dlb`` and ``mainkey`` not specified, then method\

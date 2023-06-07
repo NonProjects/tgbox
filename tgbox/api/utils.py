@@ -268,7 +268,7 @@ class DirectoryRoot:
 async def search_generator(
         sf: SearchFilter, it_messages: Optional[AsyncGenerator] = None,
         lb: Optional['tgbox.api.local.DecryptedLocalBox'] = None,
-        cache_preview: bool = True) -> AsyncGenerator:
+        cache_preview: bool=True, reverse: bool=False) -> AsyncGenerator:
     """
     Generator used to search for files in dlb and rb. It's
     only for internal use and you shouldn't use it in your
@@ -329,9 +329,9 @@ async def search_generator(
             min_id = min_id,
             max_id = max_id,
             ids = sf.in_filters['id'],
-            cache_preview = cache_preview
+            cache_preview = cache_preview,
+            reverse = reverse
         )
-
     if not iter_from:
         raise ValueError('At least it_messages or lb must be specified.')
 
