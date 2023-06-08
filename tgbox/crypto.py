@@ -35,7 +35,9 @@ __all__ = [
     'AESwState',
     'get_rnd_bytes',
     'FAST_TELETHON',
-    'FAST_ENCRYPTION'
+    'FAST_ENCRYPTION',
+    'Salt', 'BoxSalt',
+    'FileSalt', 'IV'
 ]
 class IV:
     """This is a class-wrapper for AES IV"""
