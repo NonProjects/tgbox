@@ -218,7 +218,7 @@ class AESwState:
                 self._aes_cbc = self._aes_cbc.decryptor()
                 setattr(self._aes_cbc, 'decrypt', self._aes_cbc.update)
         else:
-            self._aes_cbc = _PyaesState(self.key, self.iv.iv)
+            self._aes_cbc = _PyaesState(self.key, self.iv)
 
     @property
     def mode(self) -> int:
@@ -257,8 +257,7 @@ class AESwState:
         """
         Decrypts ``data`` with AES CBC.
 
-        ``data`` length must must
-        be evenly divisible by 16.
+        ``data`` length must be evenly divisible by 16.
         """
         if not self.__mode:
             self.__mode = 2
