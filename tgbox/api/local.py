@@ -1946,22 +1946,46 @@ class EncryptedLocalBoxDirectory:
                 'SELECT * FROM PATH_PARTS WHERE PARENT_PART_ID IS ?',
                 (part_id,)
             ))
-            async for folder_row in folders:
-                if isinstance(self._lb, DecryptedLocalBox):
-                    elbd = EncryptedLocalBoxDirectory(self._lb._elb, folder_row[1])
-                    yield await elbd.decrypt(dlb=self._lb)
-                else:
-                    yield await EncryptedLocalBoxDirectory(self._lb,
-                        folder_row[1]).init()
+            while True:
+                logger.debug('Trying to fetch new portion of local dirs (100)...')
+                pending = await folders.fetchmany(100)
+                if not pending: break # No more files
+
+                to_gather = []
+                for folder_row in pending:
+                    if isinstance(self._lb, DecryptedLocalBox):
+                        elbd = EncryptedLocalBoxDirectory(self._lb._elb, folder_row[1])
+                        to_gather.append(elbd.decrypt(dlb=self._lb))
+                    else:
+                        to_gather.append(
+                            EncryptedLocalBoxDirectory(
+                                self._lb, folder_row[1]).init()
+                        )
+                pending = await gather(*to_gather)
+
+                while pending:
+                    yield pending.pop(0)
 
         if not ignore_files:
             files = await self._tgbox_db.FILES.execute((
                 'SELECT * FROM FILES WHERE PPATH_HEAD IS ?',
                 (part_id,)
             ))
-            async for file_row in files:
-                yield await self._lb.get_file(
-                    file_row[0], cache_preview=cache_preview)
+            while True:
+                logger.debug('Trying to fetch new portion of local files (100)...')
+                pending = await files.fetchmany(100)
+                if not pending: break # No more files
+
+                pending = [
+                    self._lb.get_file(file_row[0],
+                        cache_preview=cache_preview
+                    )
+                    for file_row in pending
+                ]
+                pending = await gather(*pending)
+
+                while pending:
+                    yield pending.pop(0)
 
     async def get_files_total(self) -> int:
         """Will return a total number of files in this directory"""
