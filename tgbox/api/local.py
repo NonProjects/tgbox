@@ -14,7 +14,6 @@ from os import PathLike
 from io import BytesIO
 from time import time
 
-from hashlib import sha256
 from asyncio import iscoroutinefunction, gather
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 
@@ -50,7 +49,7 @@ from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter,
     PackedAttributes, ppart_id_generator, anext,
     get_media_duration, prbg, make_media_preview,
-    make_general_path
+    make_general_path, make_file_fingerprint
 )
 from .utils import (
     DirectoryRoot, search_generator, PreparedFile,
@@ -1499,10 +1498,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         if len(str(file_path).encode()) > self._defaults.FILE_PATH_MAX:
             raise LimitExceeded(f'File path must be <= {self._defaults.FILE_PATH_MAX} bytes.')
 
-        file_fingerprint = sha256(
-            str(file_path).encode()\
-          + self._mainkey.key).digest()
-
+        file_fingerprint = make_file_fingerprint(self._mainkey, file_path)
         logger.debug(f'File fingerprint is {file_fingerprint.hex()}')
 
         if not skip_fingerprint_check:

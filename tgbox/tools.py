@@ -45,7 +45,8 @@ __all__ = [
     'ppart_id_generator',
     'make_general_path',
     'guess_path_type',
-    'make_safe_file_path'
+    'make_safe_file_path',
+    'make_file_fingerprint'
 ]
 
 class _TypeList:
@@ -541,6 +542,29 @@ def make_safe_file_path(path: Union[str, Path]) -> Path:
         # C:\Users\user -> C\Users\User
         drive_letter = path.parts[0][0]
         return Path(drive_letter, *path.parts[1:])
+
+def make_file_fingerprint(mainkey: MainKey, file_path: Union[str, Path]) -> bytes:
+    """
+    Function to make a file Fingerprint.
+
+    Fingerprint is a SHA256 over ``mainkey`` and
+    ``file_path``, not a hash of a file itself
+    in any form. We use it to check if prepared
+    file is unique or not (and raise error).
+
+    Arguments:
+        mainkey (``MainKey``):
+            The ``MainKey`` of your *Box*
+
+        file_path (``Union[str, Path]``):
+            A file path from which we will make a
+            Fingerprint. It **should** include a
+            file name!
+
+            /home/xxx/ (directory) is NOT OK!
+            /home/xxx/file.txt (file) is OK!
+    """
+    return sha256(str(file_path).encode() + mainkey.key).digest()
 
 async def anext(aiterator, default=...):
     """Analogue to Python 3.10+ anext()"""
