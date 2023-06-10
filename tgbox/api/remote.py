@@ -1216,6 +1216,11 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
 
             self._defaults = erb._defaults
 
+    @property
+    def mainkey(self) -> MainKey:
+        """Will return ``MainKey`` of this *Box*"""
+        return self._mainkey
+
     @staticmethod
     async def decrypt() -> NoReturn:
         raise AttributeError(
@@ -1979,6 +1984,16 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
     def file_salt(self) -> Union[FileSalt, None]:
         """Returns ``FileSalt`` or ``None`` if not initialized."""
         return self._file_salt
+
+    @property
+    def filekey(self) -> FileKey:
+        """Returns ``FileKey`` of this file."""
+        return self._filekey
+
+    @property
+    def dirkey(self) -> Union[DirectoryKey, None]:
+        """Returns ``DirectoryKey`` of this file if present."""
+        return self._dirkey
 
     @property
     def residual_metadata(self) -> Union[dict, None]:

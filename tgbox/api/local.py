@@ -899,6 +899,16 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 AES(self._mainkey).decrypt(self._fast_sync_last_event_id)
             )
 
+    @property
+    def mainkey(self) -> MainKey:
+        """Will return ``MainKey`` of this *Box*"""
+        return self._mainkey
+
+    @property
+    def mainkey(self) -> MainKey:
+        """Will return ``MainKey`` of this *Box*"""
+        return self._mainkey
+
     @staticmethod
     async def init() -> NoReturn:
         raise AttributeError(
@@ -2764,18 +2774,16 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             self._elbf._secret_metadata = None
             self._elbf._updated_metadata = None
 
-    @staticmethod
-    async def init() -> NoReturn:
-        raise AttributeError(
-            """This function was inherited from ``EncryptedLocalBoxFile`` """
-            """and cannot be used on ``DecryptedLocalBoxFile``."""
-        )
-    @staticmethod
-    async def decrypt() -> NoReturn:
-        raise AttributeError(
-            """This function was inherited from ``EncryptedLocalBoxFile`` """
-            """and cannot be used on ``DecryptedLocalBoxFile``."""
-        )
+    @property
+    def filekey(self) -> FileKey:
+        """Returns ``FileKey`` of this file."""
+        return self._filekey
+
+    @property
+    def dirkey(self) -> Union[DirectoryKey, None]:
+        """Returns ``DirectoryKey`` of this file if present."""
+        return self._dirkey
+
     @property
     def residual_metadata(self) -> dict:
         """
@@ -2828,6 +2836,19 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
     def download_path(self) -> Path:
         """Returns current download path"""
         return self._download_path
+
+    @staticmethod
+    async def init() -> NoReturn:
+        raise AttributeError(
+            """This function was inherited from ``EncryptedLocalBoxFile`` """
+            """and cannot be used on ``DecryptedLocalBoxFile``."""
+        )
+    @staticmethod
+    async def decrypt() -> NoReturn:
+        raise AttributeError(
+            """This function was inherited from ``EncryptedLocalBoxFile`` """
+            """and cannot be used on ``DecryptedLocalBoxFile``."""
+        )
 
     def set_download_path(self, path: Path):
         """Will set download path to specified."""
