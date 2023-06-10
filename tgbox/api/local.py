@@ -1072,11 +1072,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
         if not box_admins:
             logger.debug('No Admins except You found. Fast sync ignored.')
 
-        if 1:#box_admins:
+        if box_admins:
             admin_log_gen = drb.tc.iter_admin_log(
                 entity = drb.box_channel,
                 delete=True, edit=True,
-                #admins = box_admins
+                admins = box_admins
             )
             async for event in admin_log_gen:
                 if event.id == self._fast_sync_last_event_id:
