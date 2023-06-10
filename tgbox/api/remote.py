@@ -861,12 +861,14 @@ class EncryptedRemoteBox:
         async for file in sgen:
             yield file
 
-    async def push_file(
+    async def _push_file(
             self, pf: 'PreparedFile',
             progress_callback: Optional[Callable[[int, int], None]] = None,
+            message_to_edit: Optional[Union[int, Message]] = None
             ) -> 'DecryptedRemoteBoxFile':
         """
-        Uploads ``PreparedFile`` to the ``RemoteBox``.
+        Uploads ``PreparedFile`` to the ``RemoteBox``
+        or updates already uploaded file in ``RemoteBox``.
 
         Arguments:
             pf (``PreparedFile``):
@@ -876,8 +878,17 @@ class EncryptedRemoteBox:
             progress_callback (``Callable[[int, int], None]``, optional):
                 A callback function accepting two parameters:
                 (downloaded_bytes, total).
+
+            message_to_edit (``Union[int, Message]``, optional):
+                If specified, will update existing ``RemoteBox``
+                (edit) file instead of uploading new.
         """
-        logger.info(f'Pushing {pf.file} to RemoteBox ID{pf.dlb._box_channel_id}...')
+        if message_to_edit:
+            logger.info(
+                f'''Updating {message_to_edit.id=} with {pf.file=}'''
+                f'''on RemoteBox ID{pf.dlb._box_channel_id}...''')
+        else:
+            logger.info(f'Pushing {pf.file=} to RemoteBox ID{pf.dlb._box_channel_id}...')
 
         me = await self._tc.get_me()
 
@@ -898,16 +909,12 @@ class EncryptedRemoteBox:
         oe.concat_metadata(pf.metadata)
         try:
             # Here we will use fast upload function
-            try:
-                ifile = await upload_file(
-                    self._tc, oe,
-                    file_name=urlsafe_b64encode(pf.filesalt.salt).decode(),
-                    part_size_kb=512, file_size=pf.filesize,
-                    progress_callback=progress_callback
-                )
-            except FilePartsInvalidError:
-                raise LimitExceeded('Your file is too big to upload')
-
+            ifile = await upload_file(
+                self._tc, oe,
+                file_name=urlsafe_b64encode(pf.filesalt.salt).decode(),
+                part_size_kb=512, file_size=pf.filesize,
+                progress_callback=progress_callback
+            )
         except Exception as e:
             # If some error was found during uploading then it's
             # probably because of fast "upload_file(...)" from
@@ -920,36 +927,92 @@ class EncryptedRemoteBox:
                 part_size_kb=512, file_size=pf.filesize,
                 progress_callback=progress_callback)
         try:
-            file_message = await self._tc.send_file(
-                self._box_channel, file=ifile,
-                silent=False, force_document=True,
-                caption = '<This caption must be removed>'
-            )
+            if message_to_edit:
+                file_message = await message_to_edit.edit(file=ifile)
+            else:
+                file_message = await self._tc.send_file(
+                    self._box_channel, file=ifile,
+                    silent=False, force_document=True,
+                    caption = '<This caption must be removed>'
+                )
+                # We will set and remove caption only for
+                # "Recent Actions" admin log. We can make
+                # a quick synchronization with its help.
+                await self._tc.edit_message(
+                    entity = self._box_channel,
+                    message = file_message, text = ''
+                )
         except ChatAdminRequiredError:
             box_name = await self.get_box_name()
-            raise NotEnoughRights(
-                '''You don\'t have enough privileges to upload '''
-               f'''files to remote {box_name}. Ask for it or '''
-                '''use this box as read only.'''
-            ) from None
 
-        # We will set and remove caption only for
-        # "Recent Actions" admin log. We can make
-        # a quick synchronization with its help.
-        await self._tc.edit_message(
-            entity = self._box_channel,
-            message = file_message, text = ''
-        )
+            if message_to_edit:
+                raise NotEnoughRights(
+                    '''You don\'t have enough privileges to edit'''
+                   f'''another's files on remote {box_name}.''') from None
+            else:
+                raise NotEnoughRights(
+                    '''You don\'t have enough privileges to upload '''
+                   f'''files to remote {box_name}. Ask for it or '''
+                    '''use this box as read only.'''
+                ) from None
+
         pf.set_file_id(file_message.id)
         pf.set_upload_time(int(file_message.date.timestamp()))
 
-        await pf.dlb._make_local_file(pf)
+        await pf.dlb._make_local_file(pf, update=bool(message_to_edit))
 
         erbf = await EncryptedRemoteBoxFile(
             file_message, self._tc,
             defaults=self._defaults).init()
 
         return await erbf.decrypt(pf.dlb._mainkey)
+
+    async def push_file(
+        self, pf: 'PreparedFile',
+        progress_callback: Optional[Callable[[int, int], None]] = None
+        ) -> 'DecryptedRemoteBoxFile':
+        """
+        Uploads ``PreparedFile`` to the ``RemoteBox``.
+
+        Arguments:
+            pf (``PreparedFile``):
+                PreparedFile to upload. You should recieve
+                it via ``DecryptedLocalBox.prepare_file``.
+
+            progress_callback (``Callable[[int, int], None]``, optional):
+                A callback function accepting two parameters:
+                (downloaded_bytes, total).
+
+        """
+        return await self._push_file(pf,
+            progress_callback=progress_callback)
+
+    async def update_file(self,
+        rbf: Union['EncryptedRemoteBoxFile', 'DecryptedRemoteBoxFile'],
+        pf: 'PreparedFile',
+        progress_callback: Optional[Callable[[int, int], None]] = None
+        ) -> 'DecryptedRemoteBoxFile':
+        """
+        Updates already uploaded ``RemoteBox`` file.
+        This will make a full reupload and ``Message`` edit.
+
+        rbf (``EncryptedRemoteBoxFile``, ``DecryptedRemoteBoxFile``):
+            The ``RemoteBox`` file to update. We will only take
+            a ``Message`` object from it. The ``rbf`` **will NOT**
+            be updated by itself, instead, new ``RemoteBox`` file
+            object will be returned after update.
+
+        pf (``PreparedFile``):
+            PreparedFile to upload. You should recieve
+            it via ``DecryptedLocalBox.prepare_file``.
+
+        progress_callback (``Callable[[int, int], None]``, optional):
+            A callback function accepting two parameters:
+            (downloaded_bytes, total).
+        """
+        return await self._push_file(pf,
+            message_to_edit=rbf._message,
+            progress_callback=progress_callback)
 
     async def delete_files(
             self,
@@ -1252,6 +1315,7 @@ class EncryptedRemoteBoxFile:
         self._file_size = self._file.size
         self._file_file_name = self._file.name
 
+        self._metadata = None
         self._file_iv = None
         self._file_salt = None
         self._box_salt = None
@@ -1481,14 +1545,14 @@ class EncryptedRemoteBoxFile:
         async for metadata in iter_down:
             m = self._prefix + self._version_byte
             m += int_to_bytes(metadata_size,3)
-            metadata = m + bytes(metadata[:metadata_size])
-            self._file_pos = len(metadata)
+            self._metadata = m + bytes(metadata[:metadata_size])
+            self._file_pos = len(self._metadata)
             logger.debug(f'Actual encrypted filedata position: {self._file_pos}')
             break
 
-        parsedm = PackedAttributes.unpack(metadata[len(m):-16])
+        parsedm = PackedAttributes.unpack(self._metadata[len(m):-16])
 
-        self._file_iv = IV(metadata[-16:])
+        self._file_iv = IV(self._metadata[-16:])
 
         self._file_salt = FileSalt(parsedm['file_salt'])
         self._box_salt = BoxSalt(parsedm['box_salt'])
@@ -1859,6 +1923,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         if self._erase_encrypted_metadata:
             self._erbf._initialized = False
             self._erbf._secret_metadata = None
+            self._erbf._metadata = None
 
     @property
     def size(self) -> Union[int, None]:

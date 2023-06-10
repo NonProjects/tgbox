@@ -496,7 +496,10 @@ class EncryptedLocalBox:
         return self
 
     async def get_file(
-            self, id: int,
+            self,
+            id: Optional[int] = None,
+            fingerprint: Optional[bytes] = None,
+
             decrypt: Optional[bool] = None,
             cache_preview: bool=True) -> Union[
                 'DecryptedLocalBoxFile',
@@ -507,8 +510,13 @@ class EncryptedLocalBox:
         file exists. ``None`` otherwise.
 
         Arguments:
-            id (``int``):
-                File ID.
+            id (``int``, optional):
+                File ID. Must be specified if
+                ``fingerprint`` is ``None``.
+
+            fingerprint (``bytes``, optional):
+                File Fingerprint. Must be specified
+                if ``id`` argument is ``None``.
 
             decrypt (``bool``, optional):
                 Will return ``EncryptedLocalBoxFile`` if ``False``,
@@ -518,6 +526,19 @@ class EncryptedLocalBox:
             cache_preview (``bool``, optional):
                 Cache preview in class or not.
         """
+        if not any((id is not None, fingerprint)):
+            raise ValueError('At least `id` or `fingerprint` must be specified.')
+
+        if fingerprint:
+            logger.info(f'Trying to fetch ID of file with {fingerprint=}...')
+            try:
+                # Get ID of local file by its fingerprint (if exists)
+                id = await self._tgbox_db.FILES.select_once(sql_tuple=
+                    ('SELECT ID FROM FILES WHERE FINGERPRINT=?', (fingerprint,))
+                )
+                id = id[0]
+            except StopAsyncIteration:
+                return None
         try:
             self.__raise_initialized()
             logger.info(f'File by ID{id} was requested from LocalBox')
@@ -918,13 +939,20 @@ class DecryptedLocalBox(EncryptedLocalBox):
         elbd = EncryptedLocalBoxDirectory(self._elb, part_id)
         return await elbd.decrypt(dlb=self)
 
-    async def _make_local_file(self, pf: 'PreparedFile') -> 'DecryptedLocalBoxFile':
+    async def _make_local_file(
+            self, pf: 'PreparedFile',
+            update: Optional[bool] = None
+    ) -> 'DecryptedLocalBoxFile':
         """
         Creates a LocalBoxFile.
 
         Arguments:
             pf (``PreparedFile``):
                 Pushed to RemoteBox ``PreparedFile``.
+
+            update (``bool``, optional):
+                If ``True``, will change local file with
+                the information from ``pf``.
         """
         assert hasattr(pf,'file_id'), 'Push to RemoteBox firstly'
         assert hasattr(pf,'upload_time'), 'Push to RemoteBox firstly'
@@ -936,15 +964,26 @@ class DecryptedLocalBox(EncryptedLocalBox):
         except StopAsyncIteration:
             pass
         else:
-            raise AlreadyImported('There is already file with same ID') from None
+            if update:
+                logger.info(f'Updating LocalBox file ID{pf.file_id}...')
+                await self.delete_files(lbf_ids=[pf.file_id])
+            else:
+                raise AlreadyImported('There is already file with same ID') from None
 
         eupload_time = AES(pf.filekey).encrypt(int_to_bytes(pf.upload_time))
 
         if pf.imported:
             logger.info(f'Adding imported PreparedFile ID{pf.file_id} to LocalBox')
-            if make_filekey(self._mainkey, pf.filesalt) == pf.filekey:
-                efilekey = None # We can make it with our MainKey
+
+            packed_metadata_pos = len(PREFIX) + len(VERBYTE) + 3
+            unpacked_metadata = pf.metadata[packed_metadata_pos:-16] # -16 is IV
+            file_box_salt = PackedAttributes.unpack(unpacked_metadata)['box_salt']
+
+            if file_box_salt == self.box_salt.salt:
+                logger.debug('We can make FileKey, eFileKey WILL be None.')
+                efilekey = None # We can make it with our (Main/Dir)Key
             else:
+                logger.debug('We can\'t make FileKey, eFileKey will NOT be None.')
                 efilekey = AES(self._mainkey).encrypt(pf.filekey.key)
         else:
             logger.info(f'Adding PreparedFile ID{pf.file_id} to LocalBox')
@@ -1002,6 +1041,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             will call/await the specified callback
             with one of the arguments from below:
                 * ``fast_progress_callback(22, 'deleted')`` OR
+                * ``fast_progress_callback(22, 'updated')`` OR
                 * ``fast_progress_callback(22, 'imported')`` OR
                 * ``fast_progress_callback(22, 'metadata edited')``
         """
@@ -1032,11 +1072,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
         if not box_admins:
             logger.debug('No Admins except You found. Fast sync ignored.')
 
-        if box_admins:
+        if 1:#box_admins:
             admin_log_gen = drb.tc.iter_admin_log(
                 entity = drb.box_channel,
                 delete=True, edit=True,
-                admins = box_admins
+                #admins = box_admins
             )
             async for event in admin_log_gen:
                 if event.id == self._fast_sync_last_event_id:
@@ -1050,7 +1090,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     action = 'deleted'
 
                 elif event.changed_message:
-                    drbf = await drb.get_file(event.old.id)
+                    drbf = await anext(drb.files(ids=event.old.id,
+                        erase_encrypted_metadata=False))
 
                     if drbf is None:
                         continue
@@ -1058,16 +1099,23 @@ class DecryptedLocalBox(EncryptedLocalBox):
                         logger.debug(f'Trying to import ID{drbf.id}...')
                         await self.import_file(drbf)
                         action = 'imported'
+
                     except AlreadyImported:
-                        logger.debug(
-                           f'''ID{event.old.id} is already imported. '''
-                            '''Checking for updated metadata...''')
-                        try:
-                            dlbf = await self.get_file(drbf.id)
-                            await dlbf.refresh_metadata(drbf=drbf)
-                            action = 'metadata updated'
-                        except Exception as e:
-                            logger.debug(f'Caption metadata is invalid: {e}')
+                        if event.old.file.name != event.new.file.name:
+                            logger.debug(f'Updating file ID{event.old.id}...')
+                            await self.delete_files(lbf_ids=[event.old.id])
+                            await self.import_file(drbf)
+                            action = 'updated'
+                        else:
+                            logger.debug(
+                               f'''ID{event.old.id} is already imported. '''
+                                '''Checking for updated metadata...''')
+                            try:
+                                dlbf = await self.get_file(drbf.id)
+                                await dlbf.refresh_metadata(drbf=drbf)
+                                action = 'metadata updated'
+                            except Exception as e:
+                                logger.debug(f'Caption metadata is invalid: {e}')
 
                 if progress_callback:
                     if iscoroutinefunction(progress_callback):
@@ -1122,7 +1170,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         logger.info(f'Deep syncing {self._tgbox_db.db_path} with {drb_box_name}...')
 
         # This will yield the first uploaded to RemoteBox file
-        first_drbf = await anext(drb.files(reverse=True), None)
+        first_drbf = await anext(drb.files(), None)
 
         if not first_drbf:
             logging.debug(f'RemoteBox {drb_box_name} is empty. Clearing local...')
@@ -1134,7 +1182,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             return
 
         # This will yield the last uploaded to RemoteBox file
-        last_drbf = await anext(drb.files())
+        last_drbf = await anext(drb.files(reverse=True))
 
         logger.debug(
             '''Removing all files from LocalBox which ID is less '''
@@ -1147,10 +1195,10 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         drbf_generator = drb.files(
             min_id=start_from,
-            reverse=True,
             cache_preview=False,
             return_imported_as_erbf=True,
-            timeout=timeout
+            timeout=timeout,
+            erase_encrypted_metadata=False
         )
         # This is drbf2 from the previous loop cycle
         previous_drbf2 = None
@@ -1161,6 +1209,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
         async def import_stack(stack: list):
             logger.debug(f'Importing new stack of files [{len(stack)}]')
             await gather(*stack); stack.clear()
+        async def re_import(drbf):
+            # We will use this coroutine to remove already
+            # saved file from Local and import it again
+            await self.delete_files(lbf_ids=[drbf.id])
+            await self.import_file(drbf)
 
         while True:
             if len(drbf_to_import) >= IMPORT_WHEN:
@@ -1212,6 +1265,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
                             '''We don\'t have a FileKey to ID'''
                            f'''{drbfx.id}. Skipping.'''
                         )
+                elif all((drbfx, elbfx)) and elbfx.file_salt != drbfx.file_salt:
+                    # File was updated (re-uploaded) so we should
+                    # remove old local file and re-import new
+                    logger.debug(f'Caching import of updated ID{drbfx.id} from {drb_box_name}')
+                    drbf_to_import.append(re_import(drbfx))
 
             # Here we will remove all local files which ID is between
             # the previous_drbf2.id <...X...> drbf1.id and also
@@ -1370,7 +1428,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
             file_size: Optional[int] = None,
             file_path: Optional[Path] = None,
             cattrs: Optional[Dict[str, Union[bytes]]] = None,
-            make_preview: bool=True) -> 'PreparedFile':
+            make_preview: bool=True,
+            skip_fingerprint_check: bool=False) -> 'PreparedFile':
         """
         Prepares your file for ``RemoteBox.push_file``
 
@@ -1419,6 +1478,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
             make_preview (``bool``, optional):
                 Will try to add file preview to
                 the metadata if ``True`` (default).
+
+            skip_fingerprint_check (``bool``, optional):
+                If ``True``, will skip the File Fingerprint
+                check. Change it only if you want to update
+                some already uploaded file.
         """
         if isinstance(file, TelegramVirtualFile):
             logger.info('Trying to make a PreparedFile from Telegram file...')
@@ -1441,7 +1505,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         logger.debug(f'File fingerprint is {file_fingerprint.hex()}')
 
-        await self._check_fingerprint(file_fingerprint)
+        if not skip_fingerprint_check:
+            await self._check_fingerprint(file_fingerprint)
 
         if not file_size:
             if isinstance(file, TelegramVirtualFile):
