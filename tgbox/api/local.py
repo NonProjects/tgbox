@@ -106,7 +106,7 @@ async def make_localbox(
     await tgbox_db.BOX_DATA.insert(
         AES(mainkey).encrypt(int_to_bytes(erb._box_channel_id)),
         AES(mainkey).encrypt(int_to_bytes(int(time()))),
-        box_salt,
+        box_salt.salt,
         None, # We aren't cloned box, so Mainkey is empty
         AES(basekey).encrypt(erb._tc.session.save().encode()),
         AES(mainkey).encrypt(int_to_bytes(erb._tc._api_id)),
@@ -205,7 +205,7 @@ async def clone_remotebox(
     await tgbox_db.BOX_DATA.insert(
         AES(drb._mainkey).encrypt(int_to_bytes(drb._box_channel_id)),
         AES(drb._mainkey).encrypt(int_to_bytes(int(time()))),
-        await drb.get_box_salt(),
+        (await drb.get_box_salt()).salt,
         AES(basekey).encrypt(drb._mainkey.key),
         AES(basekey).encrypt(drb._tc.session.save().encode()),
         AES(drb._mainkey).encrypt(int_to_bytes(drb._tc._api_id)),
