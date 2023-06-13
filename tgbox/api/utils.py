@@ -299,7 +299,6 @@ async def search_generator(
 
                 elif hasattr(current_scope, '_part_id'):
                     iterdir = current_scope.iterdir()
-
                 else:
                     iterdir = await lb.get_directory(current_scope)
                     if not iterdir:
@@ -309,8 +308,9 @@ async def search_generator(
                 async for content in iterdir:
                     if hasattr(content, '_part_id'):
                         # This is DecryptedLocalBoxDirectory
-                        if str(content) in sf.ex_filters['scope']:
-                            continue # This directory is excluded
+                        if str(content) in sf.ex_filters['scope']\
+                            or sf.in_filters['non_recursive_scope']:
+                                continue # This directory is excluded
 
                         async for dlbf in scope_generator(content):
                             yield dlbf # This is DecryptedLocalBoxFile

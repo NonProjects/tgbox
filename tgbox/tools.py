@@ -168,9 +168,10 @@ class SearchFilter:
             so *filter* ``cattrs={b'comment': b'hi(.)'}`` will match.
 
         * **file_path** *pathlib.Path*, *str*
-        * **file_name** *bytes*: File name
-        * **file_salt** *bytes*: File salt
+        * **file_name** *str*: File name
+        * **file_salt** *bytes/str*: File salt
         * **verbyte**   *bytes*: File version byte
+        * **mime**      *str*: File mime type
 
         * **min_id** *integer*: File ID should be > min_id
         * **max_id** *integer*: File ID should be < max_id
@@ -181,9 +182,9 @@ class SearchFilter:
         * **min_time** *integer/float*: Upload Time should be > min_time
         * **max_time** *integer/float*: Upload Time should be < max_time
 
-        * **mime**     *str*:  File mime type
-        * **imported** *bool*: Yield only imported files
-        * **re**       *bool*: re_search for every ``bytes``
+        * **re**                  *bool*: re_search for every ``bytes``
+        * **imported**            *bool*: Yield only imported files
+        * **non_recursive_scope** *bool*: Disable recursive scope search
     """
     def __init__(self, **kwargs):
         self.in_filters = {
@@ -203,6 +204,7 @@ class SearchFilter:
             'mime':      _TypeList(str),
             'imported':  _TypeList(bool),
             're':        _TypeList(bool),
+            'non_recursive_scope': _TypeList(bool),
         }
         self.ex_filters = deepcopy(self.in_filters)
         self.include(**kwargs)
