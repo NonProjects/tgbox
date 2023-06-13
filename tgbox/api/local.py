@@ -2627,7 +2627,11 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         if self._mainkey and elbf._edirkey:
             # DirectoryKey should be presented in the
             # public part of Metadata started with v1.3
-            dirkey = AES(self._mainkey).decrypt(elbf._edirkey)
+            try:
+                dirkey = AES(self._mainkey).decrypt(elbf._edirkey)
+            except ValueError: # invalid padding byte
+                raise AESError('Can\'t decrypt edirkey attr. Incorrect key?')
+
             self._dirkey = DirectoryKey(dirkey)
         else:
             # Otherwise, file was uploaded before
