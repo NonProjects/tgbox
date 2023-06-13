@@ -384,7 +384,7 @@ class EncryptedRemoteBox:
         """
         if not self._box_name:
             entity = await self._tc.get_entity(self._box_channel)
-            self._box_name = entity.title.split(': ')[1]
+            self._box_name = entity.title.split(': ', 1)[-1]
         return self._box_name
 
     async def file_exists(self, id: int) -> bool:
