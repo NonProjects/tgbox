@@ -1784,7 +1784,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             self._mainkey = None
 
 
-        if self._mainkey and erbf._edirkey:
+        if self._mainkey and erbf._edirkey and not self._imported:
             # DirectoryKey should be presented in the
             # public part of Metadata started with v1.3
             try:
@@ -1795,7 +1795,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             self._dirkey = DirectoryKey(dirkey)
         else:
             # Otherwise, file was uploaded before
-            # the TGBOX version 1.3
+            # the TGBOX version 1.3 or is imported
             self._dirkey = None
 
 
