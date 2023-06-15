@@ -2797,7 +2797,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         self._file_name = self._file_name.decode()
 
-        if not cache_preview:
+        if not self._cache_preview:
+            logger.debug('cache_preview is False, DRBF preview won\'t be saved.')
             self._preview = b''
 
         if self._mainkey and not self._efilekey:
