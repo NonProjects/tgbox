@@ -152,14 +152,16 @@ class TgboxDB:
         else:
             self._db_path = Path(db_path)
 
+        if self._db_path.is_dir():
+            raise PathIsDirectory('Path is directory.')
+
+        self._db_path.parent.mkdir(exist_ok=True, parents=True)
+
         self._aiosql_db = None
         self._aiosql_db_is_closed = None
         self._initialized = False
 
         self._name = self._db_path.name
-
-        if self._db_path.is_dir():
-            raise PathIsDirectory('Path is directory.')
 
     @property
     def name(self) -> str:
@@ -168,7 +170,7 @@ class TgboxDB:
 
     @property
     def db_path(self) -> PathLike:
-        """Returns path to TgboxDB file"""
+        """Returns a path to TgboxDB file"""
         return self._db_path
 
     @property
