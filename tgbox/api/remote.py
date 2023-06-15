@@ -284,11 +284,13 @@ class EncryptedRemoteBox:
         self._box_channel = box_channel
         self._box_channel_id = resolve_id(box_channel.id)[0]
 
-        self._box_salt = None
         # We can't use await in __init__, so
         # you should await get_box_salt firstly.
-        self._box_name = None
+        self._box_salt = None
         # Similar to box_salt, await get_box_name.
+        self._box_name = None
+
+        self._is_encrypted = True
 
         if defaults:
             logger.debug('ERB: Found custom defaults, will try to use it')
@@ -336,6 +338,14 @@ class EncryptedRemoteBox:
     def box_channel_id(self) -> int:
         """Returns box channel id"""
         return self._box_channel_id
+
+    @property
+    def is_encrypted(self) -> bool:
+        """
+        Will return ``True`` if this is an *Encrypted*
+        class, ``False`` if *Decrypted*
+        """
+        return self._is_encrypted
 
     async def get_last_file_id(self) -> int:
         """Returns last channel file id. If nothing found returns 0"""
@@ -1186,6 +1196,8 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
                 ``DecryptedLocalBox`` associated with this *RemoteBox*.
                 Must be specified if ``key`` is ``None``.
         """
+        self._is_encrypted = False
+
         self._erb = erb
         self._tc = erb._tc
 
@@ -1300,6 +1312,7 @@ class EncryptedRemoteBoxFile:
                 Class with a default values/constants we will use.
         """
         self._initialized = False
+        self._is_encrypted = True
 
         self._message = sended_file
 
@@ -1366,6 +1379,14 @@ class EncryptedRemoteBoxFile:
     def initialized(self) -> bool:
         """Returns ``True`` if class was initialized."""
         return self._initialized
+
+    @property
+    def is_encrypted(self) -> bool:
+        """
+        Will return ``True`` if this is an *Encrypted*
+        class, ``False`` if *Decrypted*
+        """
+        return self._is_encrypted
 
     @property
     def tc(self) -> TelegramClient:
@@ -1730,6 +1751,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._lb = dlb
 
         self._initialized = False
+        self._is_encrypted = False
 
         self.__required_metadata = [
             'duration', 'file_size', 'file_name',

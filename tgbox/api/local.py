@@ -73,7 +73,10 @@ logger = logging.getLogger(__name__)
 
 async def make_localbox(
         erb: 'tgbox.api.remote.EncryptedRemoteBox',
-        basekey: BaseKey) -> 'DecryptedLocalBox':
+        basekey: BaseKey,
+        box_name: Optional[str] = None,
+        box_path: Optional[Union[PathLike, str]] = None
+        ) -> 'DecryptedLocalBox':
     """
     Makes LocalBox
 
@@ -85,15 +88,26 @@ async def make_localbox(
         basekey (``BaseKey``):
             ``BaseKey`` that will be used
             for ``MainKey`` creation.
-    """
-    erb_box_name = await erb.get_box_name()
 
-    logger.info(f'TgboxDB.create({erb_box_name})')
-    tgbox_db = await TgboxDB.create(erb_box_name)
+        box_name (``str``, optional):
+            Filename of your LocalBox database. If not
+            specified, will be used ``RemoteBox`` name.
+
+        box_path (``PathLike``, ``str``, optional):
+            Path in which we will make a database
+            file. Current Working Dir if not specified.
+    """
+    box_name = box_name if box_name else (await erb.get_box_name())
+    box_path = Path(box_path if box_path else '.') / box_name
+
+    logger.info(f'TgboxDB.create({box_path})')
+    tgbox_db = await TgboxDB.create(box_path)
 
     if (await tgbox_db.BOX_DATA.count_rows()):
+        await tgbox_db.close()
+
         raise InUseException(
-           f'''"{tgbox_db.name}" was found on current path. '''
+           f'''"{box_path}" file is already exists. '''
             '''Please move old file or create RemoteBox with '''
             '''the different box name (see help(tgbox.api.re'''
             '''mote.make_remotebox) and use kwarg "box_name")'''
@@ -107,7 +121,7 @@ async def make_localbox(
         AES(mainkey).encrypt(int_to_bytes(erb._box_channel_id)),
         AES(mainkey).encrypt(int_to_bytes(int(time()))),
         box_salt.salt,
-        None, # We aren't cloned box, so Mainkey is empty
+        None, # We didn't cloned box, so eMainkey is empty
         AES(basekey).encrypt(erb._tc.session.save().encode()),
         AES(mainkey).encrypt(int_to_bytes(erb._tc._api_id)),
         AES(mainkey).encrypt(bytes.fromhex(erb._tc._api_hash)),
@@ -154,6 +168,7 @@ async def clone_remotebox(
         drb: 'tgbox.api.remote.DecryptedRemoteBox',
         basekey: BaseKey,
         progress_callback: Optional[Callable[[int, int], None]] = None,
+        box_name: Optional[str] = None,
         box_path: Optional[Union[PathLike, str]] = None,
         timeout: Optional[int] = 15) -> 'DecryptedLocalBox':
     """
@@ -173,40 +188,70 @@ async def clone_remotebox(
             A callback function accepting two parameters:
             (current_amount, total).
 
+        box_name (``str``, optional):
+            Filename of your LocalBox database. If not
+            specified, will be used ``RemoteBox`` name.
+
         box_path (``PathLike``, ``str``, optional):
-            Direct path with filename included. If
-            not specified, then ``RemoteBox`` name used.
+            Path in which we will make a database
+            file. Current Working Dir if not specified.
 
         timeout (``int``, optional):
             How many seconds generator will sleep at every 1000 file.
             By default it's 15 seconds. Don't use too low timeouts or
             you will receive FloodWaitError.
     """
-    drb_box_name = await drb.get_box_name()
-    box_path = drb_box_name if not box_path else box_path
+    box_name = box_name if box_name else (await drb.get_box_name())
+    box_path = Path(box_path if box_path else '.') / box_name
 
+    # The next async loop will check if it's possible
+    # to decrypt first, non-imported RemoteBox file;
+    # if not, Phrase->BaseKey->MainKey is incorrect
+
+    no_files_to_import = False
+    async for erbf in drb._erb.files():
+        if not erbf.imported:
+            try:
+                await erbf.decrypt(drb._mainkey) # AESError here is OK
+            except AESError as e:
+                await drb.done()
+                raise e
+            break # This will omit else statement
+    else:
+        # RemoteBox doesn't have files to import
+        no_files_to_import = True
+
+
+    logger.info(f'TgboxDB.create({box_path})')
     tgbox_db = await TgboxDB.create(box_path)
 
     if (await tgbox_db.BOX_DATA.count_rows()):
         await tgbox_db.close()
 
         raise InUseException(
-           f'''TgboxDB "{tgbox_db.name}" in use. Specify new box_path or '''
-            '''if your clone process was interrupted for some reason '''
+            f'''TgboxDB file "{box_path}" already exists. Specify new box_path or, '''
+            '''if your clone process was interrupted for some reason, '''
             '''use the .sync(..., deep=True) on your LocalBox instead.'''
         )
-    logger.info(
-        f'Cloning DecryptedRemoteBox {drb_box_name} to LocalBox {box_path}'
-    )
-    last_file_id = 0
-    async for erbf in drb.files(decrypt=False, return_imported_as_erbf=True):
-        last_file_id = erbf.id; break
+
+    logger.info(f'Cloning DecryptedRemoteBox to LocalBox {box_path}')
+
+    last_file_id = await drb.get_last_file_id()
+    box_salt = await drb.get_box_salt()
+
+    # We don't need to store encrypted MainKey if user
+    # clone RemoteBox with it's natural BaseKey.
+    if make_mainkey(basekey, box_salt) == drb._mainkey:
+        emainkey = None # We can make MainKey with BaseKey
+    else:
+        # We need to store encrypted MainKey
+        emainkey = AES(basekey).encrypt(drb._mainkey.key)
 
     await tgbox_db.BOX_DATA.insert(
         AES(drb._mainkey).encrypt(int_to_bytes(drb._box_channel_id)),
         AES(drb._mainkey).encrypt(int_to_bytes(int(time()))),
-        (await drb.get_box_salt()).salt,
-        AES(basekey).encrypt(drb._mainkey.key),
+        box_salt.salt,
+        emainkey,
         AES(basekey).encrypt(drb._tc.session.save().encode()),
         AES(drb._mainkey).encrypt(int_to_bytes(drb._tc._api_id)),
         AES(drb._mainkey).encrypt(bytes.fromhex(drb._tc._api_hash)),
@@ -214,10 +259,10 @@ async def clone_remotebox(
     )
     dlb = await EncryptedLocalBox(tgbox_db).decrypt(basekey)
 
+    if no_files_to_import:
+        return dlb # RemoteBox is empty
+
     files_generator = drb.files(
-        key=drb._mainkey,
-        decrypt=True,
-        reverse=True,
         timeout=timeout,
         erase_encrypted_metadata=False
     )
@@ -230,7 +275,7 @@ async def clone_remotebox(
                 else:
                     progress_callback(drbf.id, last_file_id)
 
-            logger.info(f'Adding ID{drbf.id} from {drb_box_name} to import list')
+            logger.debug(f'Adding ID{drbf.id} from RemoteBox ID{drb.box_channel_id} to import list')
             drbf_to_import.append(dlb.import_file(drbf))
 
             if len(drbf_to_import) == IMPORT_WHEN:
@@ -241,6 +286,11 @@ async def clone_remotebox(
         if drbf_to_import:
             logger.debug(f'Importing remainder of files [{len(drbf_to_import)}]')
             await gather(*drbf_to_import)
+
+        # If user provided incorrect decryption key, the files_generator
+        # will make a zero iterations, so DecryptedLocalBox will be empty
+        if last_file_id and not (await dlb.get_last_file_id()):
+            raise AESError('No file was imported. Incorrect Key?')
 
         return dlb
     except Exception as e:
@@ -325,6 +375,7 @@ class EncryptedLocalBox:
         self._fast_sync_last_event_id = None
 
         self._initialized = False
+        self._is_encrypted = True
 
     def __hash__(self) -> int:
         if not self._initialized:
@@ -387,6 +438,14 @@ class EncryptedLocalBox:
                 # check for useless path parts
                 ppath_head = parent_part_id[0]
                 if not ppath_head: break
+
+    @property
+    def is_encrypted(self) -> bool:
+        """
+        Will return ``True`` if this is an *Encrypted*
+        class, ``False`` if *Decrypted*
+        """
+        return self._is_encrypted
 
     @property
     def api_id(self) -> Union[int, None]:
@@ -856,13 +915,17 @@ class DecryptedLocalBox(EncryptedLocalBox):
         self._tgbox_db = elb._tgbox_db
         self._defaults = elb._defaults
 
+        self._is_encrypted = False
         self._initialized = True
 
         if isinstance(key, BaseKey):
             logger.debug('BaseKey specified as key')
             if isinstance(elb._mainkey, EncryptedMainkey):
                 logger.debug('Found EncryptedMainkey, decrypting...')
-                mainkey = AES(key).decrypt(elb._mainkey.key)
+                try:
+                    mainkey = AES(key).decrypt(elb._mainkey.key)
+                except ValueError: # invalid padding byte
+                    raise AESError('Can\'t decrypt eMainKey. Incorrect Key?')
                 self._mainkey = MainKey(mainkey)
             else:
                 self._mainkey = make_mainkey(key, self._elb._box_salt)
@@ -1822,6 +1885,7 @@ class EncryptedLocalBoxDirectory:
                 Path's part ID. You can fetch it from
                 the ``PATH_PARTS`` table in ``TgboxDB``.
         """
+        self._is_encrypted = True
         self._initialized = False
 
         self._lb = elb
@@ -1852,7 +1916,7 @@ class EncryptedLocalBoxDirectory:
             return self.__repr__()
 
     def __repr__(self) -> str:
-        c = 'ELBD' if 'Encrypted' in self.__class__.__name__ else 'DLBD'
+        c = 'ELBD' if self._is_encrypted else 'DLBD'
         return f'{c}[{self.part.decode() if c == "DLBD" else self.part}]'
 
     def __getitem__(self, _slice: slice):
@@ -1861,6 +1925,14 @@ class EncryptedLocalBoxDirectory:
     def __raise_initialized(self) -> NoReturn:
         if not self._initialized:
             raise NotInitializedError('Not initialized. Call .init().')
+
+    @property
+    def is_encrypted(self) -> bool:
+        """
+        Will return ``True`` if this is an *Encrypted*
+        class, ``False`` if *Decrypted*
+        """
+        return self._is_encrypted
 
     @property
     def initialized(self) -> bool:
@@ -2141,6 +2213,7 @@ class DecryptedLocalBoxDirectory(EncryptedLocalBoxDirectory):
 
         super().__init__(elbd._lb, elbd._part_id)
 
+        self._is_encrypted = False
         self._initialized = True
         self._elbd = elbd
 
@@ -2234,7 +2307,9 @@ class EncryptedLocalBoxFile:
 
         self._defaults = self._lb._defaults
 
+        self._is_encrypted = True
         self._initialized = False
+
         self._fingerprint = None
         self._updated_metadata = None
 
@@ -2254,6 +2329,14 @@ class EncryptedLocalBoxFile:
             isinstance(other, self.__class__),
             self.__hash__() == hash(other)
         ))
+    @property
+    def is_encrypted(self) -> bool:
+        """
+        Will return ``True`` if this is an *Encrypted*
+        class, ``False`` if *Decrypted*
+        """
+        return self._is_encrypted
+
     @property
     def initialized(self) -> bool:
         """
@@ -2576,6 +2659,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         if not elbf._initialized:
             raise NotInitializedError('EncryptedLocalBoxFile must be initialized.')
 
+        self._is_encrypted = False
         self._initialized = True
 
         self._elbf = elbf
