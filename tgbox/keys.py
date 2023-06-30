@@ -545,17 +545,17 @@ def make_sharekey(
 
     Arguments:
         key (``MainKey``, ``FileKey``, ``DirectoryKey``):
-            - If ``key`` is instance of ``MainKey``: Box key.
+            o If ``key`` is instance of ``MainKey``: Box key.
             Specify only this kwarg and ignore ``requestkey``
             if you want to share your Box with **ALL** peoples.
             Your Box ``key`` -- ``MainKey`` will be NOT encrypted.
 
-            - If ``key`` is instance of ``FileKey``: File key.
+            o If ``key`` is instance of ``FileKey``: File key.
             Specify only this kwarg if you want to share your
             File with **ALL** peoples. **No encryption** if
             ``RequestKey`` (as ``requestkey``) is not specified.
 
-            - If ``key`` is instance of ``DirectoryKey``: Dir key.
+            o If ``key`` is instance of ``DirectoryKey``: Dir key.
             Specify only this kwarg if you want to share your
             File with **ALL** peoples. **No encryption** if
             ``RequestKey`` (as ``requestkey``) is not specified.
