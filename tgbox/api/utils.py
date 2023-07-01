@@ -494,7 +494,7 @@ async def search_generator(
 
             for file_salt in filter['file_salt']:
                 if isinstance(file_salt, str):
-                    fsalt = urlsafe_b64encode(file.file_salt).decode()
+                    fsalt = urlsafe_b64encode(file.file_salt.salt).decode()
                 else:
                     fsalt = file.file_salt
 
