@@ -494,6 +494,7 @@ class EncryptedRemoteBox:
 
     async def files(
             self, key: Optional[Union[MainKey, FileKey]] = None,
+            drb: Optional['DecryptedRemoteBox'] = None,
             dlb: Optional['DecryptedLocalBox'] = None,
             *,
             ignore_errors: bool=True,
@@ -522,22 +523,26 @@ class EncryptedRemoteBox:
         .. note::
             - The default order is from newest to oldest, but this\
             behaviour can be changed with the ``reverse`` parameter.
-            - You can ignore ``key`` and ``dlb`` if you call\
+            - You can ignore ``key`` and ``drb`` if you call\
             this method on ``DecryptedRemoteBox``.
 
         Arguments:
             key (``MainKey``, ``FileKey``, optional):
                 Will be used to decrypt ``EncryptedRemoteBoxFile``.
 
+            drb (``DecryptedRemoteBox``):
+                Decrypted RemoteBox. Will be used to decrypt
+                ``EncryptedRemoteBoxFile``
+
             dlb (``DecryptedLocalBox``, optional):
                 If file in your ``RemoteBox`` was imported from
-                other ``RemoteBox`` then you can't decrypt it with
+                other ``RemoteBox``, then you can't decrypt it with
                 specified mainkey, but if you already imported it
-                to your LocalBox, then you can specify dlb and we
-                will use ``FILE_KEY`` from the Database.
+                to your LocalBox, then you can specify ``dlb``
+                and we will use ``FILEKEY`` from the Database.
 
                 If ``decrypt`` specified but there is no ``key``,
-                then we try to use mainkey from this dlb.
+                then we will try to use mainkey from this dlb.
 
                 This kwarg works in tandem with ``ignore_errors``
                 and ``return_imported_as_erbf`` if dlb doesn't have
@@ -637,16 +642,24 @@ class EncryptedRemoteBox:
         # to oldest) so here we flip `reverse` only for this.
         reverse = (not reverse)
 
+        # ============================================================ #
+
         if key:
             logger.debug('Custom key specified, will try to use it to decrypt files')
 
-        if hasattr(self, '_mainkey') and not key:
-            logger.debug('self have _mainkey, will try to yield DecryptedRemoteBoxFile')
-            key = self._mainkey # pylint: disable=no-member
+        elif not key and dlb:
+            logger.debug('We will take a MainKey from DecryptedLocalBox')
+            key = dlb._mainkey
 
-        if hasattr(self, '_dlb'):
-            logger.debug('self have _dlb, will try to yield DecryptedRemoteBoxFile')
-            dlb = self._dlb # pylint: disable=no-member
+        if not drb and isinstance(self, DecryptedRemoteBox):
+            logger.debug('DecryptedRemoteBox is self')
+            drb = self
+
+        # ============================================================ #
+
+        erb = self._erb if isinstance(self, DecryptedRemoteBox) else self
+
+        # ============================================================ #
 
         if decrypt is None and isinstance(self, DecryptedRemoteBox):
             decrypt = True
@@ -654,11 +667,10 @@ class EncryptedRemoteBox:
         elif decrypt is None and isinstance(self, EncryptedRemoteBox):
             decrypt = False
 
-        if decrypt and not any((key, dlb)):
-            raise ValueError(
-                'You need to specify key or dlb to be able to decrypt.'
-            )
-        key = key if (key or not dlb) else dlb._mainkey
+        if decrypt and not any((dlb, drb, key)):
+            raise ValueError('At least one of dlb, drb or key must be specified.')
+
+        # ============================================================ #
 
         it_messages = self._tc.iter_messages(
             self._box_channel, limit=limit, offset_id=offset_id,
@@ -674,9 +686,11 @@ class EncryptedRemoteBox:
                 logger.debug(
                     '''Decryption is disabled, will try to '''
                     '''yield EncryptedRemoteBoxFile''')
+
                 try:
                     return await EncryptedRemoteBoxFile(
-                        m, self._tc, cache_preview=cache_preview,
+                        id=None, erb=erb, message_document=m,
+                        cache_preview=cache_preview,
                         defaults=self._defaults).init()
 
                 except NotATgboxFile:
@@ -690,10 +704,13 @@ class EncryptedRemoteBox:
                 '''Decryption is enabled, will try to '''
                 '''yield DecryptedRemoteBoxFile''')
             try:
-                return await EncryptedRemoteBoxFile(
-                    m, self._tc, cache_preview=cache_preview,
-                    defaults=self._defaults).decrypt(key=key,
-                        erase_encrypted_metadata=erase_encrypted_metadata)
+                erbf = EncryptedRemoteBoxFile(
+                    id=None, erb=erb, message_document=m,
+                    cache_preview=cache_preview,
+                    defaults=self._defaults
+                )
+                return await erbf.decrypt(key=key, drb=drb,
+                    erase_encrypted_metadata=erase_encrypted_metadata)
 
             except Exception as e: # In case of imported file
                 logger.debug(
@@ -707,7 +724,8 @@ class EncryptedRemoteBox:
                         '''is not specified, so will return ERBF''')
                     try:
                         return await EncryptedRemoteBoxFile(
-                            m, self._tc, cache_preview=cache_preview,
+                            id=None, erb=erb, message_document=m,
+                            cache_preview=cache_preview,
                             defaults=self._defaults).init()
 
                     except NotATgboxFile:
@@ -744,7 +762,8 @@ class EncryptedRemoteBox:
                                     '''so we will return ERBF.'''
                                 )
                                 return await EncryptedRemoteBoxFile(
-                                    m, self._tc, cache_preview=cache_preview,
+                                    id=None, erb=erb, message_document=m,
+                                    cache_preview=cache_preview,
                                     defaults=self._defaults).init()
 
                             except NotATgboxFile:
@@ -768,9 +787,15 @@ class EncryptedRemoteBox:
                             ) from None
                     else:
                         # We already imported file, so DLB contains a FileKey
-                        return await EncryptedRemoteBoxFile(
-                            m, self._tc, cache_preview=cache_preview,
-                            defaults=self._defaults).decrypt(key=dlb_file._filekey)
+
+                        erbf = EncryptedRemoteBoxFile(
+                            id=None, erb=erb, message_document=m,
+                            cache_preview=cache_preview,
+                            defaults=self._defaults
+                        )
+                        return await erbf.decrypt(
+                            key=dlb_file._filekey, drb=drb,
+                            erase_encrypted_metadata=erase_encrypted_metadata)
 
         processed_messages = 0
         while True:
@@ -971,11 +996,14 @@ class EncryptedRemoteBox:
 
         await pf.dlb._make_local_file(pf, update=bool(message_to_edit))
 
+        erb = self._erb if isinstance(self, DecryptedRemoteBox) else self
+        drb = self if isinstance(self, DecryptedRemoteBox) else None
+
         erbf = await EncryptedRemoteBoxFile(
-            file_message, self._tc,
+            id=None, erb=erb, message_document=file_message,
             defaults=self._defaults).init()
 
-        return await erbf.decrypt(pf.dlb._mainkey)
+        return await erbf.decrypt(key=pf.dlb._mainkey, drb=drb)
 
     async def push_file(
         self, pf: 'PreparedFile',
@@ -1289,49 +1317,79 @@ class EncryptedRemoteBoxFile:
 
         asyncio_run(main())
     """
+    #def __init__(
+    #        self, sended_file: Message,
+    #        tc: TelegramClient,
+    #        cache_preview: bool=True,
+    #        defaults: Optional[Union[DefaultsTableWrapper,
+    #            RemoteBoxDefaults]] = None):
+
+    #"""
+    #Arguments:
+    #    sended_file (``Message``):
+    #        A ``Telethon``'s message object. This
+    #        message should contain ``File``.
+
+    #    tc (``TelegramClient``):
+    #        Your Telegram account.
+
+    #    cache_preview (``bool``, optional):
+    #        Cache preview in class or not. ``True`` by default.
+    #        This kwarg will be used later in ``DecryptedRemoteBoxFile``
+
+    #    defaults (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
+    #        Class with a default values/constants we will use.
+    #"""
+
     def __init__(
-            self, sended_file: Message,
-            tc: TelegramClient,
+            self, id: int, erb: EncryptedRemoteBox,
+            message_document: Optional[Message] = None,
             cache_preview: bool=True,
             defaults: Optional[Union[DefaultsTableWrapper,
                 RemoteBoxDefaults]] = None):
         """
         Arguments:
-            sended_file (``Message``):
-                A ``Telethon``'s message object. This
-                message should contain ``File``.
+            id (``int``):
+                File ID. You can also specify a
+                ``message_document`` if you already
+                have ``Message`` object.
 
-            tc (``TelegramClient``):
-                Your Telegram account.
+            erb (``EncryptedRemoteBox``):
+                Encrypted RemoteBox.
+
+            message_document (``Message``, optional):
+                A ``Telethon``'s message object. This
+                message should contain ``File``. If
+                specified, the ``id`` argument will
+                be ignored.
 
             cache_preview (``bool``, optional):
-                Cache preview in class or not. ``True`` by default.
-                This kwarg will be used later in ``DecryptedRemoteBoxFile``
+                Cache preview in class or not.
 
             defaults (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
                 Class with a default values/constants we will use.
         """
         self._initialized = False
         self._is_encrypted = True
-
-        self._message = sended_file
-
-        self._id = sended_file.id
-        self._file = sended_file.file
-
-        if not self._file:
-            raise NotATgboxFile('Specified message doesn\'t have a document')
-
-        self._sender = sended_file.post_author
-
-        self._tc = tc
         self._cache_preview = cache_preview
 
-        self._upload_time = int(self._message.date.timestamp())
-        self._box_channel = sended_file.chat
-        self._box_channel_id = sended_file.peer_id.channel_id
-        self._file_size = self._file.size
-        self._file_file_name = self._file.name
+        self._rb = erb
+
+        if message_document:
+            self._message = message_document
+            self._id = self._message.id
+        else:
+            self._message = None
+            self._id = id
+
+        self._file = None
+        self._sender = None
+
+        self._upload_time = None
+        self._box_channel = None
+        self._box_channel_id = None
+        self._file_size = None
+        self._file_file_name = None
 
         self._metadata = None
         self._file_iv = None
@@ -1344,11 +1402,7 @@ class EncryptedRemoteBoxFile:
         self._edirkey = None
         self._minor_version = None
         self._file_pos = None
-
-        if self._message.fwd_from:
-            self._imported = True
-        else:
-            self._imported = False
+        self._imported = None
 
         if defaults is None:
             logger.debug('ERBF: Custom defaults is not present')
@@ -1389,9 +1443,12 @@ class EncryptedRemoteBoxFile:
         return self._is_encrypted
 
     @property
-    def tc(self) -> TelegramClient:
-        """Returns ``TelegramClient``"""
-        return self._tc
+    def rb(self) -> Union[EncryptedRemoteBox, DecryptedRemoteBox]:
+        """
+        Returns ``EncryptedRemoteBox`` from ``EncryptedRemoteBoxFile``
+        and ``DecryptedRemoteBox`` from ``DecryptedRemoteBoxFile``
+        """
+        return self._rb
 
     @property
     def defaults(self) -> Union[DefaultsTableWrapper, RemoteBoxDefaults]:
@@ -1523,12 +1580,38 @@ class EncryptedRemoteBoxFile:
             if not self._defaults.initialized:
                 await self._defaults.init()
 
+        # ======================================================= #
+
+        if not self._message:
+            self._message = await self._rb._tc.get_messages(
+                self._rb.box_channel, ids=self._id)
+
+        self._file = self._message.file
+        self._file_file_name = self._file.name
+
+        if not self._file:
+            raise NotATgboxFile('Specified message doesn\'t have a document')
+
+        self._file_size = self._file.size
+
+        self._sender = self._message.post_author
+        self._upload_time = int(self._message.date.timestamp())
+        self._box_channel = self._message.chat
+        self._box_channel_id = self._message.peer_id.channel_id
+
+        if self._message.fwd_from:
+            self._imported = True
+        else:
+            self._imported = False
+
+        # ======================================================= #
+
         # 3 is amount of bytes to which we pack metadata length
         request_amount = len(PREFIX) + len(VERBYTE) + 3
 
         logger.debug(f'base_data request_amount is {request_amount} bytes')
 
-        async for base_data in self._tc.iter_download(
+        async for base_data in self._rb._tc.iter_download(
             self._message.document, request_size=pad_request_size(request_amount)):
                 base_data = base_data[:request_amount]
 
@@ -1563,7 +1646,7 @@ class EncryptedRemoteBoxFile:
 
         logger.debug(f'metadata_size_padded is {metadata_size_padded} bytes')
 
-        iter_down = self._tc.iter_download(
+        iter_down = self._rb._tc.iter_download(
             file = self._message.document,
             offset = request_amount,
             request_size = metadata_size_padded
@@ -1619,7 +1702,7 @@ class EncryptedRemoteBoxFile:
         """
         logger.debug(f'Removing file ID{self._id} from ID{self._box_channel_id}')
 
-        rm_result = await self._tc.delete_messages(
+        rm_result = await self._rb._tc.delete_messages(
             self._box_channel, [self._id]
         )
         if not rm_result[0].pts_count:
@@ -1644,7 +1727,7 @@ class EncryptedRemoteBoxFile:
 
     async def decrypt(
             self, key: Optional[Union[MainKey, FileKey, ImportKey]] = None,
-            dlb: Optional['DecryptedLocalBox'] = None,
+            drb: Optional[DecryptedRemoteBox] = None,
             erase_encrypted_metadata: bool=True
             ) -> 'DecryptedRemoteBoxFile':
         """
@@ -1653,10 +1736,10 @@ class EncryptedRemoteBoxFile:
         Arguments:
             key (``FileKey``, ``MainKey``, ``ImportKey``):
                 Decryption key. Must be specified if
-                ``dlb`` argument is ``None``.
+                ``drb`` argument is ``None``.
 
-            dlb (``DecryptedLocalBox``, optional):
-                Decrypted LocalBox. Must be specified
+            drb (``DecryptedRemoteBox``, optional):
+                Decrypted RemoteBox. Must be specified
                 if ``key`` argument is ``None``.
 
             erase_encrypted_metadata (``bool``, optional):
@@ -1668,7 +1751,7 @@ class EncryptedRemoteBoxFile:
         if not self.initialized:
             await self.init()
 
-        return DecryptedRemoteBoxFile(self, key=key, dlb=dlb,
+        return DecryptedRemoteBoxFile(self, key=key, drb=drb,
             erase_encrypted_metadata=erase_encrypted_metadata)
 
 class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
@@ -1708,7 +1791,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
     def __init__(
             self, erbf: EncryptedRemoteBoxFile,
             key: Optional[Union[FileKey, ImportKey, MainKey]] = None,
-            dlb: Optional['DecryptedLocalBox'] = None,
+            drb: Optional[DecryptedRemoteBox] = None,
             cache_preview: Optional[bool] = None,
             erase_encrypted_metadata: bool=True):
         """
@@ -1718,10 +1801,10 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
             key (``FileKey``, ``ImportKey``, ``MainKey``, optional):
                 Decryption key. Must be specified
-                if ``dlb`` argument is ``None``.
+                if ``drb`` argument is ``None``.
 
-            dlb (``DecryptedLocalBox``, optional):
-                Decrypted LocalBox associated with the
+            drb (``DecryptedRemoteBox``, optional):
+                Decrypted RemoteBox associated with the
                 EncryptedRemoteBoxFile you want to decrypt.
                 Must be specified if ``key` is ``None``.
 
@@ -1735,8 +1818,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 encrypted ``secret_metadata`` Metadata
                 value from the parent class.
         """
-        if not any((key, dlb)):
-            raise ValueError('At least key or dlb must be specified')
+        if not any((key, drb)):
+            raise ValueError('At least key or drb must be specified')
 
         if not erbf.initialized:
             raise NotInitializedError('EncryptedRemoteBoxFile must be initialized.')
@@ -1744,11 +1827,10 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._key = key
         self._erbf = erbf
 
-        # In DecryptedRemoteBoxFile, if '_lb is not None'
-        # then it must be 100% DecryptedLocalBox, while
-        # in DecryptedLocalBox it can be EncryptedLocalBox.
-        # We name it the same here to make API similar
-        self._lb = dlb
+        if drb:
+            self._rb = drb
+        else:
+            self._rb = erbf._rb
 
         self._initialized = False
         self._is_encrypted = False
@@ -1762,7 +1844,6 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._file = erbf._file
         self._sender = erbf._sender
 
-        self._tc = erbf._tc
         self._defaults = erbf._defaults
 
         if cache_preview is None:
@@ -1799,9 +1880,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             logger.debug('key is MainKey, self._mainkey is present')
             self._mainkey = key
 
-        elif self._lb:
-            logger.debug('We will take MainKey from DecryptedLocalBox')
-            self._mainkey = self._lb._mainkey
+        elif isinstance(self._rb, DecryptedRemoteBox):
+            logger.debug('We will take MainKey from DecryptedRemoteBox')
+            self._mainkey = self._rb._mainkey
         else:
             self._mainkey = None
 
@@ -2151,13 +2232,13 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 # If it will fail too, -- we will raise an error.
                 if use_slow_download_switch == 0:
                     iter_down = download_file(
-                        client = self._tc,
+                        client = self._rb._tc,
                         location = self._message.document,
                         request_size = request_size,
                     )
                 else:
                     # Switch to the default slow method
-                    iter_down = self._tc.iter_download(
+                    iter_down = self._rb._tc.iter_download(
                         self._message.document,
                         request_size=request_size
                     )
