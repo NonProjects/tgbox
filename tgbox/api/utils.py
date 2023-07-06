@@ -336,19 +336,18 @@ async def search_generator(
         raise ValueError('At least it_messages or lb must be specified.')
 
     async for file in iter_from:
-        if hasattr(file, '_message'): # *RemoteBoxFile
+        if hasattr(file, '_rb'): # *RemoteBoxFile
             file_size = file.file_size
-
-            if hasattr(file, 'file_path') and file.file_path:
-                file_path = str(file.file_path)
-            else:
-                file_path = ''
 
         elif hasattr(file, '_lb'): # *LocalBoxFile
             file_size = file.size
-            file_path = str(file.file_path) if file.file_path else ''
         else:
             continue
+
+        if hasattr(file, 'file_path') and file.file_path:
+            file_path = str(file.file_path)
+        else:
+            file_path = ''
 
         # We will use it as flags, the first
         # is for 'include', the second is for
@@ -470,13 +469,22 @@ async def search_generator(
                                 yield_result[indx] = False
                                 break
 
-            for filter_file_path in filter['file_path']:
+            # If it_messages is specified, then we're making search
+            # on the RemoteBox, thus, we can't use the "scope" filter,
+            # which is LocalBox-only; so we will treat it as the
+            # simple "file_path" filter to mimic "scope".
+            if it_messages:
+                sf_file_path = [*filter['file_path'], *filter['scope']]
+            else:
+                sf_file_path = filter['file_path']
+
+            for filter_file_path in sf_file_path:
                 if in_func(str(filter_file_path), file_path):
                     if indx == 1:
                         yield_result[indx] = False
                     break
             else:
-                if filter['file_path']:
+                if sf_file_path:
                     if indx == 0:
                         yield_result[indx] = False
                         break
