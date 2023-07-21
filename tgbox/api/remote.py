@@ -47,7 +47,7 @@ from ..keys import (
     make_mainkey, make_sharekey, MainKey,
     ShareKey, ImportKey, FileKey, BaseKey,
     make_filekey, make_requestkey, RequestKey,
-    DirectoryKey
+    DirectoryKey, make_dirkey
 )
 from ..defaults import (
     VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME,
@@ -65,7 +65,7 @@ from ..errors import (
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter, OpenPretender,
     pad_request_size, PackedAttributes, prbg, anext,
-    make_safe_file_path
+    make_safe_file_path, ppart_id_generator
 )
 from .utils import (
     TelegramClient, TelegramVirtualFile,
@@ -1317,30 +1317,6 @@ class EncryptedRemoteBoxFile:
 
         asyncio_run(main())
     """
-    #def __init__(
-    #        self, sended_file: Message,
-    #        tc: TelegramClient,
-    #        cache_preview: bool=True,
-    #        defaults: Optional[Union[DefaultsTableWrapper,
-    #            RemoteBoxDefaults]] = None):
-
-    #"""
-    #Arguments:
-    #    sended_file (``Message``):
-    #        A ``Telethon``'s message object. This
-    #        message should contain ``File``.
-
-    #    tc (``TelegramClient``):
-    #        Your Telegram account.
-
-    #    cache_preview (``bool``, optional):
-    #        Cache preview in class or not. ``True`` by default.
-    #        This kwarg will be used later in ``DecryptedRemoteBoxFile``
-
-    #    defaults (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
-    #        Class with a default values/constants we will use.
-    #"""
-
     def __init__(
             self, id: int, erb: EncryptedRemoteBox,
             message_document: Optional[Message] = None,
@@ -1393,14 +1369,16 @@ class EncryptedRemoteBoxFile:
 
         self._metadata = None
         self._file_iv = None
+
         self._file_salt = None
         self._box_salt = None
         self._version_byte = None
         self._prefix = None
         self._fingerprint = None
         self._secret_metadata = None
-        self._edirkey = None
+        self._efile_path = None
         self._minor_version = None
+
         self._file_pos = None
         self._imported = None
 
@@ -1672,18 +1650,20 @@ class EncryptedRemoteBoxFile:
         self._fingerprint = parsedm.get('file_fingerprint', b'')
 
         # Metadata include the minor_version field started from
-        # the version 1.3.0. We use it to enable a more
+        # the version 1.3. We use it to enable a more
         # straightforward backward compatibility
         self._minor_version = parsedm.get('minor_version', -1)
         if isinstance(self._minor_version, bytes):
             self._minor_version = bytes_to_int(self._minor_version)
 
         if self._minor_version >= 3:
-            # edirkey is encrypted DirectoryKey. It is should
-            # be presented in public Metadata from version 1.3
-            self._edirkey = parsedm['edirkey']
+            # efile_path is encrypted File's path. Previously
+            # it was in the Secret Metadata. Now it's a part
+            # public Metadata and we will decrypt it and use
+            # to make a DirectoryKey and then a FileKey
+            self._efile_path = parsedm['efile_path']
         else:
-            self._edirkey = None
+            self._efile_path = None
 
         self._initialized = True
         return self
@@ -1837,7 +1817,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         self.__required_metadata = [
             'duration', 'file_size', 'file_name',
-            'cattrs', 'mime', 'efile_path', 'preview'
+            'cattrs', 'mime', 'preview'
         ]
         self._message = erbf._message
         self._id = erbf._id
@@ -1860,7 +1840,6 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._file_size = erbf._file_size
 
         self._fingerprint = erbf._fingerprint
-        self._edirkey = erbf._edirkey
         self._minor_version = erbf._minor_version
 
         self._upload_time, self._size = erbf._upload_time, None
@@ -1887,20 +1866,30 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             self._mainkey = None
 
 
-        if self._mainkey and erbf._edirkey and not self._imported:
-            # DirectoryKey should be presented in the
-            # public part of Metadata started with v1.3
-            try:
-                dirkey = AES(self._mainkey).decrypt(erbf._edirkey)
-            except ValueError: # invalid padding byte
-                raise AESError('Can\'t decrypt edirkey attr. Incorrect key?')
+        # Prior to v1.3, the EFILE_PATH was a part of the Secret Metadata,
+        # thus, was *always* None before decryption. Started from the v1.3,
+        # the EFILE_PATH is now in a Public Metadata, so we can easily
+        # decrypt it with MainKey, then make a DirectoryKey, and then
+        # make a FileKey, which will decrypt File and Secret Metadata.
+        # This "If Statement" will be True only if File is version 1.3+
+        if self._mainkey and erbf._efile_path is not None and not self._imported:
+            self._file_path = AES(self._mainkey).decrypt(erbf._efile_path)
+            self._file_path = Path(self._file_path.decode())
 
-            self._dirkey = DirectoryKey(dirkey)
+            for path_part in ppart_id_generator(self._file_path, self._mainkey):
+                ppath_head = path_part[2]
+
+            self._dirkey = make_dirkey(self._mainkey, ppath_head)
         else:
-            # Otherwise, file was uploaded before
-            # the TGBOX version 1.3 or is imported
-            self._dirkey = None
+            if erbf._efile_path: # v1.3+ but no MainKey
+                logger.warning(
+                   f'''We can\'t decrypt real file path of ID{self._id} because '''
+                    '''MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '''
+                    '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
+                )
+                self._file_path = self._defaults.DEF_NO_FOLDER
 
+            self._dirkey = None
 
         secret_metadata = None
 
@@ -1972,19 +1961,25 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._cattrs = PackedAttributes.unpack(secret_metadata['cattrs'])
         self._mime = secret_metadata['mime'].decode()
 
-        if self._mainkey:
-            logger.debug('Decrypting efile_path with the MainKey')
-            self._file_path = AES(self._mainkey).decrypt(
-                secret_metadata['efile_path']
-            )
-            self._file_path = Path(self._file_path.decode())
-        else:
-            logger.warning(
-               f'''We can\'t decrypt real file path of ID{self._id} because '''
-                '''MainKey is not present. Try to decrypt EncryptedRemoteBoxFile '''
-                '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
-            )
-            self._file_path = self._defaults.DEF_NO_FOLDER
+        if self._file_path is None:
+            # File was uploaded from Version < 1.3
+            if self._mainkey:
+                logger.debug('Decrypting efile_path with the MainKey')
+                self._file_path = AES(self._mainkey).decrypt(
+                    secret_metadata['efile_path']
+                )
+                self._file_path = Path(self._file_path.decode())
+            else:
+                logger.warning(
+                   f'''We can\'t decrypt real file path of ID{self._id} because '''
+                    '''MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '''
+                    '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
+                )
+                self._file_path = self._defaults.DEF_NO_FOLDER
+
+            # Started from the v1.3, the EFILE_PATH is not a
+            # part of the Required Metadata fields.
+            secret_metadata.pop('efile_path')
 
         for attr in self.__required_metadata:
             secret_metadata.pop(attr)

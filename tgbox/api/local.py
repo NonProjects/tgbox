@@ -1674,12 +1674,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
         # encrypt anything, we use it only to make keys
         dirkey = make_dirkey(self._mainkey, ppath_head)
         # FileKey is a Key that encrypts File and it's
-        # metadata (except the edirkey & efile_path).
+        # metadata (except the efile_path [- MainKey]).
         filekey = make_filekey(dirkey, file_salt)
-
-        # We will store the DirectoryKey in encrypted
-        # (by MainKey) form in the public Metadata.
-        edirkey = AES(self._mainkey).encrypt(dirkey.key)
 
         # We should always encrypt FILE_PATH with MainKey.
         file_path_no_name = str(file_path.parent).encode()
@@ -1692,7 +1688,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
             preview = preview,
             duration = int_to_bytes(duration),
             file_size = int_to_bytes(file_size),
-            efile_path = efile_path,
             file_name = file_path.name.encode(),
             mime = mime_type.encode(),
             cattrs = cattrs
@@ -1703,8 +1698,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
             box_salt = self._box_salt.salt,
             file_salt = file_salt.salt,
             file_fingerprint = file_fingerprint,
-            edirkey = edirkey,
             minor_version = minor_version,
+            efile_path = efile_path,
             secret_metadata = secret_metadata
         )
         if len(metadata) > self._defaults.METADATA_MAX:
@@ -2319,7 +2314,7 @@ class EncryptedLocalBoxFile:
         self._file_salt, self._version_byte = None, None
         self._file_iv, self._box_salt = None, None
         self._secret_metadata, self._minor_version = None, None
-        self._edirkey = None
+        self._efile_path = None
 
     def __hash__(self) -> int:
         return hash((self._id, 22))
@@ -2496,22 +2491,22 @@ class EncryptedLocalBoxFile:
             metadata[pattr_offset:-16]
         )
         self._file_iv = metadata[-16:]
+
         self._file_salt = FileSalt(unpacked_metadata['file_salt'])
         self._box_salt = BoxSalt(unpacked_metadata['box_salt'])
         self._secret_metadata = unpacked_metadata['secret_metadata']
+        # Metadata include the efile_path field started from the
+        # version 1.3. Previously it was in the Secret Metadata,
+        # now it's a part of Public Metadata so we can easily
+        # decrypt it with MainKey and make a DirectoryKey
+        self._efile_path = unpacked_metadata.get('efile_path', None)
         # Metadata include the minor_version field started from
-        # the version 1.3.0. We use it to enable a more
+        # the version 1.3. We use it to enable a more
         # straightforward backward compatibility
         self._minor_version = unpacked_metadata.get('minor_version', -1)
+
         if isinstance(self._minor_version, bytes):
             self._minor_version = bytes_to_int(self._minor_version)
-
-        if self._minor_version >= 3:
-            # edirkey is encrypted DirectoryKey. It is should
-            # be presented in public Metadata from version 1.3
-            self._edirkey = unpacked_metadata['edirkey']
-        else:
-            self._edirkey = None
 
         if isinstance(self._defaults, DefaultsTableWrapper):
             if not self._defaults.initialized:
@@ -2687,6 +2682,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         self._box_salt = elbf._box_salt
         self._minor_version = elbf._minor_version
 
+        self._file_path = None
+
         if cache_preview is None:
             self._cache_preview = elbf._cache_preview
         else:
@@ -2708,18 +2705,30 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             self._mainkey = None
 
 
-        if self._mainkey and elbf._edirkey and not self._imported:
-            # DirectoryKey should be presented in the
-            # public part of Metadata started with v1.3
-            try:
-                dirkey = AES(self._mainkey).decrypt(elbf._edirkey)
-            except ValueError: # invalid padding byte
-                raise AESError('Can\'t decrypt edirkey attr. Incorrect key?')
+        # Prior to v1.3, the EFILE_PATH was a part of the Secret Metadata,
+        # thus, was *always* None before decryption. Started from the v1.3,
+        # the EFILE_PATH is now in a Public Metadata, so we can easily
+        # decrypt it with MainKey, then make a DirectoryKey, and then
+        # make a FileKey, which will decrypt File and Secret Metadata.
+        # This "If Statement" will be True only if File is version 1.3+
+        if self._mainkey and elbf._efile_path is not None and not self._imported:
+            self._file_path = AES(self._mainkey).decrypt(elbf._efile_path)
+            self._file_path = Path(self._file_path.decode())
+            self._original_file_path = self._file_path
 
-            self._dirkey = DirectoryKey(dirkey)
+            for path_part in ppart_id_generator(self._file_path, self._mainkey):
+                ppath_head = path_part[2]
+
+            self._dirkey = make_dirkey(self._mainkey, ppath_head)
         else:
-            # Otherwise, file was uploaded before
-            # the TGBOX version 1.3 or is imported
+            if elbf._efile_path: # v1.3+ but no MainKey
+                logger.warning(
+                   f'''We can\'t decrypt real file path of ID{self._id} because '''
+                    '''MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '''
+                    '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
+                )
+                self._file_path = self._defaults.DEF_NO_FOLDER
+
             self._dirkey = None
 
 
@@ -2767,7 +2776,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         try:
             self._upload_time = AES(self._filekey).decrypt(elbf._upload_time)
         except ValueError:
-            raise AESError('Can\'t decrypt Metadata attr. Incorrect key?')
+            raise AESError('Can\'t decrypt Metadata attr. Incorrect key?') from None
 
         self._upload_time = bytes_to_int(self._upload_time)
 
@@ -2783,7 +2792,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         self.__required_metadata = [
             'duration', 'file_size', 'file_name',
-            'cattrs', 'mime', 'efile_path', 'preview'
+            'cattrs', 'mime', 'preview'
         ]
         for attr in self.__required_metadata:
             setattr(self, f'_{attr}', secret_metadata[attr])
@@ -2801,20 +2810,28 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             logger.debug('cache_preview is False, DRBF preview won\'t be saved.')
             self._preview = b''
 
-        if self._mainkey and not self._efilekey:
-            logger.debug('Decrypting efile_path with the MainKey')
-            self._file_path = AES(self._mainkey).decrypt(self._efile_path) # pylint: disable=no-member
-            self._file_path = Path(self._file_path.decode())
-            self._original_file_path = self._file_path
-        else:
-            logger.warning(
-               f'''We can\'t decrypt real file path of ID{self._id} because '''
-                '''MainKey is not present. Try to decrypt EncryptedLocalBoxFile '''
-                '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
-            )
-            self._file_path = self._defaults.DEF_NO_FOLDER
+        if self._file_path is None:
+            # File was uploaded from Version < 1.3
+            if self._mainkey and not self._efilekey:
+                logger.debug('Decrypting efile_path with the MainKey')
 
-        del self._efile_path # pylint: disable=no-member
+                # Prior v1.3, the EFILE_PATH was a part of the Secret Metadata.
+                self._file_path = AES(self._mainkey).decrypt(
+                    secret_metadata['efile_path'])
+
+                # Started from the v1.3, the EFILE_PATH is not a
+                # part of the Required Metadata fields.
+                secret_metadata.pop('efile_path')
+
+                self._file_path = Path(self._file_path.decode())
+                self._original_file_path = self._file_path
+            else:
+                logger.warning(
+                   f'''We can\'t decrypt real file path of ID{self._id} because '''
+                    '''MainKey is not present. Try to decrypt EncryptedLocalBoxFile '''
+                    '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
+                )
+                self._file_path = self._defaults.DEF_NO_FOLDER
 
         for attr in self.__required_metadata:
             secret_metadata.pop(attr)
