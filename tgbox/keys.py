@@ -416,7 +416,7 @@ def make_filekey(key: Union[MainKey, DirectoryKey], file_salt: FileSalt) -> File
         key (``MainKey`` (legacy), ``DirectoryKey``):
             Key which will be used to make a ``FileKey``.
 
-        file_salt (``FileSate``):
+        file_salt (``FileSalt``):
             ``FileSalt`` generated on file prepare.
     """
     return FileKey(sha256(key + file_salt).digest())
