@@ -1961,7 +1961,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._cattrs = PackedAttributes.unpack(secret_metadata['cattrs'])
         self._mime = secret_metadata['mime'].decode()
 
-        if self._file_path is None:
+        if self._file_path is None and not self._imported:
             # File was uploaded from Version < 1.3
             if self._mainkey:
                 logger.debug('Decrypting efile_path with the MainKey')

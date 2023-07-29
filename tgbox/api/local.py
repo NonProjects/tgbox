@@ -2810,7 +2810,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             logger.debug('cache_preview is False, DRBF preview won\'t be saved.')
             self._preview = b''
 
-        if self._file_path is None:
+        if self._file_path is None and not self._imported:
             # File was uploaded from Version < 1.3
             if self._mainkey and not self._efilekey:
                 logger.debug('Decrypting efile_path with the MainKey')
