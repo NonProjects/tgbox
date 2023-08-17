@@ -17,9 +17,7 @@ from subprocess import PIPE, run as subprocess_run
 from io import BytesIO
 from os import PathLike
 from functools import partial
-
 from re import search as re_search
-from os import remove as remove_file
 
 from platform import system as platform_system
 from pathlib import PureWindowsPath, Path
@@ -590,33 +588,24 @@ async def get_media_duration(file_path: str) -> int:
         d = duration.decode().split('.')[0].split(': ')[1].split(':')
         return int(d[0]) * 60**2 + int(d[1]) * 60 + int(d[2])
     except Exception as e:
-        raise DurationImpossible(f'Can\'t get media duration: {e}') from None
+        raise DurationImpossible(f'Can\'t get media duration: {e}')
 
-async def make_media_preview(
-        file_path: PathLike,
-        temp_path: Optional[PathLike] = None,
-        x: int=128, y: int=-1) -> BinaryIO:
+async def make_media_preview(file_path: PathLike, x: int=128, y: int=-1) -> BinaryIO:
     """
-    Makes x:y sized thumbnail of the
-    video/audio with ffmpeg. "-1"
-    preserves one of side size.
+    Makes x:y sized thumbnail of the video/audio
+    with ffmpeg. "-1" preserves one of side size.
     """
-    temp_path = Path() if not temp_path else temp_path
-    thumbnail_path = Path(temp_path, prbg(4).hex()+'.jpg')
-
-    func = partial(subprocess_run,
+    sp_func = partial(subprocess_run,
         args=[
-            FFMPEG, '-i', file_path, '-filter:v', f'scale={x}:{y}', '-an',
-            '-loglevel', 'quiet', '-q:v', '2', thumbnail_path
+            FFMPEG, '-i', file_path, '-frames:v', '1', '-filter:v', f'scale={x}:{y}',
+            '-an', '-loglevel', 'quiet', '-q:v', '2', '-f', 'mjpeg', 'pipe:1'
         ],
-        stdout=PIPE,
-        stderr=None
+        capture_output = True
     )
+    loop = get_event_loop()
     try:
-        loop = get_event_loop()
-        await loop.run_in_executor(None, func)
-        thumb = BytesIO(open(thumbnail_path,'rb').read())
-        remove_file(thumbnail_path); return thumb
+        sp_result = await loop.run_in_executor(None, sp_func)
+        assert sp_result.stdout, 'Preview bytes is empty'
+        return BytesIO(sp_result.stdout)
     except Exception as e:
-        # If something goes wrong then file is not created (FileNotFoundError)
-        raise PreviewImpossible(f'Can\'t make thumbnail: {e}') from None
+        raise PreviewImpossible(f'Can\'t make thumbnail: {e}')
