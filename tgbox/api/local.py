@@ -1281,6 +1281,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         async def import_stack(stack: list):
             logger.debug(f'Importing new stack of files [{len(stack)}]')
             await gather(*stack); stack.clear()
+
         async def re_import(drbf):
             # We will use this coroutine to remove already
             # saved file from Local and import it again

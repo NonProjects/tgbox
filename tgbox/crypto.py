@@ -174,17 +174,18 @@ class _PyaesState:
         return total
 
 class AESwState:
+    """
+    Wrapper around AES CBC which preserve state.
+
+    .. note::
+        You should use only ``encrypt()`` or
+        ``decrypt()`` method per one object.
+    """
     def __init__(
             self, key: Union[bytes, 'Key'],
             iv: Optional[Union[IV, bytes]] = None
         ):
         """
-        Wrap around AES CBC which saves state.
-
-        .. note::
-            You should use only ``encrypt()`` or
-            ``decrypt()`` method per one object.
-
         Arguments:
             key (``bytes``, ``Key``):
                 AES encryption/decryption Key.
