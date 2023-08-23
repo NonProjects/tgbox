@@ -25,7 +25,7 @@ from tgbox.version import VERSION
 
 project = 'tgbox'
 copyright = '2023, NonProjects'
-author = 'NonProjects'
+author = 'NotStatilko'
 
 # The full version, including alpha/beta/rc tags
 release = VERSION
@@ -38,7 +38,9 @@ release = VERSION
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosectionlabel',
-    'sphinxcontrib.jquery'
+    'sphinxcontrib.jquery',
+    'sphinx.ext.viewcode',
+    'sphinx_togglebutton'
 ]
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -53,4 +55,4 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = "sphinx_rtd_theme"
+html_theme = "sphinx_book_theme"

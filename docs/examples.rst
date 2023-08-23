@@ -14,6 +14,7 @@ Logging in & Box creation
 
         # This two will not work. Get your own at https://my.telegram.org
         API_ID, API_HASH = 1234567, '00000000000000000000000000000000'
+
         # Simple progress callback to track upload/download state
         PROGRESS_CALLBACK = lambda c,t: print(round(c/t*100),'%')
 
@@ -62,16 +63,14 @@ Logging in & Box creation
             # the RemoteBoxFile you need from the LocalBox
             dlbf = await dlb.get_file(drbf.id)
 
-            print('File size:', dlbf.size)
+            print('File size:', dlbf.size, 'bytes')
             print('File path:', dlbf.file_path)
 
             # Downloading your [already uploaded] file from Remote.
             await drbf.download(progress_callback=PROGRESS_CALLBACK)
 
-            # Close all connections
-            # after work was done
-            await erb.done()
-            await dlb.done()
+            await drb.done() # Close all connections
+            await dlb.done() # after work was done
 
         asyncio_run(main())
 
@@ -163,7 +162,7 @@ Multi-upload
             print(drbf.id, drbf.file_name)
 
 .. warning::
-    You will receive a 429 (Flood) error and will be restricted for uploading files for some time if you will spam Telegram servers. Vanilla clients allow users to upload 1-3 files per time and no more, however, if you will upload 10 small files at the same time it will be OK, but if you will upload even three big files similarly then you almost guarantee to get a flood error.
+    You will receive a 429 (Flood) error and will be restricted for uploading files for some time if you will spam Telegram servers. Vanilla clients allow users to upload 1-3 files per time and no more, however, if you will upload 10 small files at the same time it will be OK.
 
 
 Iterating
@@ -229,11 +228,11 @@ File search
 
     # Here we search on the LocalBox, but
     # you can also search on the RemoteBox
-    async for dlbf in dlb.search_file(ff):
+    async for dlbf in dlb.search_file(sf):
         print(dlbf.id, dlbf.file_name)
 
-Download file preview
----------------------
+Obtain file preview
+-------------------
 
 .. code-block:: python
 

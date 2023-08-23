@@ -22,7 +22,7 @@ We name *"encrypted cloud storage"* as **Box** and the API to it as **Tgbox**. T
    :caption: Core:
 
    installation
-   basis
+   protocol
    remotebox
    localbox
    examples

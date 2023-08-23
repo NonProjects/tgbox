@@ -14,6 +14,7 @@ TGBOX: encrypted cloud storage based on Telegram
 
         # This two will not work. Get your own at https://my.telegram.org
         API_ID, API_HASH = 1234567, '00000000000000000000000000000000'
+
         # Simple progress callback to track upload/download state
         PROGRESS_CALLBACK = lambda c,t: print(round(c/t*100),'%')
 
@@ -50,6 +51,7 @@ TGBOX: encrypted cloud storage based on Telegram
 
             # Preparing for upload. Will return a PreparedFile object
             pf = await dlb.prepare_file(open(file_to_upload,'rb'))
+
             # Uploading PreparedFile to Remote and getting DecryptedRemoteBoxFile
             drbf = await drb.push_file(pf, progress_callback=PROGRESS_CALLBACK)
 
@@ -67,27 +69,25 @@ TGBOX: encrypted cloud storage based on Telegram
             # Downloading your [already uploaded] file from Remote.
             await drbf.download(progress_callback=PROGRESS_CALLBACK)
 
-            # Close all connections
-            # after work was done
-            await drb.done()
-            await dlb.done()
+            await drb.done() # Close all connections
+            await dlb.done() # after work was done
 
         asyncio_run(main())
 
 Motivation
 ----------
 
-The Telegram is beautiful app. Not only by mean of features and Client API, but it's also good in cryptography and secure messaging. In the last years, core and client devs of Telegram mostly work for "social-network features", i.e video chats and message reactions which is OK, but there also can be plenty of "crypto-related" things.
+The Telegram is beautiful app. Not only by mean of features and Client API, but it's also used to be good in cryptography and secure messaging. In the last years, core and client devs of Telegram mostly work for "social-network features", i.e video chats and message reactions which is OK (until stories, wtf?), but there also can be plenty of "crypto-related" things implemented.
 
 Target
 ------
 
-This *[unofficial]* library targets to be a PoC of **encrypted file storage** inside the Telegram, but can be used as standalone API.
+This *[unofficial]* library targets to be a PoC of **encrypted file storage** inside the Telegram, and should be used as standalone *Python library*.
 
 Abstract
 --------
 
-We name *"encrypted cloud storage"* as **Box** and the API to it as **Tgbox**. There is **two** of boxes: the **RemoteBox** and the **LocalBox**. They define a basic primitives. You can share your Box and separate Files with other people absolutely secure - only You and someone you want will have decryption key, even through insecure communication canals (`e2e <https://en.wikipedia.org/wiki/End-to-end_encryption>`__). You can make unlimited amount of Boxes, Upload & Download speed is **faster** than in official Telegram clients and maximum filesize is around **2GB** and around **4GB** for Premium users.
+We name *"encrypted cloud storage"* as **Box** and the API to it as ``tgbox``. The *Box* splits into the **RemoteBox** and the **LocalBox**. They define a basic primitives. You can **share** your *Box* and separate *Files* with other people absolutely **secure** - only You and someone you want will have decryption key, even through insecure communication canals (`e2e <https://en.wikipedia.org/wiki/End-to-end_encryption>`__). You can make **unlimited** amount of Boxes, Upload & Download **speed is faster** than in official Telegram clients and maximum filesize is around **2GB** and around **4GB** for Premium users.
 
 Documentation
 -------------
