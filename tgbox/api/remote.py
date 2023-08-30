@@ -1048,6 +1048,12 @@ class EncryptedRemoteBox:
             A callback function accepting two parameters:
             (downloaded_bytes, total).
         """
+        if rbf is None:
+            raise RemoteFileNotFound(
+                '''Specified "rbf" is None. Probably the File you're trying '''
+                '''to update was removed from the Remote, but still present '''
+                '''in your Local Box. Try to Sync them firstly.'''
+            )
         return await self._push_file(pf,
             message_to_edit=rbf._message,
             progress_callback=progress_callback)
@@ -1873,13 +1879,23 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         # make a FileKey, which will decrypt File and Secret Metadata.
         # This "If Statement" will be True only if File is version 1.3+
         if self._mainkey and erbf._efile_path is not None and not self._imported:
-            self._file_path = AES(self._mainkey).decrypt(erbf._efile_path)
-            self._file_path = Path(self._file_path.decode())
+            try:
+                self._file_path = AES(self._mainkey).decrypt(erbf._efile_path)
+            except ValueError: # ValueError: invalid padding byte
+                logger.warning(
+                   f'''We can\'t decrypt real file path of ID{self._id} because '''
+                    '''MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '''
+                    '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
+                )
+                self._file_path = self._defaults.DEF_NO_FOLDER
+                self._dirkey = None
+            else:
+                self._file_path = Path(self._file_path.decode())
 
-            for path_part in ppart_id_generator(self._file_path, self._mainkey):
-                ppath_head = path_part[2]
+                for path_part in ppart_id_generator(self._file_path, self._mainkey):
+                    ppath_head = path_part[2]
 
-            self._dirkey = make_dirkey(self._mainkey, ppath_head)
+                self._dirkey = make_dirkey(self._mainkey, ppath_head)
         else:
             if erbf._efile_path: # v1.3+ but no MainKey
                 logger.warning(
