@@ -49,7 +49,7 @@ __all__ = [
 
 class _TypeList:
     """
-    This is cutted version of ``list()`` that
+    This is small version of ``list()`` that
     checks type on ``.append(...)``.
 
     You can specify multiply types with

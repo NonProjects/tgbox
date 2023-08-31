@@ -62,7 +62,7 @@ class RemoteBoxInaccessible(TgboxException):
     """The RemoteBox you try to use is inaccessible"""
 
 class NotEnoughRights(TgboxException):
-    """You don't have rigths for this action"""
+    """You don't have rights for this action"""
 
 class NoPlaceLeftForMetadata(TgboxException):
     """Your edited metadata overflow Telegram caption limit"""
@@ -73,7 +73,7 @@ class AlreadyImported(TgboxException):
     """LocalBox have file with same ID"""
 
 class NotImported(TgboxException):
-    """The file you try to retrieve wasn\'t imported yet"""
+    """The file you try to retrieve wasn't imported yet"""
 
 class FingerprintExists(TgboxException):
     """File with the same file path already uploaded to the Box"""

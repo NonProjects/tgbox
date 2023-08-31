@@ -80,7 +80,7 @@ class Phrase:
 
     @property
     def phrase(self) -> bytes:
-        """Returns currrent raw phrase"""
+        """Returns current raw phrase"""
         return self._phrase
 
     @classmethod
@@ -217,7 +217,7 @@ class Key:
         return prefix + urlsafe_b64encode(self._key).decode()
 
     def hex(self) -> str:
-        """Returns key in hex represenation"""
+        """Returns key in hex representation"""
         return self._key.hex()
 
 class BaseKey(Key):
@@ -231,7 +231,7 @@ class BaseKey(Key):
 
 class MainKey(Key):
     """
-    ``MainKey`` may be reffered as "Box key". This
+    ``MainKey`` may be referred as "Box key". This
     key encrypts all box data and used in ``FileKey``
     creation. It's one of your most important ``Key``,
     as leakage of it will result in compromising all
@@ -376,7 +376,7 @@ def make_mainkey(basekey: BaseKey, box_salt: BoxSalt) -> MainKey:
 
     Arguments:
         basekey (``bytes``):
-            Key which you recieved with scrypt
+            Key which you received with scrypt
             function or any other key you want.
 
         box_salt (``BoxSalt``):
@@ -455,7 +455,7 @@ def make_requestkey(key: Union[MainKey, BaseKey],
     is called ``ShareKey``. Use help on ``make_sharekey``.).
 
     B sends received ``RequestKey`` to A. A makes ``ShareKey``
-    and sends it to B. B calls ``get_importkey`` and recieves the
+    and sends it to B. B calls ``get_importkey`` and receives the
     ``ImportKey``, which is, in fact, a ``FileKey``.
 
     No one except Alice and Bob will have ``FileKey``. If Alice want
@@ -525,7 +525,7 @@ def make_sharekey(
         You may want to know what is ``RequestKey`` before reading
         this. Please, run help on ``make_requestkey`` to get info.
 
-    Alice recieved ``RequestKey`` from Bob. But what she should do
+    Alice received ``RequestKey`` from Bob. But what she should do
     next? As reqkey is just EC-pubkey, she wants to make a *shared
     secret key*. A makes her own privkey, with ``sha256(mainkey
     + sha256(salt + requestkey))`` & initializes ECDH with B pubkey
