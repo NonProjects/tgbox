@@ -326,7 +326,7 @@ Box clone
         # See help(tgbox.keys.Phrase.generate)
         basekey = make_basekey(b'example phrase here')
 
-        # Retreive RemoteBox by username (entity),
+        # Retrieve RemoteBox by username (entity),
         # you may also use here invite link.
         #
         # In this example we will clone created
@@ -336,7 +336,7 @@ Box clone
         # want to share Box with someone
         # else, use ShareKey. See docs.
         #
-        # Retreiving MainKey will give
+        # Retrieving MainKey will give
         # FULL R/O ACCESS to your box.
         erb = await get_remotebox(tc=tc, entity='@nontgbox_non')
 
@@ -347,7 +347,7 @@ Box clone
 
         # Wrap and decrypt @nontgbox_non
         drb = await erb.decrypt(key=mainkey)
-        # Clone and retreive DecryptedLocalBox
+        # Clone and retrieve DecryptedLocalBox
         dlb = await clone_remotebox(drb, basekey)
 
         # Iterate over DecryptedLocalBox contents

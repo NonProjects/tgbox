@@ -344,7 +344,7 @@ In more low-level
 
 - **5. Alice makes ShareKey with RequestKey of Bob and sends it**
 
-  1. *A* creates her *EC* **private key** on *SECP256k1* from the ``sha256(a_mainkey + sha256(file_salt + b_requestkey))``. After this, she will extract **public key** from *B*'s :class:`~tgbox.keys.RequestKey` and will make a **shared 32 byte-secret** with ``ECDH(a_privkey, b_pubkey{requestkey}, secp256k1)``. **Shared secret is additionaly hashed with SHA256**. Hashed shared secret is AES-CBC key for :class:`~tgbox.keys.FileKey` encryption;
+  1. *A* creates her *EC* **private key** on *SECP256k1* from the ``sha256(a_mainkey + sha256(file_salt + b_requestkey))``. After this, she will extract **public key** from *B*'s :class:`~tgbox.keys.RequestKey` and will make a **shared 32 byte-secret** with ``ECDH(a_privkey, b_pubkey{requestkey}, secp256k1)``. **Shared secret is additionally hashed with SHA256**. Hashed shared secret is AES-CBC key for :class:`~tgbox.keys.FileKey` encryption;
 
   2. *A* make SHA256 hash from *B*'s :class:`~tgbox.keys.RequestKey` and take
      first 16 bytes from result, this is AES-CBC **IV**.
@@ -412,7 +412,7 @@ In more low-level
 
 - **5. Alice makes ShareKey with RequestKey of Bob and sends it**
 
-  1. *A* creates her *EC* **private key** on *SECP256k1* from the ``sha256(a_mainkey + sha256(file_salt{of last file} + b_requestkey))``. After this, she will extract **public key** from *B*'s :class:`~tgbox.keys.RequestKey` and will make a **shared 32 byte-secret** with ``ECDH(a_privkey, b_pubkey{requestkey}, secp256k1)``. **Shared secret is additionaly hashed with SHA256**. Hashed shared secret is AES-CBC key for :class:`~tgbox.keys.DirectoryKey` encryption. :class:`~tgbox.keys.DirectoryKey` can be easily obtained from :attr:`~tgbox.api.local.DecryptedLocalBoxFile.dirkey`;
+  1. *A* creates her *EC* **private key** on *SECP256k1* from the ``sha256(a_mainkey + sha256(file_salt{of last file} + b_requestkey))``. After this, she will extract **public key** from *B*'s :class:`~tgbox.keys.RequestKey` and will make a **shared 32 byte-secret** with ``ECDH(a_privkey, b_pubkey{requestkey}, secp256k1)``. **Shared secret is additionally hashed with SHA256**. Hashed shared secret is AES-CBC key for :class:`~tgbox.keys.DirectoryKey` encryption. :class:`~tgbox.keys.DirectoryKey` can be easily obtained from :attr:`~tgbox.api.local.DecryptedLocalBoxFile.dirkey`;
 
   2. *A* make SHA256 hash from *B*'s :class:`~tgbox.keys.RequestKey` and take
      first 16 bytes from result, this is AES-CBC **IV**.
@@ -466,7 +466,7 @@ In more low-level
 
 - **4. Alice makes ShareKey with Bob's RequestKey and sends it**
 
-  1. *A* creates her own *private key* similarly to *B*, with the difference only in the *Salt*. While *B* makes a *private key* and then *public key* (= :class:`~tgbox.keys.RequestKey`) from the :class:`~tgbox.keys.BaseKey` concated with the :class:`~tgbox.keys.BoxSalt`, *Alice* makes *private key* from the ``sha256(a_mainkey + sha256(box_salt + b_requestkey))``. After this, she extracts *public key* from :class:`~tgbox.keys.RequestKey` of *B* and makes a **shared 32 byte-secret** with ``ECDH(a_privkey, b_pubkey{requestkey}, secp256k1)``. **Shared secret is additionaly hashed with SHA256**. Hashed shared secret is AES-CBC key for :class:`~tgbox.keys.MainKey` encryption;
+  1. *A* creates her own *private key* similarly to *B*, with the difference only in the *Salt*. While *B* makes a *private key* and then *public key* (= :class:`~tgbox.keys.RequestKey`) from the :class:`~tgbox.keys.BaseKey` concated with the :class:`~tgbox.keys.BoxSalt`, *Alice* makes *private key* from the ``sha256(a_mainkey + sha256(box_salt + b_requestkey))``. After this, she extracts *public key* from :class:`~tgbox.keys.RequestKey` of *B* and makes a **shared 32 byte-secret** with ``ECDH(a_privkey, b_pubkey{requestkey}, secp256k1)``. **Shared secret is additionally hashed with SHA256**. Hashed shared secret is AES-CBC key for :class:`~tgbox.keys.MainKey` encryption;
 
   2. *A* make SHA256 hash from *B*'s :class:`~tgbox.keys.RequestKey` and take
      first 16 bytes from result, this is AES-CBC **IV**.
@@ -506,7 +506,7 @@ Deep Synchronization
 **Deep Synchronization** is a process in which we iterate over :doc:`remotebox` and **compare each file** with those from :doc:`localbox`. If some *File* is presented in *Remote* but not presented in *Local*, -- it will be imported. If some *File* is presented in *Local* but not presented in *Remote*, then it will be **removed** from *Local*. The *Deep Sync* is pretty fast even with *Box* that have a thousands of *Files*, however, may make a many of unnecessary requests. In contrary to *Fast Sync*, the *Deep Sync* is not limited in 48 hours time span. Moreover, you can set a *Start From ID* parameter if you need to *sync* only most recent *Files*. *Deep Sync* can be enabled by the ``deep=True`` flag in the :meth:`~tgbox.api.local.DecryptedLocalBox.sync` method.
 
 .. note::
-   Both *Sync* methods catch *File* (and *Metadata*) updates, import new *Files* & remove *Files* that no more exist in the *RemoteBox*. You can specify a *Progress Calback* and track a progess of *Sync* process.
+   Both *Sync* methods catch *File* (and *Metadata*) updates, import new *Files* & remove *Files* that no more exist in the *RemoteBox*. You can specify a *Progress Callback* and track a progress of *Sync* process.
 
 Versioning
 ----------
@@ -515,7 +515,7 @@ The TGBOX will try to follow the well known `Semantic Versioning <https://semver
 
 1. We will increment *Minor Version* and push all updates to the default ``indev`` branch
 2. While developing, we will increment the alpha/beta tags of Version and make pre-release
-3. When all updates will be commited & tested, we will make a *branch of Version*
+3. When all updates will be committed & tested, we will make a *branch of Version*
 
 In future, we will push patches to the *Version* branch and make release of it.
 

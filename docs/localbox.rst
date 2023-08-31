@@ -134,7 +134,7 @@ In this schema we split a *File path* by parts (*/*, *home*, *...*). A path anch
         See it in a ``tools`` module: :func:`tgbox.tools.ppart_id_generator`.
 
 
-Additionaly, we encrypt the *Path Part* with a :class:`~tgbox.keys.MainKey` and store it with *Part ID (Px)* and *Parent Part ID (Px-1)* in a ``PATH_PARTS`` table of *LocalBox* SQLite *Database*. In the default :doc:`protocol` behaviour this process is initiated after user pushed file to *RemoteBox*, on saving *Metadata* to *LocalBox*. We make a *Path Part IDs* and insert data into ``PATH_PARTS`` table if it's not contains this *Part ID*. When we store data of the *File* in the ``FILES`` table, we insert the **last** *Part ID* (or *Path Part ID Head*) into the ``FILES:PPATH_HEAD`` column (see :ref:`FILES`).
+Additionally, we encrypt the *Path Part* with a :class:`~tgbox.keys.MainKey` and store it with *Part ID (Px)* and *Parent Part ID (Px-1)* in a ``PATH_PARTS`` table of *LocalBox* SQLite *Database*. In the default :doc:`protocol` behaviour this process is initiated after user pushed file to *RemoteBox*, on saving *Metadata* to *LocalBox*. We make a *Path Part IDs* and insert data into ``PATH_PARTS`` table if it's not contains this *Part ID*. When we store data of the *File* in the ``FILES`` table, we insert the **last** *Part ID* (or *Path Part ID Head*) into the ``FILES:PPATH_HEAD`` column (see :ref:`FILES`).
 
 Why bother?
 ^^^^^^^^^^^
