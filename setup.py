@@ -18,7 +18,7 @@ setup(
     packages         = ['tgbox', 'tgbox.api'],
     version          = version,
     license          = 'LGPL-2.1',
-    description      = 'Encrypted cloud storage API based on a Telegram API',
+    description      = 'Encrypted cloud storage Protocol based on a Telegram API',
     long_description = open('README.rst', encoding='utf-8').read(),
     author           = 'NonProjects',
     author_email     = 'thenonproton@pm.me',
@@ -55,7 +55,7 @@ setup(
         ]
     },
     classifiers = [
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'Topic :: Security :: Cryptography',
         'Topic :: Software Development :: Libraries',
