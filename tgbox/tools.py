@@ -447,7 +447,9 @@ def ppart_id_generator(path: Path, mainkey: MainKey) -> Generator[tuple, None, N
 
     Will yield a tuple (PART, PARENT_PART_ID, PART_ID)
     """
+    path = make_general_path(path) # Handle Windows-like path correctly
     parent_part_id = b'' # The root (/ anchor) doesn't have parent
+
     for part in path.parts:
         part_id = sha256(
             mainkey\
