@@ -20,7 +20,7 @@ from functools import partial
 from re import search as re_search
 
 from platform import system as platform_system
-from pathlib import PureWindowsPath, Path
+from pathlib import PureWindowsPath, PurePosixPath, Path
 
 from .errors import (
     ConcatError,
@@ -447,7 +447,12 @@ def ppart_id_generator(path: Path, mainkey: MainKey) -> Generator[tuple, None, N
 
     Will yield a tuple (PART, PARENT_PART_ID, PART_ID)
     """
-    path = make_general_path(path) # Handle Windows-like path correctly
+    if guess_path_type(path) == 'unix':
+        path = str(PurePosixPath(path))
+        path = PurePosixPath(path.lstrip('\\'))
+    else:
+        path = PureWindowsPath(path)
+
     parent_part_id = b'' # The root (/ anchor) doesn't have parent
 
     for part in path.parts:
