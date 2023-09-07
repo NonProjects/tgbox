@@ -2408,7 +2408,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         else:
             updates_encoded = ''
         try:
-            await self._message.edit(updates_encoded)
+            await self._rb._tc.edit_message(self._message, updates_encoded)
         except MediaCaptionTooLongError:
             raise NoPlaceLeftForMetadata(NoPlaceLeftForMetadata.__doc__) from None
         except ChatAdminRequiredError:
