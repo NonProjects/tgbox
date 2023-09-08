@@ -29,7 +29,8 @@ from telethon.errors import (
     MediaCaptionTooLongError,
     MessageNotModifiedError,
     AuthKeyUnregisteredError,
-    FilePartsInvalidError
+    FilePartsInvalidError,
+    MessageIdInvalidError
 )
 from telethon.tl.functions.channels import (
     CreateChannelRequest, EditPhotoRequest,
@@ -57,10 +58,10 @@ from ..defaults import (
 from ..fastelethon import upload_file, download_file
 
 from ..errors import (
-    NotEnoughRights, NotATgboxFile, IncorrectKey,
     NotInitializedError, RemoteBoxInaccessible,
+    NotEnoughRights, NotATgboxFile, IncorrectKey,
     LimitExceeded, NotImported, AESError, RemoteFileNotFound,
-    NoPlaceLeftForMetadata, SessionUnregistered
+    NoPlaceLeftForMetadata, SessionUnregistered, InvalidFile
 )
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter, OpenPretender,
@@ -2413,6 +2414,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             raise NoPlaceLeftForMetadata(NoPlaceLeftForMetadata.__doc__) from None
         except ChatAdminRequiredError:
             raise NotEnoughRights(NotEnoughRights.__doc__) from None
+        except MessageIdInvalidError as e:
+            raise InvalidFile('Can\'t edit caption of this Document') from e
         except MessageNotModifiedError as e:
             logger.debug(
                 '''Updates wasn\'t commited to your RemoteBox '''
