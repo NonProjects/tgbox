@@ -105,7 +105,7 @@ You can also build docs from the source
 Third party & thanks to
 -----------------------
 - `⭐️ <https://github.com/NonProjects/tgbox/stargazers>`__ **Stargazers!**
-- `Sphinx_book_theme <https://github.com/executablebooks/sphinx-book-theme>`__ (`BSD 3-Clause <https://github.com/executablebooks/sphinx-book-theme/blob/master/LICENSE>`__)
+- `Sphinx_rtd_theme <https://github.com/readthedocs/sphinx_rtd_theme>`__ (`MIT <https://github.com/readthedocs/sphinx_rtd_theme/blob/master/LICENSE>`__)
 - `Aiosqlite <https://github.com/omnilib/aiosqlite>`__ (`MIT <https://github.com/omnilib/aiosqlite/blob/main/LICENSE>`__)
 - `Telethon <https://github.com/LonamiWebs/Telethon>`__ (`MIT <https://github.com/LonamiWebs/Telethon/blob/master/LICENSE>`__)
 - `Ecdsa <https://github.com/tlsfuzzer/python-ecdsa>`__ (`LICENSE <https://github.com/tlsfuzzer/python-ecdsa/blob/master/LICENSE>`__)
