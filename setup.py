@@ -50,7 +50,6 @@ setup(
         ],
         'doc': [
             'sphinx-rtd-theme==1.3.0',
-            'sphinxcontrib-jquery==4.1',
             'sphinx-togglebutton==0.3.2'
         ]
     },
