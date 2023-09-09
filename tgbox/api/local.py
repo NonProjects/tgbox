@@ -518,7 +518,7 @@ class EncryptedLocalBox:
             return 0
 
     async def get_files_total(self) -> int:
-        """Returns a total number of files in this *LocalBox"""
+        """Returns a total number of files in this LocalBox"""
         return await self._tgbox_db.FILES.count_rows()
 
     async def init(self) -> 'EncryptedLocalBox':
@@ -1415,9 +1415,10 @@ class DecryptedLocalBox(EncryptedLocalBox):
             Don't treat this as progressbar. The code
             will call/await the specified callback
             with one of the arguments from below:
-                * ``fast_progress_callback(22, 'deleted')`` OR
-                * ``fast_progress_callback(22, 'imported')`` OR
-                * ``fast_progress_callback(22, 'metadata edited')``
+
+            * ``fast_progress_callback(22, 'deleted')`` OR
+            * ``fast_progress_callback(22, 'imported')`` OR
+            * ``fast_progress_callback(22, 'metadata edited')``
 
         .. note::
             * By default this method will use a fast

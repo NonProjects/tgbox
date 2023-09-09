@@ -358,7 +358,7 @@ class EncryptedRemoteBox:
         return 0
 
     async def get_files_total(self) -> int:
-        """Returns a total number of files in this *RemoteBox"""
+        """Returns a total number of files in this RemoteBox"""
 
         search = await self._tc(SearchRequest(
             peer = self._box_channel,
