@@ -38,7 +38,6 @@ release = VERSION
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosectionlabel',
-    'sphinxcontrib.jquery',
     'sphinx.ext.viewcode',
     'sphinx_togglebutton'
 ]
