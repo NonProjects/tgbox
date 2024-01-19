@@ -2147,6 +2147,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             self, *, outfile: Optional[Union[str, BinaryIO, Path]] = None,
             hide_folder: bool=False, hide_name: bool=False,
             decrypt: bool=True, request_size: int=524288,
+            offset: Optional[int] = None,
             progress_callback: Optional[Callable[[int, int], None]] = None) -> BinaryIO:
         """
         Downloads and saves remote box file to the ``outfile``.
@@ -2174,6 +2175,11 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             decrypt (``bool``, optional):
                 Decrypts file if True (default).
 
+            offset (``int``, optional):
+                Offset to **decrypted** file. Use this if your download
+                process was stopped for some reason. Specify here how
+                much of bytes you already downloaded and we will fetch rest.
+
             request_size (``int``, optional):
                 How many bytes will be requested to Telegram when more
                 data is required. By default, as many bytes as possible
@@ -2191,9 +2197,6 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self.__raise_initialized()
 
         logger.info(f'Downloading DRBF (ID{self._id})...')
-
-        if decrypt:
-            aws = AES(self._filekey, self._file_iv)
 
         if outfile is None:
             outfile = self._defaults.DOWNLOAD_PATH
@@ -2234,7 +2237,45 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         logger.debug(f'outfile is {outfile}')
 
         use_slow_download_switch = 0
+
+        stream_iv = self._file_iv if not offset else b'' # We know IV if (not offset)
+        aws = None # Placeholder for AESwState class, we will set it later
+        offset = 0 if not offset else offset
+
+        download_offset = self._file_pos + offset
+        if offset:
+            download_offset -= 16 # Currently i don't know why but without this
+                # first block decryption works incorrectly if offset specified.
+
+        # Download offset must be divisible by 4096 & 524288
+        download_offset_prepared = int((download_offset // 4096) * 4096)
+        download_offset_prepared = int((download_offset_prepared // 524288) * 524288)
+
         while True:
+            # We need previous AES CBC block to obtain IV for the next one,
+            # but Telegram give only 512KiB blocks, so we need to download it
+            if not stream_iv and decrypt:
+                if offset:
+                    assert not offset % 524288, 'offset must be divisible by 524288'
+                    iv_offset = self._file_pos + (offset - 524288)
+                else:
+                    iv_offset = self._file_pos - 524288
+                    iv_offset -= (iv_offset % 524288)
+                    iv_offset = 0 if iv_offset < 0 else iv_offset
+
+                iter_down_iv = self._rb._tc.iter_download(
+                    self._message.document,
+                    offset=iv_offset
+                )
+                for _ in range(2):
+                    stream_iv += bytes(await anext(iter_down_iv, b''))
+
+                stream_iv_pos = self._file_pos + offset - 16
+                stream_iv = stream_iv[stream_iv_pos:stream_iv_pos+16]
+
+            if decrypt:
+                aws = AES(self._filekey, stream_iv)
+
             try:
                 # By default we will try to download file via the
                 # fast "download_file" coroutine from fastelethon
@@ -2247,22 +2288,24 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                         client = self._rb._tc,
                         location = self._message.document,
                         request_size = request_size,
-                    )
+                        offset = download_offset_prepared)
                 else:
                     # Switch to the default slow method
                     iter_down = self._rb._tc.iter_download(
                         self._message.document,
-                        request_size=request_size
+                        request_size = request_size,
+                        offset = download_offset_prepared
                     )
-                buffered, offset, total = b'', self._file_pos, 0
+                buffered, total = b'', offset
                 async for chunk in iter_down:
                     if buffered:
                         buffered += chunk
                         chunk = buffered[:request_size]
                         buffered = buffered[request_size:]
                     else:
-                        buffered += chunk[offset:]
-                        offset = None; continue
+                        slice_ = download_offset - download_offset_prepared
+                        buffered += chunk[slice_:]
+                        continue
 
                     chunk = aws.decrypt(chunk, unpad=False) if decrypt else chunk
                     outfile.write(chunk)
