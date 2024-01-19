@@ -73,11 +73,9 @@ class DownloadSender:
             offset: int, limit: int,
             stride: int, count: int) -> None:
 
-        # TODO: Add left bytes to buffer and return.
+        # Offset must be divisible by 4096, and then by 524288,
+        # otherwise error will be raised.
         self.offset = offset
-        # Offset must be divisible by 4096, otherwise
-        # error. We concat left bytes later.
-        self.safe_offset = offset - offset % 4096
 
         self.sender = sender
         self.client = client
@@ -85,7 +83,7 @@ class DownloadSender:
         self.remaining = count
 
         self.request = GetFileRequest(
-            file, offset=self.safe_offset, limit=limit
+            file, offset=self.offset, limit=limit
         )
 
     async def next(self) -> Optional[bytes]:
@@ -96,9 +94,7 @@ class DownloadSender:
 
         self.remaining -= 1
         self.request.offset += self.stride
-
-        result_bytes = result.bytes[self.offset - self.safe_offset:]
-        return result_bytes
+        return result.bytes
 
     def disconnect(self) -> Awaitable[None]:
         return self.sender.disconnect()
@@ -197,19 +193,26 @@ class ParallelTransferrer:
         self.senders = [
             await self._create_download_sender(
                 file, 0, part_size, connections * part_size,
-                get_part_count(), offset=offset
-            ),
-            *await asyncio.gather(
-                *[
-                    self._create_download_sender(
-                        file, i, part_size,
-                        connections * part_size,
-                        get_part_count(),
-                        offset=offset
-                    )
-                    for i in range(1, connections)
-                ])
+                get_part_count(), offset=offset)
         ]
+        offset_to_increment = offset
+
+        senders_prepared = []
+
+        for i in range(1, connections):
+            offset_to_increment += 524288
+
+            sender = self._create_download_sender(
+                file, i, part_size,
+                connections * part_size,
+                get_part_count(),
+                offset = offset_to_increment
+            )
+            senders_prepared.append(sender)
+
+        gather_result = await asyncio.gather(*senders_prepared)
+        self.senders.extend(gather_result)
+
     async def _create_download_sender(
             self, file: TypeLocation,
             index: int,
@@ -280,9 +283,12 @@ class ParallelTransferrer:
             connection_count: Optional[int] = None
             ) -> AsyncGenerator[bytes, None]:
 
+        assert not offset % 4096, 'Offset must be divisible by 4096'
+        assert not offset % 524288, 'Offset must be divisible by 524288'
+
         connection_count = connection_count or self._get_connection_count(file_size)
         part_size = (part_size_kb or utils.get_appropriated_part_size(file_size)) * 1024
-        part_count = math.ceil(file_size / part_size)
+        part_count = math.ceil((file_size - offset) / part_size)
 
         logger.debug("Starting parallel download: "
                   f"{connection_count} {part_size} {part_count} {file!s}")
@@ -399,7 +405,7 @@ async def download_file(
         client: TelegramClient,
         location: TypeLocation,
         request_size: int=524288,
-        offset: int=None,
+        offset: int=0,
         progress_callback: callable = None
         ) -> AsyncGenerator[bytes, None]:
 
@@ -417,7 +423,7 @@ async def download_file(
         location, size, offset=offset,
         part_size_kb=int(request_size/1024)
     )
-    position = 0
+    position = offset
     async for chunk in downloaded:
         position += len(chunk)
         if progress_callback:
