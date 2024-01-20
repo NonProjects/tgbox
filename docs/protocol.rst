@@ -375,6 +375,9 @@ Sharing *Box directory*
 .. note::
    This chapter is only for files that was uploaded from *version 1.3+*!
 
+.. warning::
+   By sharing *DirectoryKey* with someone you also give a **full access to all of the files that will be uploaded to corresponding Directory in future!** Make sure you understand this before using proposed method from below! Use *File sharing* to share files individually.
+
 If you want to share many files at once, with previous approach (:ref:`Sharing *Box file*`) you will be need to make a separate :class:`~tgbox.keys.ShareKey` for each target file. Started from *version 1.3* now it's possible to share a bunch of files **per one request**. To do so, target *Box files* should be linked to one *abstract file path* in your *Box*. For example, you can share all files that have a */home/user/Pictures* path (we call it *Directory*) with **only one** :class:`~tgbox.keys.ShareKey`.
 
 .. tip::
@@ -430,9 +433,6 @@ In more low-level
 - **7. Bob imports decrypted EncryptedRemoteBoxFile**
 
   *Bob* will call :meth:`~tgbox.api.remote.EncryptedRemoteBoxFile.decrypt` with resulted :class:`~tgbox.keys.ImportKey` from step *6.* on each file of *Alice* and will receive :meth:`~tgbox.api.remote.DecryptedRemoteBoxFile` objects. To store information about this files in the *LocalBox*, *Bob* will need to call :meth:`~tgbox.api.DecryptedLocalBox.import_file` method on each decrypted file. This will make & store a :class:`~tgbox.keys.FileKey` in encrypted form in *LocalBox* of *Bob* so he can always access imported files of *Alice*.
-
-.. note::
-   We store file keys of **other** people **only** in your *LocalBox*. You will easily retrieve all information about **your** files in *Remote* if corresponding to it *Local* will be lost (you can always make a *LocalBox* from *RemoteBox*), however, it's will be **impossible** to decrypt all *imported files*, and you will need to request a keys for them again.
 
 Sharing *Box*
 +++++++++++++
