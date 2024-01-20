@@ -92,8 +92,8 @@ Every file in TGBOX (as well as in any OS) must have a *file path*. TGBOX *shoul
 |
 
 .. image:: images/tgbox_ppart_id.png
-   :scale: 50%
    :align: center
+   :width: 500px
 
 |
 

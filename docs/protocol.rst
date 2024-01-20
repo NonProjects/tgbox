@@ -45,7 +45,7 @@ Encryption keys hierarchy
 -------------------------
 
 .. image:: images/keys_hierarchy.png
-   :scale: 65%
+   :width: 500px
 
 The *Phrase* →
 ++++++++++++++
@@ -112,10 +112,11 @@ To pack a *Key-Value* container we use the simple algorithm, that in *Protocol* 
 *Key length* plus *Key* plus *Value length* plus *Value* (all *values* should be *bytes*) and so on. We store the Key/Value length in **three bytes**, so the maximum bytelength for each *Key* or *Value* is 16MiB-1.
 
 .. image:: images/pattrs.png
-   :scale: 35%
    :align: center
 
-| In the upper image example, **FF** (is hexed *[int 255]*, as well as *Key length* & *Value length*) is a *Magic number* that identify a *PackedAttributes* bytestring. The **000005** is a *Key length*, the next is a *Key*, which is "*field*". So, we slice the first three bytes after *Magic number*, get a *Key length*, then we slice a *Key length*, get a *Key*. After *Key* there should be the next three bytes that represent a *Value length*. We make the same operation as with *Key* and receive a *Value*, which is "*data*". Repeat this until packed string *is not empty*.
+|
+
+In the upper image example, **FF** (is hexed *[int 255]*, as well as *Key length* & *Value length*) is a *Magic number* that identify a *PackedAttributes* bytestring. The **000005** is a *Key length*, the next is a *Key*, which is "*field*". So, we slice the first three bytes after *Magic number*, get a *Key length*, then we slice a *Key length*, get a *Key*. After *Key* there should be the next three bytes that represent a *Value length*. We make the same operation as with *Key* and receive a *Value*, which is "*data*". Repeat this until packed string *is not empty*.
 
 .. code-block:: python
 
@@ -131,6 +132,7 @@ Metadata in depth
 +++++++++++++++++
 
 .. image:: images/rbfm_schema.png
+   :align: center
 
 On this schema:
     - Only *Metadata* keys shown;
