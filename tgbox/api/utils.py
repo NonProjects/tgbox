@@ -208,6 +208,11 @@ class TelegramVirtualFile:
 
         self._downloader = None
 
+    def __repr__(self) -> str:
+        return (
+            f'''<class {self.__class__.__name__} @ '''
+            f'''{self.name=}, {self.size=}, {self.mime=}>'''
+        )
     async def get_preview(self, quality: int=1) -> bytes:
         if hasattr(self.document,'sizes')\
             and not self.document.sizes:
@@ -551,6 +556,12 @@ class DefaultsTableWrapper:
         """
         self._tgbox_db = tgbox_db
         self._initialized = False
+
+    def __repr__(self) -> str:
+        return (f'{self.__class__.__name__}({repr(self._tgbox_db)})')
+
+    def __str__(self) -> str:
+        return (f'{self.__class__.__name__}({repr(self._tgbox_db)}) # {self._initialized=}')
 
     @property
     def initialized(self) -> bool:

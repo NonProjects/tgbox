@@ -45,8 +45,10 @@ class IV:
         self.iv = iv if isinstance(iv, bytes) else bytes(iv)
 
     def __repr__(self) -> str:
-        class_name = self.__class__.__name__
-        return f'{class_name}({repr(self.iv)}) # at {hex(id(self))}'
+        return f'{self.__class__.__name__}({repr(self.iv)})'
+
+    def __str__(self) -> str:
+        return f'{self.__class__.__name__}({repr(self.iv)}) # at {hex(id(self))}'
 
     def __add__(self, other):
         return self.iv + other
@@ -75,8 +77,11 @@ class Salt:
         self.salt = salt if isinstance(salt, bytes) else bytes(salt)
 
     def __repr__(self) -> str:
+        return f'{self.__class__.__name__}({repr(self.salt)})'
+
+    def __str__(self) -> str:
         class_name = self.__class__.__name__
-        return f'{class_name}({repr(self.salt)}) # at {hex(id(self))}'
+        return f'{self.__class__.__name__}({repr(self.salt)}) # at {hex(id(self))}'
 
     def __add__(self, other):
         return self.salt + other
@@ -207,6 +212,12 @@ class AESwState:
         if self.iv and not isinstance(self.iv, IV):
             self.iv = IV(self.iv)
         self.__iv_concated = False
+
+    def __repr__(self) -> str:
+        return f'<class {self.__class__.__name__}(<key>, {repr(self.iv)})>'
+
+    def __str__(self) -> str:
+        return f'<class {self.__class__.__name__}(<key>, {repr(self.iv)})> # {self.__mode=}'
 
     def __init_aes_state(self, mode: int) -> None:
         if FAST_ENCRYPTION:

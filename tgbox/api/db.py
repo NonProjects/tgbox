@@ -62,6 +62,9 @@ class SqlTableWrapper:
         self._table_name = table_name
         self._aiosql_conn = aiosql_conn
 
+    def __repr__(self) -> str:
+        return f'<class {self.__class__.__name__}(aiosql_conn, "{self._table_name}")>'
+
     async def __aiter__(self) -> tuple:
         """Will yield rows as self.select without ``sql_statement``"""
         async for row in self.select():
@@ -162,6 +165,12 @@ class TgboxDB:
         self._initialized = False
 
         self._name = self._db_path.name
+
+    def __str__(self) -> str:
+        return f'{self.__class__.__name__}("{str(self._db_path)}") # {self._initialized=}'
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}("{str(self._db_path)}")'
 
     @property
     def name(self) -> str:

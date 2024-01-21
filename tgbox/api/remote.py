@@ -307,6 +307,15 @@ class EncryptedRemoteBox:
                 DOWNLOAD_PATH = DOWNLOAD_PATH
             )
 
+    def __repr__(self) -> str:
+        return f'<class {self.__class__.__name__}({self._box_channel}, {self._tc}, {repr(self._defaults)})>'
+
+    def __str__(self) -> str:
+        box_salt = None if not self._box_salt else urlsafe_b64encode(self._box_salt.salt).decode()
+        return (
+            f'''<class {self.__class__.__name__}({self._box_channel}, {self._tc}, {repr(self._defaults)})> '''
+            f'''# {self._box_name=}, {box_salt=}'''
+        )
     def __hash__(self) -> int:
         # Without 22 hash of int wil be equal to object's
         return hash((self._box_channel_id, 22))
@@ -1402,6 +1411,18 @@ class EncryptedRemoteBoxFile:
             logger.debug('ERBF: Found custom defaults, will try to use it')
             self._defaults = defaults
 
+    def __repr__(self) -> str:
+        return (
+            f'''{self.__class__.__name__}({self._id}, {repr(self._rb)}, '''
+            f'''{self._message}, {self._cache_preview}, {repr(self._defaults)})'''
+        )
+    def __str__(self) -> str:
+        file_salt = None if not self._initialized else urlsafe_b64encode(self._file_salt.salt).decode()
+        return (
+            f'''{self.__class__.__name__}({self._id}, {repr(self._rb)}, '''
+            f'''{self._message}, {self._cache_preview}, {repr(self._defaults)}) # '''
+            f'''{self._initialized=}, {file_salt=}, {self._sender=}, {self._imported=}'''
+        )
     def __hash__(self) -> int:
         if not self.initialized:
             raise NotInitializedError(

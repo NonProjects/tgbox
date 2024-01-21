@@ -325,6 +325,16 @@ class OpenPretender:
 
         self._position = 0
 
+    def __repr__(self):
+        return (
+            f'''<class {self.__class__.__name__}({self._flo}, {repr(self._aes_state)}, '''
+            f'''{self._total_size})>'''
+        )
+    def __str__(self):
+        return (
+            f'''<class {self.__class__.__name__}({self._flo}, {repr(self._aes_state)}, '''
+            f'''{self._total_size})> # {self._position=}, {len(self._buffered_bytes)=}'''
+        )
     def concat_metadata(self, metadata: bytes) -> None:
         """Concates metadata to the file as (metadata + file)."""
         if self._position:

@@ -377,6 +377,15 @@ class EncryptedLocalBox:
         self._initialized = False
         self._is_encrypted = True
 
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}({repr(self._tgbox_db)}, {repr(self._defaults)})'
+
+    def __str__(self) -> str:
+        box_salt = None if not self._initialized else urlsafe_b64encode(self.box_salt.salt).decode()
+        return (
+            f'''{self.__class__.__name__}({repr(self._tgbox_db)}, {repr(self._defaults)}) '''
+            f'''# {self._initialized=}, {self._box_channel_id=}, {box_salt=}'''
+        )
     def __hash__(self) -> int:
         if not self._initialized:
             raise NotInitializedError(
@@ -2318,6 +2327,15 @@ class EncryptedLocalBoxFile:
         self._secret_metadata, self._minor_version = None, None
         self._efile_path = None
 
+    def __repr__(self) -> str:
+        return (f'{self.__class__.__name__}({self._id}, {repr(self._lb)}, {self._cache_preview})')
+
+    def __str__(self) -> str:
+        file_salt = None if not self._initialized else urlsafe_b64encode(self._file_salt.salt).decode()
+        return (
+            f'''{self.__class__.__name__}({self._id}, {repr(self._lb)}, {self._cache_preview}) # '''
+            f'''{self._initialized=}, {file_salt=}'''
+        )
     def __hash__(self) -> int:
         return hash((self._id, 22))
 
