@@ -17,7 +17,7 @@ Abstract Box
 .. note::
     More detailed in :doc:`remotebox` and :doc:`localbox`
 
-- The *Box* is an object that have *BoxSalt* — 32 (usually random) bytes. With this *Salt* and user *Passphrase* we make *base* encryption key (see :ref:`Encryption keys hierarchy`).
+- The *Box* is an object that have *BoxSalt* — 32 (usually random) bytes. With this *Salt* and user *Passphrase* we make *main* encryption key (see :ref:`Encryption keys hierarchy`).
 
 - The *Box* splits into two types, — the *Remote* (is a *Telegram Channel*) and *Local* (is a *SQLite database*). They have a two states, — the *Encrypted* (when *Passphrase* is not presented) and *Decrypted*.
 
