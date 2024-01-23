@@ -909,8 +909,8 @@ class EncryptedRemoteBox:
     async def _push_file(
             self, pf: 'PreparedFile',
             progress_callback: Optional[Callable[[int, int], None]] = None,
-            message_to_edit: Optional[Union[int, Message]] = None
-            ) -> 'DecryptedRemoteBoxFile':
+            message_to_edit: Optional[Union[int, Message]] = None,
+            use_slow_upload: Optional[bool] = False) -> 'DecryptedRemoteBoxFile':
         """
         Uploads ``PreparedFile`` to the ``RemoteBox``
         or updates already uploaded file in ``RemoteBox``.
@@ -927,6 +927,11 @@ class EncryptedRemoteBox:
             message_to_edit (``Union[int, Message]``, optional):
                 If specified, will update existing ``RemoteBox``
                 (edit) file instead of uploading new.
+
+            use_slow_upload (``bool``, optional):
+                Will use default upload function from the Telethon
+                library instead of function from `fastelethon.py`.
+                Use this if you have problems with upload.
         """
         if message_to_edit:
             logger.info(
@@ -953,6 +958,8 @@ class EncryptedRemoteBox:
         oe = OpenPretender(pf.file, aes_state, pf.filesize)
         oe.concat_metadata(pf.metadata)
         try:
+            assert not use_slow_upload, 'use_slow_upload enabled'
+
             # Here we will use fast upload function
             ifile = await upload_file(
                 self._tc, oe,
@@ -965,7 +972,8 @@ class EncryptedRemoteBox:
             # probably because of fast "upload_file(...)" from
             # the custom fastelethon module. We will try to
             # use the slow upload from the Telethon library
-            logger.warning(f'Fast upload FAILED, falling to SLOW!\n{format_exc()}')
+            if not isinstance(e, AssertionError): # We assert if use_slow_upload
+                logger.warning(f'Fast upload FAILED, trying with SLOW!\n{format_exc()}')
 
             ifile = await self._tc.upload_file(
                 oe, file_name=urlsafe_b64encode(pf.filesalt.salt).decode(),
@@ -1017,7 +1025,8 @@ class EncryptedRemoteBox:
 
     async def push_file(
         self, pf: 'PreparedFile',
-        progress_callback: Optional[Callable[[int, int], None]] = None
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        use_slow_upload: Optional[bool] = False,
         ) -> 'DecryptedRemoteBoxFile':
         """
         Uploads ``PreparedFile`` to the ``RemoteBox``.
@@ -1031,6 +1040,10 @@ class EncryptedRemoteBox:
                 A callback function accepting two parameters:
                 (downloaded_bytes, total).
 
+            use_slow_upload (``bool``, optional):
+                Will use default upload function from the Telethon
+                library instead of function from `fastelethon.py`.
+                Use this if you have problems with upload.
         """
         return await self._push_file(pf,
             progress_callback=progress_callback)
@@ -1038,8 +1051,8 @@ class EncryptedRemoteBox:
     async def update_file(self,
         rbf: Union['EncryptedRemoteBoxFile', 'DecryptedRemoteBoxFile'],
         pf: 'PreparedFile',
-        progress_callback: Optional[Callable[[int, int], None]] = None
-        ) -> 'DecryptedRemoteBoxFile':
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        use_slow_upload: Optional[bool] = False) -> 'DecryptedRemoteBoxFile':
         """
         Updates already uploaded ``RemoteBox`` file.
         This will make a full reupload and ``Message`` edit.
@@ -1057,6 +1070,11 @@ class EncryptedRemoteBox:
         progress_callback (``Callable[[int, int], None]``, optional):
             A callback function accepting two parameters:
             (downloaded_bytes, total).
+
+        use_slow_upload (``bool``, optional):
+            Will use default upload function from the Telethon
+            library instead of function from `fastelethon.py`.
+            Use this if you have problems with upload.
         """
         if rbf is None:
             raise RemoteFileNotFound(
@@ -1066,7 +1084,8 @@ class EncryptedRemoteBox:
             )
         return await self._push_file(pf,
             message_to_edit=rbf._message,
-            progress_callback=progress_callback)
+            progress_callback=progress_callback,
+            use_slow_upload=use_slow_upload)
 
     async def delete_files(
             self,
@@ -2169,7 +2188,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             hide_folder: bool=False, hide_name: bool=False,
             decrypt: bool=True, request_size: int=524288,
             offset: Optional[int] = None,
-            progress_callback: Optional[Callable[[int, int], None]] = None) -> BinaryIO:
+            progress_callback: Optional[Callable[[int, int], None]] = None,
+            use_slow_download: Optional[bool] = False) -> BinaryIO:
         """
         Downloads and saves remote box file to the ``outfile``.
 
@@ -2214,6 +2234,11 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             progress_callback (``Callable[[int, int], None]``, optional):
                 A callback function accepting two parameters:
                 (downloaded_bytes, total).
+
+            use_slow_download (``bool``, optional):
+                Will use default download function from the Telethon
+                library instead of function from `fastelethon.py`.
+                Use this if you have problems with download.
         """
         self.__raise_initialized()
 
@@ -2257,7 +2282,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         logger.debug(f'outfile is {outfile}')
 
-        use_slow_download_switch = 0
+        # '0' is the fast download from the fastelethon.py, and '1'
+        # is the default download from Telethon library.
+        download_error_switch = 1 if use_slow_download else 0
 
         stream_iv = self._file_iv if not offset else b'' # We know IV if (not offset)
         aws = None # Placeholder for AESwState class, we will set it later
@@ -2300,11 +2327,11 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             try:
                 # By default we will try to download file via the
                 # fast "download_file" coroutine from fastelethon
-                # module. If it fails, the "use_slow_download_switch"
+                # module. If it fails, the "download_error_switch"
                 # will be incremented and this code will be switched
                 # to the default "iter_download" from TelegramClient;
                 # If it will fail too, -- we will raise an error.
-                if use_slow_download_switch == 0:
+                if download_error_switch == 0:
                     iter_down = download_file(
                         client = self._rb._tc,
                         location = self._message.document,
@@ -2357,14 +2384,14 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 break # Download is successfull so we can exit this loop
 
             except Exception as e:
-                if use_slow_download_switch < 1:
-                    use_slow_download_switch += 1
+                if download_error_switch == 0:
+                    download_error_switch = 1
                     logger.warning(
-                        '''Fast download FAILED. Trying to use SLOW. '''
-                       f'''Traceback:\n{format_exc()}''')
+                        '''Fast download FAILED. Trying with SLOW!\n'''
+                       f'''{format_exc()}''')
                     continue
                 else:
-                    logger.error('Fast & Slow download methods failed')
+                    logger.error('Both fast and slow download methods failed')
                     raise e
 
         return outfile
