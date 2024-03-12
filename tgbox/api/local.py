@@ -695,7 +695,8 @@ class EncryptedLocalBox:
             max_id: Optional[int] = None,
             ids: Optional[int, list] = None,
             decrypt: Optional[bool] = None,
-            reverse: Optional[bool] = False)\
+            reverse: Optional[bool] = False,
+            fetch_count: Optional[int] = 100)\
             -> Union[
                 'DecryptedLocalBoxFile',
                 'EncryptedLocalBoxFile', None
@@ -711,10 +712,10 @@ class EncryptedLocalBox:
             cache_preview (``bool``, optional):
                 Cache preview in class or not.
 
-            min_id (``bool``, optional):
+            min_id (``int``, optional):
                 Will iterate from this ID.
 
-            max_id (``bool``, optional):
+            max_id (``int``, optional):
                 Will iterate up to this ID.
 
             ids (``int``, ``list``, optional):
@@ -731,7 +732,13 @@ class EncryptedLocalBox:
                 If set to ``True``, the local files will be returned in reverse
                 order (from newest to oldest, instead of the default oldest
                 to newest).
+
+            fetch_count (``int``, optional):
+                Amount of files generator will fetch and cache from
+                SQLite table before return. ``100`` by default.
         """
+        assert fetch_count > 0, 'fetch_count must be > 0'
+
         if ids:
             ids = str(tuple(ids)) if len(ids) > 1 else f'({ids[0]})'
             sql_query = f'SELECT ID FROM FILES WHERE ID IN {ids}'
@@ -751,8 +758,9 @@ class EncryptedLocalBox:
         cursor = await self._tgbox_db.FILES.execute((sql_query ,()))
 
         while True:
-            logger.debug('Trying to fetch new portion of local files (100)...')
-            pending = await cursor.fetchmany(100)
+            logger.debug(f'Trying to fetch new portion of local files ({fetch_count})...')
+
+            pending = await cursor.fetchmany(fetch_count)
             if not pending: return # No more files
 
             pending = [
@@ -1481,11 +1489,12 @@ class DecryptedLocalBox(EncryptedLocalBox):
     async def search_file(
             self, sf: SearchFilter,
             cache_preview: bool=True,
-            reverse: bool=False) -> AsyncGenerator[
+            reverse: bool=False,
+            fetch_count: int=100) -> AsyncGenerator[
                 'DecryptedLocalBoxFile', None
             ]:
         """
-        This method used to search for files in your ``DecryptedLocalBox``.
+        Use this method search for files in your ``DecryptedLocalBox``.
 
         Arguments:
             sf (``SearchFilter``):
@@ -1498,10 +1507,17 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 If set to ``True``, the local files will be searched in reverse
                 order (from newest to oldest, instead of the default oldest
                 to newest).
+
+            fetch_count (``int``, optional):
+                Amount of files generator will fetch and cache from
+                SQLite table before return. ``100`` by default.
         """
+        assert fetch_count > 0, 'fetch_count must be > 0'
+
         sgen = search_generator(
             sf=sf, lb=self, reverse=reverse,
-            cache_preview=cache_preview
+            cache_preview=cache_preview,
+            fetch_count=fetch_count
         )
         async for file in sgen:
             yield file
