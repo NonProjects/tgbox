@@ -1,11 +1,7 @@
-"""This module stores all keys and keys making functions."""
+"""This module stores all keys and key making functions."""
 
 from os import urandom
 from random import SystemRandom
-try:
-    from hashlib import sha256, scrypt
-except ImportError:
-    pass # This is for ReadTheDocs. Ignore it.
 
 from typing import (
     AsyncGenerator,
@@ -16,12 +12,32 @@ from base64 import (
     urlsafe_b64decode
 )
 from .errors import IncorrectKey
-from .defaults import Scrypt, WORDS_PATH
+from .defaults import Scrypt, WORDS_PATH, READTHEDOCS
 
 from .crypto import (
     AESwState as AES, FAST_ENCRYPTION,
     Salt, BoxSalt, FileSalt
 )
+try:
+    from hashlib import sha256, scrypt
+except ImportError: # No Scrypt installed
+    if FAST_ENCRYPTION:
+        from cryptography.hazmat.primitives.kdf.scrypt\
+            import Scrypt as cryptography_Scrypt
+
+        def scrypt(
+                password: bytes, *, salt=None, n=None,
+                r=None, p=None, maxmem=0, dklen=64):
+            """
+            This is a little wrapper around the Scrypt
+            from the cryptography library.
+            """
+            s = cryptography_Scrypt(salt=salt, length=dklen, n=n, r=r, p=p)
+            return s.derive(password)
+    else:
+        if not READTHEDOCS: # ReadTheDocs does not have Scrypt in hashlib
+            raise RuntimeError('Could not find Scrypt. Install tgbox[fast]')
+
 if FAST_ENCRYPTION: # Is faster and more secure
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.hazmat.primitives.serialization import PublicFormat
