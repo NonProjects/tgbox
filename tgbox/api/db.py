@@ -107,26 +107,22 @@ class SqlTableWrapper:
 
     async def insert(
             self, *args, sql_statement: Optional[str] = None,
-            commit: bool=True, ignore: bool=False) -> None:
+            commit: bool=True) -> None:
         """
         If ``sql_statement`` isn't specified, then will be used
         ``INSERT INTO TABLE_NAME values (...)``.
 
         This method doesn't check if you insert correct data
         or correct amount of it, you should know DB structure.
-
-        If ``ignore`` specified, will be used ``INSERT OR IGNORE``
-        instead of ``INSERT`` to silently ignore errors.
         """
-        insert_ = 'INSERT OR IGNORE' if ignore else 'INSERT'
-
         if not sql_statement:
             sql_statement = (
-                f'{insert_} INTO {self._table_name} values ('
+                f'INSERT INTO {self._table_name} values ('
                 + ('?,' * len(args))[:-1] + ')'
             )
         logger.debug(f'self._aiosql_conn.execute({sql_statement}, {args})')
         await self._aiosql_conn.execute(sql_statement, args)
+
         if commit:
             logger.debug('self._aiosql_conn.commit()')
             await self._aiosql_conn.commit()
