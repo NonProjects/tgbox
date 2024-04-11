@@ -314,6 +314,10 @@ async def search_generator(
                 async for content in iterdir:
                     if hasattr(content, '_part_id'):
                         # This is DecryptedLocalBoxDirectory
+
+                        if sf.ex_filters['scope'] or sf.in_filters['non_recursive_scope']:
+                            await content.lload(full=True)
+
                         if str(content) in sf.ex_filters['scope']\
                             or sf.in_filters['non_recursive_scope']:
                                 continue # This directory is excluded
