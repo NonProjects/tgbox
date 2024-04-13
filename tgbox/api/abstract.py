@@ -189,17 +189,15 @@ class Box(DecryptedLocalBox):
         self.update_file = self.drb.update_file
         self.left = self.drb.left
 
+        # Here we Syncify inherited methods of super()
+        if getattr(self, '_needs_syncify', None):
+            syncify(self); self._needs_syncify = False # pylint: disable=W0201
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({repr(self.dlb)}, {repr(self.drb)})'
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__}({str(self.dlb)}, {str(self.drb)})'
-
-    def __ensure_syncified(self):
-        if getattr(self, '_needs_syncify', None):
-            # Here we Syncify inherited methods of super()
-            syncify(self); self._needs_syncify = False # pylint: disable=W0201
 
     async def get_file(
             self, id: int, cache_preview: bool=True,
@@ -229,8 +227,6 @@ class Box(DecryptedLocalBox):
                 like ``files()`` expect this kwarg, but here
                 we don't need it at all. Ignored.
         """
-        self.__ensure_syncified()
-
         bf = BoxFile(id, dlb=self.dlb, drb=self.drb,
             cache_preview=cache_preview,
             erase_encrypted_metadata=erase_encrypted_metadata
@@ -242,7 +238,6 @@ class Box(DecryptedLocalBox):
         See ``help(DecryptedRemoteBox.delete_files)``.
         ``lb`` is auto passed to ``delete_files()``.
         """
-        self.__ensure_syncified()
         return await self.drb.delete_files(*args, **kwargs, lb=self.dlb)
 
     async def sync(self, *args, **kwargs):
@@ -250,7 +245,6 @@ class Box(DecryptedLocalBox):
         See ``help(DecryptedLocalBox.sync)``.
         ``drb`` is auto passed to ``sync()``.
         """
-        self.__ensure_syncified()
         return await self.dlb.sync(*args, **kwargs, drb=self.drb)
 
     async def done(self):
@@ -259,7 +253,6 @@ class Box(DecryptedLocalBox):
         work with Box, so we will
         clean up & close connections.
         """
-        self.__ensure_syncified()
         await self.dlb.done()
         await self.drb.done()
 
