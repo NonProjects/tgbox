@@ -11,6 +11,13 @@ from dataclasses import dataclass
 from re import search as re_search
 from base64 import urlsafe_b64encode
 
+from asyncio import get_event_loop_policy, get_running_loop
+
+from inspect import (
+    iscoroutinefunction, isasyncgenfunction, isasyncgen
+)
+from functools import wraps
+
 from telethon.tl.custom.file import File
 from telethon.sessions import StringSession
 
@@ -27,6 +34,7 @@ from ..fastelethon import download_file
 from ..tools import anext, SearchFilter, _TypeList
 
 from .db import TABLES, TgboxDB
+
 
 __all__ = [
     'search_generator',
@@ -226,7 +234,7 @@ class TelegramVirtualFile:
             message = self.document,
             thumb = quality, file = bytes
         )
-    async def read(self, size: int=-1) -> bytes:
+    async def read(self, size: int=-1) -> bytes: # pylint: disable=unused-argument
         """Will return <= 512KiB of data. 'size' ignored"""
         if not self._downloader:
             self._downloader = download_file(
@@ -343,6 +351,18 @@ async def search_generator(
             reverse = reverse,
             fetch_count=fetch_count
         )
+        if not isasyncgen(iter_from):
+            # The .files() generator was syncified, so we can't
+            # use the "async for" on it. We will make a little wrapper
+            async def _async_iter_from(_iter_from):
+                try:
+                    while True:
+                        yield await next(_iter_from)
+                except StopAsyncIteration:
+                    return
+
+            iter_from = _async_iter_from(iter_from)
+
     if not iter_from:
         raise ValueError('At least it_messages or lb must be specified.')
 
@@ -646,3 +666,68 @@ class RemoteBoxDefaults:
     DEF_UNK_FOLDER: Union[str, PathLike]
     DEF_NO_FOLDER: Union[str, PathLike]
     DOWNLOAD_PATH: Union[str, PathLike]
+
+
+def _syncify_wrap_func(t, method_name):
+    method = getattr(t, method_name)
+
+    @wraps(method)
+    def syncified(*args, **kwargs):
+        coro = method(*args, **kwargs)
+        try:
+            loop = get_running_loop()
+        except RuntimeError:
+            loop = get_event_loop_policy().get_event_loop()
+
+        if loop.is_running():
+            return coro
+        else:
+            return loop.run_until_complete(coro)
+
+    # Save an accessible reference to the original method
+    setattr(syncified, '__tb.sync', method)
+    setattr(t, method_name, syncified)
+
+def _syncify_wrap_agen(t, method_name):
+    method = getattr(t, method_name)
+
+    @wraps(method)
+    def syncified(*args, **kwargs):
+        coro = method(*args, **kwargs)
+        try:
+            loop = get_running_loop()
+        except RuntimeError:
+            loop = get_event_loop_policy().get_event_loop()
+        try:
+            while True:
+                if loop.is_running():
+                    yield anext(coro)
+                else:
+                    yield loop.run_until_complete(anext(coro))
+        except StopAsyncIteration:
+            return
+
+    # Save an accessible reference to the original method
+    setattr(syncified, '__tb.sync', method)
+    setattr(t, method_name, syncified)
+
+def syncify(*types):
+    """
+    Converts all the methods in the given types (class definitions)
+    into synchronous, which return either the coroutine or the result
+    based on whether ``asyncio's`` event loop is running.
+    """
+    do_not_sync = ('search_generator',)
+
+    for t in types:
+        for name in dir(t):
+            if name in do_not_sync:
+                continue
+
+            if not name.startswith('_') or name == '__call__':
+                if isasyncgenfunction(getattr(t, name)):
+                    _syncify_wrap_agen(t, name)
+
+                elif iscoroutinefunction(getattr(t, name)):
+                    _syncify_wrap_func(t, name)
+

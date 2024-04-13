@@ -14,12 +14,11 @@ from os import PathLike
 from io import BytesIO
 from time import time
 
+from inspect import isasyncgen
 from asyncio import iscoroutinefunction, gather
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 
-from telethon.tl.types import (
-    Photo, Document, ChannelParticipantsAdmins
-)
+from telethon.tl.types import ChannelParticipantsAdmins
 from telethon.errors.rpcerrorlist import ChatAdminRequiredError
 
 from filetype import guess as filetype_guess
@@ -323,7 +322,7 @@ class EncryptedLocalBox:
 
         asyncio_run(main())
 
-    You can acces it from the ``DecryptedLocalBox``:
+    You can access it from the ``DecryptedLocalBox``:
 
     .. code-block:: python
 
@@ -654,6 +653,15 @@ class EncryptedLocalBox:
                 Will **not** return LocalBoxFile associated
                 with the *LocalBoxDirectory* if ``False``.
         """
+        # We may use the _async_iter_from function if
+        # target async generators was syncified prior.
+        async def _async_iter_from(_iter_from):
+            try:
+                while True:
+                    yield await next(_iter_from)
+            except StopAsyncIteration:
+                return
+
         sfpid = (sfpid,) if sfpid else []
 
         if not sfpid:
@@ -675,8 +683,19 @@ class EncryptedLocalBox:
             yield lbfid
 
             if not ignore_files:
-                async for lbfi in lbfid.iterdir(ignore_dirs=True):
+                # ---------------------------------------------------------- #
+                # We need to wrap 'iterdir' method here if it was syncified,
+                # otherwise we will 'async for' on sync generator
+
+                iterdir_ = lbfid.iterdir(ignore_dirs=True)
+
+                if not isasyncgen(iterdir_): # Was syncified
+                    iterdir_ = _async_iter_from(iterdir_)
+
+                async for lbfi in iterdir_:
                     yield lbfi
+
+                # ---------------------------------------------------------- #
 
             child_pids = await self._tgbox_db.PATH_PARTS.execute((
                 'SELECT PART_ID FROM PATH_PARTS WHERE PARENT_PART_ID IS ?',
@@ -684,10 +703,20 @@ class EncryptedLocalBox:
             ))
             child_sfpid = [i[0] for i in await child_pids.fetchall()]
 
+            # ---------------------------------------------------------- #
+            # We need to wrap 'contents' method here if it was syncified,
+            # otherwise we will 'async for' on sync generator
+
             for csfpid in child_sfpid:
                 contents = self.contents(csfpid, ignore_files=ignore_files)
+
+                if not isasyncgen(contents): # Was syncified
+                    contents = _async_iter_from(contents)
+
                 async for content in contents:
                     yield content
+
+            # ---------------------------------------------------------- #
 
     async def files(
             self, cache_preview: bool=True,
@@ -978,11 +1007,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
             self._fast_sync_last_event_id = bytes_to_int(
                 AES(self._mainkey).decrypt(self._fast_sync_last_event_id)
             )
-
-    @property
-    def mainkey(self) -> MainKey:
-        """Will return ``MainKey`` of this *Box*"""
-        return self._mainkey
 
     @property
     def mainkey(self) -> MainKey:
