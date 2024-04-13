@@ -1045,14 +1045,13 @@ class DecryptedLocalBox(EncryptedLocalBox):
                f'''Adding ({part}, {parent_part_id}, {part_id}) '''
                 '''to the PATH_PARTS if it\'s not already in'''
             )
-            cursor = await self._tgbox_db.PATH_PARTS.execute(
-                ('SELECT PART_ID FROM PATH_PARTS WHERE PART_ID=?', (part_id,))
+            sql_query = (
+                'INSERT OR IGNORE INTO PATH_PARTS VALUES (?,?,?)',
+                (AES(self._mainkey).encrypt(part.encode()),
+                part_id, parent_part_id)
             )
-            if not await cursor.fetchone():
-                await self._tgbox_db.PATH_PARTS.insert(
-                    AES(self._mainkey).encrypt(part.encode()),
-                    part_id, parent_part_id
-                )
+            await self._tgbox_db.PATH_PARTS.execute(sql_query)
+
         elbd = EncryptedLocalBoxDirectory(self._elb, part_id)
         return await elbd.decrypt(dlb=self)
 
