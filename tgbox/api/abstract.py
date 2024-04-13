@@ -175,6 +175,9 @@ class Box(DecryptedLocalBox):
             drb (``DecryptedRemoteBox``):
                 The ``DecryptedRemoteBox`` object! Also Yang...
         """
+        if not (dlb.box_channel_id == drb.box_channel_id):
+            raise NotInitializedError('Box ID mismatch!')
+
         super().__init__(dlb._elb, dlb._mainkey)
 
         self.dlb = dlb
@@ -198,6 +201,22 @@ class Box(DecryptedLocalBox):
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__}({str(self.dlb)}, {str(self.drb)})'
+
+    async def is_synced(self) -> bool:
+        """
+        This method will compare Last file ID of
+        RemoteBox with Last file ID of LocalBox,
+        if the same, -- will return True.
+
+        Please note that it's not guaranteed to be
+        right, as changes can be made not only to
+        the last files in Box. If you share your
+        Box with someone else, then consider to
+        use ``Box.sync()`` method more often.
+        """
+        lfid_remote = await self.drb.get_last_file_id()
+        lfid_local = await self.dlb.get_last_file_id()
+        return lfid_remote == lfid_local
 
     async def get_file(
             self, id: int, cache_preview: bool=True,
