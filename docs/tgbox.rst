@@ -37,6 +37,24 @@ tgbox.api.utils module
    :show-inheritance:
    :inherited-members:
 
+tgbox.api.abstract module
+----------------------
+
+.. automodule:: tgbox.api.abstract
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+
+tgbox.api.sync module
+----------------------
+
+.. automodule:: tgbox.api.sync
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+
 tgbox.crypto module
 -------------------
 
