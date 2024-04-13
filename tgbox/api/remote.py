@@ -29,7 +29,6 @@ from telethon.errors import (
     MediaCaptionTooLongError,
     MessageNotModifiedError,
     AuthKeyUnregisteredError,
-    FilePartsInvalidError,
     MessageIdInvalidError
 )
 from telethon.tl.functions.channels import (
@@ -69,9 +68,8 @@ from ..tools import (
     make_safe_file_path, ppart_id_generator
 )
 from .utils import (
-    TelegramClient, TelegramVirtualFile,
-    RemoteBoxDefaults, DefaultsTableWrapper,
-    search_generator
+    TelegramClient, RemoteBoxDefaults,
+    DefaultsTableWrapper, search_generator
 )
 __all__ = [
     'make_remotebox',
@@ -1026,8 +1024,7 @@ class EncryptedRemoteBox:
     async def push_file(
         self, pf: 'PreparedFile',
         progress_callback: Optional[Callable[[int, int], None]] = None,
-        use_slow_upload: Optional[bool] = False,
-        ) -> 'DecryptedRemoteBoxFile':
+        use_slow_upload: Optional[bool] = False) -> 'DecryptedRemoteBoxFile':
         """
         Uploads ``PreparedFile`` to the ``RemoteBox``.
 
@@ -1046,7 +1043,8 @@ class EncryptedRemoteBox:
                 Use this if you have problems with upload.
         """
         return await self._push_file(pf,
-            progress_callback=progress_callback)
+            progress_callback=progress_callback,
+            use_slow_upload=use_slow_upload)
 
     async def update_file(self,
         rbf: Union['EncryptedRemoteBoxFile', 'DecryptedRemoteBoxFile'],

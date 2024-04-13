@@ -27,7 +27,7 @@ except ImportError: # No Scrypt installed
 
         def scrypt(
                 password: bytes, *, salt=None, n=None,
-                r=None, p=None, maxmem=0, dklen=64):
+                r=None, p=None, maxmem=0, dklen=64): # pylint: disable=unused-argument
             """
             This is a little wrapper around the Scrypt
             from the cryptography library.

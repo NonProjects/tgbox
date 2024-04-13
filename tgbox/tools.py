@@ -28,7 +28,7 @@ from .errors import (
     DurationImpossible
 )
 from .defaults import FFMPEG
-from .keys import FileKey, MainKey
+from .keys import MainKey
 from .crypto import AESwState as AES
 
 __all__ = [
@@ -408,7 +408,7 @@ class OpenPretender:
     def tell(self) -> int:
         return self._position
 
-    def seekable(self, *args, **kwargs) -> bool:
+    def seekable(self, *args, **kwargs) -> bool: # pylint: disable=unused-argument
         return False
 
     def close(self) -> None:

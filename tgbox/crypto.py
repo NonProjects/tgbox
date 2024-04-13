@@ -80,7 +80,6 @@ class Salt:
         return f'{self.__class__.__name__}({repr(self.salt)})'
 
     def __str__(self) -> str:
-        class_name = self.__class__.__name__
         return f'{self.__class__.__name__}({repr(self.salt)}) # at {hex(id(self))}'
 
     def __add__(self, other):
