@@ -4,18 +4,23 @@ import logging
 
 from os import PathLike
 from asyncio import gather
-from typing import Optional, Union, NoReturn
 
+from typing import (
+    Optional, Union, NoReturn,
+    BinaryIO, Callable
+)
 from .local import (
     DecryptedLocalBox, make_localbox,
     get_localbox, DecryptedLocalBoxFile,
     EncryptedLocalBoxFile
 )
 from .remote import (
-    DecryptedRemoteBox, make_remotebox, get_remotebox
+    DecryptedRemoteBox, DecryptedRemoteBoxFile,
+    make_remotebox, get_remotebox
 )
-from .utils import syncify, TelegramClient
-
+from .utils import (
+    syncify, TelegramClient, TelegramVirtualFile
+)
 from ..defaults import (
     DEF_TGBOX_NAME, REMOTEBOX_PREFIX, BOX_IMAGE_PATH
 )
@@ -23,6 +28,7 @@ from ..errors import NotInitializedError, InvalidFile
 from ..keys import BaseKey
 from ..crypto import BoxSalt
 
+__all__ = ['make_box', 'get_box', 'Box', 'BoxFile']
 
 logger = logging.getLogger(__name__)
 
@@ -265,6 +271,65 @@ class Box(DecryptedLocalBox):
         ``drb`` is auto passed to ``sync()``.
         """
         return await self.dlb.sync(*args, **kwargs, drb=self.drb)
+
+    async def push(self, file: Union[str, BinaryIO, bytes, TelegramVirtualFile],
+            progress_callback: Optional[Callable[[int, int], None]] = None,
+            use_slow_upload: Optional[bool] = False, *args, **kwargs
+            ) -> DecryptedRemoteBoxFile:
+        """
+        This is a wrapper around ``DecryptedRemoteBox.push_file``. Will
+        automatically use ``DecryptedLocalBox.prepare_file``. See
+        ``help()`` on both of these methods for additional arguments.
+
+        Arguments:
+            file (``str``, ``BinaryIO``, ``bytes``, ``TelegramVirtualFile``):
+                ``file`` data to add to the LocalBox. In most
+                cases it's just opened file. If you want to upload
+                something else, then you need to implement class
+                that have ``read`` & ``name`` methods.
+
+                The method needs to know size of the ``file``, so
+                it will try to ask system what size of file on path
+                ``file.name``. If it's impossible, method will try to
+                seek file to EOF, if file isn't seekable, then we try to
+                get size by ``len()`` (as ``__len__`` dunder). If all fails,
+                method tries to get ``file.read())`` (with load to RAM).
+
+                Abs file path length must be <= ``self.defaults.FILE_PATH_MAX``;
+                If file has no ``name`` and ``file_path`` is not
+                specified then it will be ``NO_FOLDER/{prbg(6).hex()}``.
+
+                We will treat this argument as path to file and
+                auto ``open()`` here if it is specified as ``str``.
+
+                .. note::
+                    This argument will be auto passed to ``prepare_file()``
+
+            progress_callback (``Callable[[int, int], None]``, optional):
+                A callback function accepting two parameters:
+                (downloaded_bytes, total). A ``push_file`` kwarg.
+
+            use_slow_upload (``bool``, optional):
+                Will use default upload function from the Telethon
+                library instead of function from `fastelethon.py`.
+                Use this if you have problems with upload. A
+                ``push_file`` kwarg.
+
+            .. note::
+                The ``*args`` and ``**kwargs`` will be redirected only
+                to the ``DecryptedLocalBox.prepare_file`` method. See
+                ``help(DecryptedLocalBox.prepare_file)`` for kwargs.
+        """
+        if isinstance(file, str):
+            file = open(file, 'rb')
+
+        pf = await self.dlb.prepare_file(
+            file=file, *args, **kwargs
+        )
+        return await self.drb.push_file(pf=pf,
+            progress_callback=progress_callback,
+            use_slow_upload=use_slow_upload
+        )
 
     async def done(self):
         """
