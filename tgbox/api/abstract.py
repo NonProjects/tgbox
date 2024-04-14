@@ -402,3 +402,19 @@ class BoxFile(DecryptedLocalBoxFile):
         self.__raise_initialized()
         return await self.drbf.update_metadata(
             *args, **kwargs, dlb=self.dlb)
+
+    async def delete(self, remote: Optional[bool] = False, *args, **kwargs):
+        """
+        See ``help(DecryptedLocalBoxFile.delete)`` &
+        see ``help(DecryptedRemoteBoxFile.delete)``.
+
+        If ``remote`` is ``True``, will be called the same
+        method on the ``DecryptedRemoteBoxFile``, deleting
+        file in the Local & Remote Box. Do NOT set this
+        kwarg to ``True`` if you don't want to completly
+        destroy and remove your uploaded file from Box.
+        """
+        self.__raise_initialized()
+        await self.dlbf.delete(*args, **kwargs)
+        if remote:
+            await self.drbf.delete(*args, **kwargs)
