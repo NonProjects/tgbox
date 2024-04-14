@@ -19,6 +19,8 @@ All you should do is to firstly import this module, then anything you want.
 
 import logging
 
+from typing import AsyncGenerator
+
 from . import local
 from . import remote
 from . import abstract
@@ -30,9 +32,41 @@ from .local import (
 from .abstract import Box, BoxFile
 from .utils import TelegramClient, syncify
 
-__all__ = []
+from ..tools import anext
+from .. import sync as sync_coro
+
+__all__ = ['sync_agen', 'sync_coro']
 
 logger = logging.getLogger(__name__)
+
+def sync_agen(async_gen: AsyncGenerator):
+    """
+    This will make async generator to sync
+    generator, so we can write "for" loop.
+
+    Use this functions on generators that
+    you want to syncify. For example, if
+    you want to iterate over LocalBox in
+    sync code (to load *only* local files):
+
+    .. code-block:: python
+
+        ... # Some code was omited
+
+        async_gen = box.dlb.files(reverse=True)
+        for dlbf in tgbox.api.sync.sync_agen(async_gen):
+            print(dlbf.id, dlbf.file_name, dlbf.size)
+
+    .. tip::
+        To sync coroutines you can use a ``sync`` func
+        from the tgbox package (`tgbox.sync`) or use
+        it from here as `tgbox.api.sync.sync_coro`
+    """
+    try:
+        while True:
+            yield sync_coro(anext(async_gen))
+    except StopAsyncIteration:
+        return
 
 syncify(
     Box, BoxFile, TelegramClient,
