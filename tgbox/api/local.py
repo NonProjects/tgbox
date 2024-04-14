@@ -1568,7 +1568,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
                 The method needs to know size of the ``file``, so
                 it will try to ask system what size of file on path
-                ``file.name``. If it's impossible, then method tries to
+                ``file.name``. If it's impossible, method will try to
                 seek file to EOF, if file isn't seekable, then we try to
                 get size by ``len()`` (as ``__len__`` dunder). If all fails,
                 method tries to get ``file.read())`` (with load to RAM).
