@@ -565,9 +565,9 @@ class EncryptedLocalBox:
             self,
             id: Optional[int] = None,
             fingerprint: Optional[bytes] = None,
-
             decrypt: Optional[bool] = None,
-            cache_preview: bool=True) -> Union[
+            cache_preview: bool=True,
+            erase_encrypted_metadata: bool=True) -> Union[
                 'DecryptedLocalBoxFile',
                 'EncryptedLocalBoxFile', None]:
         """
@@ -622,7 +622,8 @@ class EncryptedLocalBox:
                     elbf = EncryptedLocalBoxFile(id, self._elb, # pylint: disable=E1101
                         cache_preview=cache_preview
                     )
-                    return await elbf.decrypt(dlb=self)
+                    return await elbf.decrypt(dlb=self,
+                        erase_encrypted_metadata=erase_encrypted_metadata)
             else:
                 logger.debug(f'Trying to return ID{id} EncryptedLocalBoxFile...')
 
