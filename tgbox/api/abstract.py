@@ -252,7 +252,7 @@ class Box(DecryptedLocalBox):
                 like ``files()`` expect this kwarg, but here
                 we don't need it at all. Ignored.
         """
-        bf = BoxFile(id, dlb=self.dlb, drb=self.drb,
+        bf = BoxFile(id=id, dlb=self.dlb, drb=self.drb,
             cache_preview=cache_preview,
             erase_encrypted_metadata=erase_encrypted_metadata
         )
@@ -275,7 +275,7 @@ class Box(DecryptedLocalBox):
     async def push(self, file: Union[str, BinaryIO, bytes, TelegramVirtualFile],
             progress_callback: Optional[Callable[[int, int], None]] = None,
             use_slow_upload: Optional[bool] = False, *args, **kwargs
-            ) -> DecryptedRemoteBoxFile:
+            ) -> 'BoxFile':
         """
         This is a wrapper around ``DecryptedRemoteBox.push_file``. Will
         automatically use ``DecryptedLocalBox.prepare_file``. See
@@ -326,10 +326,14 @@ class Box(DecryptedLocalBox):
         pf = await self.dlb.prepare_file(
             file=file, *args, **kwargs
         )
-        return await self.drb.push_file(pf=pf,
+        drbf = await self.drb.push_file(pf=pf,
             progress_callback=progress_callback,
             use_slow_upload=use_slow_upload
         )
+        dlbf = await self.dlb.get_file(drbf.id,
+            erase_encrypted_metadata=False)
+
+        return await BoxFile(dlbf=dlbf, drbf=drbf).init()
 
     async def done(self):
         """
@@ -359,34 +363,77 @@ class BoxFile(DecryptedLocalBoxFile):
         ``help()`` on every class/method from the ``tgbox.api``
         package and Read The Docs: tgbox.readthedocs.io/en/latest/
     """
-    def __init__(
-            self, id: int, dlb: DecryptedLocalBox, drb: DecryptedRemoteBox,
-            cache_preview: bool=True, erase_encrypted_metadata=True):
+    def __init__(self,
+            id: Optional[int] = None,
+            dlb: Optional[DecryptedLocalBox] = None,
+            drb: Optional[DecryptedRemoteBox] = None,
+
+            dlbf: Optional[DecryptedLocalBoxFile] = None,
+            drbf: Optional[DecryptedRemoteBoxFile] = None,
+
+            cache_preview: Optional[bool] = True,
+            erase_encrypted_metadata: Optional[bool] = True):
         """
         Arguments:
             id (``int``):
-                Box file ID.
+                Box file ID. Must be specified if ``dlbf``
+                and ``drbf`` is ``None``.
 
             dlb (``DecryptedLocalBox``):
                 The ``DecryptedLocalBox`` object! Also Yin...
+                Must be specified if ``dlbf`` and ``drbf`` is ``None``
 
             drb (``DecryptedRemoteBox``):
                 The ``DecryptedRemoteBox`` object! Also Yang...
+                Must be specified if ``dlbf`` and ``drbf`` is ``None``
+
+
+            dlbf (``DecryptedLocalBoxFile``):
+                The ``DecryptedLocalBoxFile`` object! Also Yin...
+                Must be specified if ``id``, ``dlb``
+                and ``drbf`` is ``None``
+
+            drbf (``DecryptedRemoteBoxFile``):
+                The ``DecryptedRemoteBoxFile`` object! Also Yang...
+                Must be specified if ``id``, ``dlb``
+                and ``drbf`` is ``None``
 
             cache_preview (``bool``, optional):
                 Cache preview in class or not.
 
             erase_encrypted_metadata (``bool``, optional):
                 Will remove metadata to save more RAM if ``True``.
+
+        .. note::
+            Must be specified ``id``, ``dlb`` and ``drb`` or
+            ``dlbf`` and ``drbf``. Otherwise ``ValueError``.
         """
+        _check = (
+            all((id, dlb, drb)),
+            all((dlbf, drbf))
+        )
+        if not any(_check):
+            raise ValueError('Must be specified (id, dlb, drb) or (dlbf, drbf)')
+
         self.__initialized = False
 
-        self.__id = id
-        self.dlb = dlb
-        self.drb = drb
+        if all((dlbf, drbf)):
+            if not (dlbf.id == drbf.id):
+                raise NotInitializedError('File ID mismatch!')
 
-        self.dlbf = None
-        self.drbf = None
+            self.__id = dlbf.id
+            self.dlb = dlbf._lb
+            self.drb = drbf._rb
+
+            self.dlbf = dlbf
+            self.drbf = drbf
+        else:
+            self.__id = id
+            self.dlb = dlb
+            self.drb = drb
+
+            self.dlbf = None
+            self.drbf = None
 
         self.cache_preview = cache_preview
         self.erase_encrypted_metadata = erase_encrypted_metadata
@@ -428,21 +475,29 @@ class BoxFile(DecryptedLocalBoxFile):
         """
         logger.debug('DLBF+DRBF initialization...')
 
-        elbf = EncryptedLocalBoxFile(
-            id=self.__id, elb=self.dlb._elb,
-            cache_preview=self.cache_preview)
+        if not self.__initialized and not all((self.dlbf, self.drbf)):
+            elbf = EncryptedLocalBoxFile(
+                id=self.__id, elb=self.dlb._elb,
+                cache_preview=self.cache_preview)
 
-        await elbf.init()
+            await elbf.init()
 
-        super().__init__(elbf=elbf, dlb=self.dlb, cache_preview=self.cache_preview,
-            erase_encrypted_metadata=self.erase_encrypted_metadata)
+            super().__init__(elbf=elbf, dlb=self.dlb, cache_preview=self.cache_preview,
+                erase_encrypted_metadata=self.erase_encrypted_metadata)
 
-        self.dlbf, self.drbf = await gather(
-            self.dlb.get_file(self.id, cache_preview=self.cache_preview),
-            self.drb.get_file(self.id, cache_preview=self.cache_preview)
-        )
-        if not all((self.dlbf, self.drbf)):
-            raise InvalidFile('Your Box is out of Sync! Use .sync(deep=True)')
+            self.dlbf, self.drbf = await gather(
+                self.dlb.get_file(self.id, cache_preview=self.cache_preview),
+                self.drb.get_file(self.id, cache_preview=self.cache_preview)
+            )
+            if not all((self.dlbf, self.drbf)):
+                raise InvalidFile('Your Box is out of Sync! Use .sync(deep=True)')
+        else:
+            if not self.dlbf._elbf.initialized:
+                await self.dlbf._elbf.init()
+
+            super().__init__(elbf=self.dlbf._elbf, dlb=self.dlb,
+                cache_preview=self.cache_preview,
+                erase_encrypted_metadata=self.erase_encrypted_metadata)
 
         self.download = self.drbf.download
         self.sender = self.drbf.sender
