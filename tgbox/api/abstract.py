@@ -258,13 +258,23 @@ class Box(DecryptedLocalBox):
         )
         return await bf.init()
 
-    async def delete_files(self, *args, **kwargs):
+    async def delete_files(self, remote: Optional[bool] = False, *args, **kwargs):
         """
-        See ``help(DecryptedRemoteBox.delete_files)``.
-        ``lb`` is auto passed to ``delete_files()``.
-        """
-        return await self.drb.delete_files(*args, **kwargs, lb=self.dlb)
+        See ``help(DecryptedLocalBox.delete_files)`` &
+        see ``help(DecryptedRemoteBox.delete_files)``.
 
+        If ``remote`` is ``True``, will be called the same
+        method on the ``DecryptedRemoteBox``, deleting
+        files in the Local & Remote Box. Do NOT set this
+        kwarg to ``True`` if you don't want to completly
+        destroy and remove selected files from Box.
+
+        ``rb`` is auto passed to ``delete_files()`` and
+        is ``None`` if ``remote`` is ``False``.
+        """
+        await self.dlb.delete_files(*args, **kwargs,
+            rb=(self.drb if remote else None)
+        )
     async def sync(self, *args, **kwargs):
         """
         See ``help(DecryptedLocalBox.sync)``.
@@ -334,6 +344,24 @@ class Box(DecryptedLocalBox):
             erase_encrypted_metadata=False)
 
         return await BoxFile(dlbf=dlbf, drbf=drbf).init()
+
+    async def delete(self, remote: Optional[bool] = False, *args, **kwargs):
+        """
+        This method **WILL DELETE** *Box*!
+
+        See ``help(DecryptedLocalBox.delete)`` &
+        see ``help(DecryptedRemoteBox.delete)``.
+
+        If ``remote`` is ``True``, will be called the same
+        method on the ``DecryptedRemoteBox``, completly
+        deleting **ALL OF YOUR FILES AND BOX INFORMATION!**
+
+        Use ``left()`` if you **only want to left**
+        your *Box* ``Channel``, not destroy it.
+        """
+        await self.dlb.delete(*args, **kwargs)
+        if remote:
+            await self.drb.delete(*args, **kwargs)
 
     async def done(self):
         """
@@ -449,8 +477,10 @@ class BoxFile(DecryptedLocalBoxFile):
         self.box_channel = None
 
     def __repr__(self) -> str:
-        return f'<{self.__class__.__name__} @ {self.dlbf=}, {self.drbf=}'
-
+        return (
+            f'''<{self.__class__.__name__} @ {self.dlbf.file_name} '''
+            f'''>> {self.dlbf=}, {self.drbf=}'''
+        )
     def __str__(self) -> str:
         return repr(self)
 
@@ -516,12 +546,27 @@ class BoxFile(DecryptedLocalBoxFile):
 
     async def update_metadata(self, *args, **kwargs):
         """
-        See ``help(DecryptedRemoteBoxFile.update_metadata)``.
-        ``dlb`` is auto passed to ``update_metadata()``.
+        See ``help(DecryptedLocalBoxFile.update_metadata)``.
+        ``drbf`` is auto passed to ``update_metadata()``.
         """
         self.__raise_initialized()
-        return await self.drbf.update_metadata(
-            *args, **kwargs, dlb=self.dlb)
+        return await self.dlb.update_metadata(*args, **kwargs, drbf=self.drbf)
+
+    async def update(self, *args, **kwargs):
+        """
+        See ``help(DecryptedRemoteBox.update_file)``.
+        ``rbf`` is auto passed to ``update_file()``.
+        """
+        self.__raise_initialized()
+        return await self.drb.update_file(self.drbf, *args, **kwargs)
+
+    async def exists(self, *args, **kwargs):
+        """
+        See ``help(DecryptedRemoteBox.file_exists)``.
+        ``id`` is auto passed to ``file_exists()``.
+        """
+        self.__raise_initialized()
+        return await self.drb.file_exists(*args, **kwargs, id=self.dlbf.id)
 
     async def delete(self, remote: Optional[bool] = False, *args, **kwargs):
         """
@@ -532,7 +577,7 @@ class BoxFile(DecryptedLocalBoxFile):
         method on the ``DecryptedRemoteBoxFile``, deleting
         file in the Local & Remote Box. Do NOT set this
         kwarg to ``True`` if you don't want to completly
-        destroy and remove your uploaded file from Box.
+        destroy and remove from Box your uploaded file.
         """
         self.__raise_initialized()
         await self.dlbf.delete(*args, **kwargs)

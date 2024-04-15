@@ -907,7 +907,12 @@ class EncryptedLocalBox:
         clean up & close connections.
         """
         logger.info('Closing all LocalBox DB connections...')
-        await self._tgbox_db.close()
+        try:
+            await self._tgbox_db.close()
+        except ValueError as e:
+            # Most probably this is because of LocalBox.delete(),
+            # so this message will go to DEBUG, no higher
+            logger.debug(f'Failed to done() due {e}')
 
 class DecryptedLocalBox(EncryptedLocalBox):
     """
@@ -1130,14 +1135,18 @@ class DecryptedLocalBox(EncryptedLocalBox):
         """
         try:
             # Verify that there is no file with the same fingerprint
-            await self._tgbox_db.FILES.select_once(sql_tuple=(
+            id = await self._tgbox_db.FILES.select_once(sql_tuple=(
                 'SELECT ID FROM FILES WHERE FINGERPRINT=?',
                 (fingerprint,)
             ))
         except StopAsyncIteration:
             pass
         else:
-            raise FingerprintExists(FingerprintExists.__doc__) from None
+            error_msg = (
+                f'''{FingerprintExists.__doc__} (ID={id[0]}). If you '''
+                 '''want to UPDATE file, set skip_fingerprint_check=True'''
+            )
+            raise FingerprintExists(error_msg) from None
 
     async def _fast_sync(
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
@@ -1553,7 +1562,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
     async def prepare_file(
             self, file: Union[BinaryIO, bytes, TelegramVirtualFile],
             file_size: Optional[int] = None,
-            file_path: Optional[Path] = None,
+            file_path: Optional[str, Path] = None,
             cattrs: Optional[Dict[str, Union[bytes]]] = None,
             make_preview: bool=True,
             skip_fingerprint_check: bool=False) -> 'PreparedFile':
@@ -1582,7 +1591,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 Bytelength of ``file``. You can specify
                 it if you already know file size.
 
-            file_path (``Path``, optional):
+            file_path (``str``, ``Path``, optional):
                 File path of *Box* file (file name must be
                 included). If not specified, will be used path
                 from the ``BinaryIO``, (``file`` arg) if file
@@ -1620,6 +1629,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
             else:
                 file_path = Path(self._defaults.DEF_NO_FOLDER, prbg(8).hex())
         else:
+            if isinstance(file_path, str):
+                file_path = Path(file_path)
+
             if len(file_path.parts) < 2:
                 raise ValueError('Path should contain folder and file name')
 
@@ -3133,7 +3145,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
     async def update_metadata(
             self, changes: Dict[str, Union[bytes, None]],
             dlb: Optional['DecryptedLocalBox'] = None,
-            drb: Optional['DecryptedRemoteBox'] = None
+            drb: Optional['DecryptedRemoteBox'] = None,
+            drbf: Optional['DecryptedRemoteBoxFile'] = None
         ):
         """This method will "update" file metadata attributes
 
@@ -3163,6 +3176,16 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             drb (``DecryptedRemoteBox``, optional):
                 ``DecryptedRemoteBox`` associated with
                 this ``DecryptedLocalBox``. Will auto
+                refresh your updates in remote. Don't
+                specify this if you want to update
+                metadata in the LocalBox only.
+
+                If you have ``DecryptedRemoteBoxFile``,
+                pass it as ``drbf`` instead.
+
+            drbf (``DecryptedRemoteBoxFile``, optional):
+                ``DecryptedRemoteBoxFile`` associated with
+                this ``DecryptedLocalBoxFile``. Will auto
                 refresh your updates in remote. Don't
                 specify this if you want to update
                 metadata in the LocalBox only.
@@ -3258,6 +3281,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         if drb:
             drbf = await drb.get_file(self._id)
+
+        if drbf:
             await drbf.update_metadata(changes, dlb=dlb)
 
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:

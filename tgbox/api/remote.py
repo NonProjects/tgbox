@@ -1062,8 +1062,9 @@ class EncryptedRemoteBox:
             object will be returned after update.
 
         pf (``PreparedFile``):
-            PreparedFile to upload. You should recieve
-            it via ``DecryptedLocalBox.prepare_file``.
+            ``PreparedFile`` to upload. You should recieve
+            it via ``DecryptedLocalBox.prepare_file`` (set
+            ``skip_fingerprint_check`` to ``True``).
 
         progress_callback (``Callable[[int, int], None]``, optional):
             A callback function accepting two parameters:
@@ -1163,7 +1164,7 @@ class EncryptedRemoteBox:
 
     async def delete(self) -> None:
         """
-        This method **WILL DELETE** *RemoteBox*.
+        This method **WILL DELETE** *RemoteBox*!
 
         Use ``left()`` if you **only want to left**
         your *Box* ``Channel``, not delete it.
@@ -2396,7 +2397,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
     async def update_metadata(
             self, changes: Dict[str, Union[bytes, None]],
-            dlb: Optional['DecryptedLocalBox'] = None
+            dlb: Optional['DecryptedLocalBox'] = None,
+            dlbf: Optional['DecryptedLocalBoxFile'] = None
         ):
         """This method will "update" file metadata attributes
 
@@ -2412,6 +2414,15 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 ``None`` as value to remove key from updates.
 
             dlb (``DecryptedLocalBox``, optional):
+                ``DecryptedLocalBox`` associated with
+                this ``DecryptedRemoteBox``. Will auto
+                refresh your updates. If not specified,
+                then you will need to do it by yourself.
+
+                If you have ``DecryptedLocalBoxFile``,
+                pass it as ``dlbf`` instead.
+
+            dlbf (``DecryptedLocalBoxFile``, optional):
                 ``DecryptedLocalBox`` associated with
                 this ``DecryptedRemoteBox``. Will auto
                 refresh your updates. If not specified,
@@ -2523,6 +2534,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         if dlb:
             dlbf = await dlb.get_file(self._id)
+
+        if dlbf:
             await dlbf.refresh_metadata(_updated_metadata=updates_encoded)
 
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
