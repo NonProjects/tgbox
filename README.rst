@@ -1,8 +1,9 @@
 TGBOX: encrypted cloud storage based on Telegram
 ================================================
 .. epigraph::
-        | This repository contains a set of classes and functions used to manage TGBOX.
-        | Try the `tgbox-cli <https://github.com/NotStatilko/tgbox-cli>`__  if you're interested in working implementation!
+
+        | ❕ This repository contains a set of classes and functions used to manage TGBOX.
+        |       Try the `tgbox-cli <https://github.com/NotStatilko/tgbox-cli>`__  if you're interested in working implementation!
 
 .. code-block:: python
 
