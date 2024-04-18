@@ -7,73 +7,35 @@ TGBOX: encrypted cloud storage based on Telegram
 
 .. code-block:: python
 
-        from asyncio import run as asyncio_run
-        from getpass import getpass # Hidden input
-
-        from tgbox.api import TelegramClient, make_remotebox, make_localbox
-        from tgbox.keys import Phrase, make_basekey
+        import tgbox, tgbox.api.sync
 
         # This two will not work. Get your own at https://my.telegram.org
         API_ID, API_HASH = 1234567, '00000000000000000000000000000000'
 
-        # Simple progress callback to track upload/download state
-        PROGRESS_CALLBACK = lambda c,t: print(round(c/t*100),'%')
+        tc = tgbox.api.TelegramClient(api_id=API_ID, api_hash=API_HASH)
+        tc.start() # This method will prompt you for Phone, Code & Password
 
-        async def main():
-            phone = input('Phone number: ')
+        print(phrase := tgbox.keys.Phrase.generate()) # Your secret Box Phrase
+        basekey = tgbox.keys.make_basekey(phrase) # Will Require 1GB of RAM
+        box = tgbox.api.make_box(tc, basekey) # Will make Encrypted File Storage
 
-            tc = TelegramClient(
-                phone_number = phone,
-                api_id = API_ID,
-                api_hash = API_HASH
-            )
-            await tc.connect() # Connecting to Telegram
-            await tc.send_code() # Requesting login code
+        # Will upload selected file to the RemoteBox, cache information
+        # in LocalBox and return the tgbox.api.abstract.BoxFile object
+        abbf = box.push(input('File to upload (path): '))
 
-            code = int(input('Login code: '))
-            password = getpass('Your password: ')
+        # Retrieving some info from the BoxFile
+        print('File size:', abbf.size, 'bytes')
+        print('File name:', abbf.file_name)
 
-            # Login to your Telegram account
-            await tc.log_in(password, code)
+        downloaded = abbf.download() # Downloading your file from Remote.
+        print(downloaded) # Will print path to downloaded file object
 
-            # Generate and show your Box phrase
-            print(phrase := Phrase.generate())
+        box.done() # Work is done. Close all connections!
 
-            # WARNING: This will use 1GB of RAM for a
-            # couple of seconds. See help(make_basekey)
-            basekey = make_basekey(phrase)
+.. epigraph::
 
-            erb = await make_remotebox(tc) # Make EncryptedRemoteBox
-            dlb = await make_localbox(erb, basekey) # Make DecryptedLocalBox
-            drb = await erb.decrypt(dlb=dlb) # Obtain DecryptedRemoteBox
-
-            # Write a file path to upload to your Box
-            file_to_upload = input('File to upload (path): ')
-
-            # Preparing for upload. Will return a PreparedFile object
-            pf = await dlb.prepare_file(open(file_to_upload,'rb'))
-
-            # Uploading PreparedFile to Remote and getting DecryptedRemoteBoxFile
-            drbf = await drb.push_file(pf, progress_callback=PROGRESS_CALLBACK)
-
-            # Retrieving some info from the RemoteBox file
-            print('File size:', drbf.size, 'bytes')
-            print('File name:', drbf.file_name)
-
-            # You can also access all information about
-            # the RemoteBoxFile you need from the LocalBox
-            dlbf = await dlb.get_file(drbf.id)
-
-            print('File size:', dlbf.size, 'bytes')
-            print('File path:', dlbf.file_path)
-
-            # Downloading your [already uploaded] file from Remote.
-            await drbf.download(progress_callback=PROGRESS_CALLBACK)
-
-            await drb.done() # Close all connections
-            await dlb.done() # after work was done
-
-        asyncio_run(main())
+        | ❔ This code block heavily utilize the magic ``tgbox.api.sync`` module and high-level functions
+        |       from the ``tgbox.api.abstract`` module for showcase. For actual *Async* code, see `Examples <https://tgbox.readthedocs.io/en/latest/examples.html>`__.
 
 Motivation
 ----------
