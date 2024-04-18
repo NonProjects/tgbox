@@ -282,17 +282,17 @@ class Box(DecryptedLocalBox):
         """
         return await self.dlb.sync(*args, **kwargs, drb=self.drb)
 
-    async def push(self, file: Union[str, BinaryIO, bytes, TelegramVirtualFile],
+    async def push(self, file: Union[str, BinaryIO, bytes, TelegramVirtualFile, list],
             progress_callback: Optional[Callable[[int, int], None]] = None,
             use_slow_upload: Optional[bool] = False, *args, **kwargs
-            ) -> 'BoxFile':
+            ) -> Union['BoxFile', list['BoxFile']]:
         """
         This is a wrapper around ``DecryptedRemoteBox.push_file``. Will
         automatically use ``DecryptedLocalBox.prepare_file``. See
         ``help()`` on both of these methods for additional arguments.
 
         Arguments:
-            file (``str``, ``BinaryIO``, ``bytes``, ``TelegramVirtualFile``):
+            file (``str``, ``BinaryIO``, ``bytes``, ``TelegramVirtualFile``, ``list``):
                 ``file`` data to add to the LocalBox. In most
                 cases it's just opened file. If you want to upload
                 something else, then you need to implement class
@@ -312,6 +312,10 @@ class Box(DecryptedLocalBox):
                 We will treat this argument as path to file and
                 auto ``open()`` here if it is specified as ``str``.
 
+                This argument accept ``list`` of ``file`` for uploading
+                files simultaneously. DO NOT specify too many big files!
+                Otherwise you may receive 429 -- ``FloodWaitError``.
+
                 .. note::
                     This argument will be auto passed to ``prepare_file()``
 
@@ -329,21 +333,48 @@ class Box(DecryptedLocalBox):
                 The ``*args`` and ``**kwargs`` will be redirected only
                 to the ``DecryptedLocalBox.prepare_file`` method. See
                 ``help(DecryptedLocalBox.prepare_file)`` for kwargs.
+
+        Returns:
+            A single ``BoxFile`` object or a ``list`` with ``BoxFile``
+            objects if ``file`` was specified as ``list`` with files.
         """
-        if isinstance(file, str):
-            file = open(file, 'rb')
+        file = [file,] if not isinstance(file, list) else file
+        file = [(open(f,'rb') if isinstance(f, str) else f) for f in file]
 
-        pf = await self.dlb.prepare_file(
-            file=file, *args, **kwargs
-        )
-        drbf = await self.drb.push_file(pf=pf,
-            progress_callback=progress_callback,
-            use_slow_upload=use_slow_upload
-        )
-        dlbf = await self.dlb.get_file(drbf.id,
-            erase_encrypted_metadata=False)
+        file_ = []
+        while file:
+            file_.append( # Make a PreparedFile objects
+                self.dlb.prepare_file(
+                    file=file.pop(0), *args, **kwargs)
+            )
+        file = await gather(*file_)
 
-        return await BoxFile(dlbf=dlbf, drbf=drbf).init()
+        file_ = []
+        while file:
+            file_.append( # Get a DecryptedRemoteBoxFile objects
+                self.drb.push_file(
+                    pf=file.pop(0),
+                    progress_callback=progress_callback,
+                    use_slow_upload=use_slow_upload
+                )
+            )
+        file_drbf = await gather(*file_)
+
+        file_dlbf = [ # Get a DecryptedLocalBoxFile objects from DRBF
+            self.dlb.get_file(drbf.id, erase_encrypted_metadata=False)
+            for drbf in file_drbf
+        ]
+        file_dlbf = await gather(*file_dlbf)
+
+        abbf_list = [] # Union DLBF & DRBF into BoxFile
+        for drbf, dlbf in zip(file_drbf, file_dlbf):
+            abbf_list.append(BoxFile(dlbf=dlbf, drbf=drbf).init())
+
+        abbf_list = await gather(*abbf_list)
+        if len(abbf_list) == 1:
+            return abbf_list[0]
+
+        return abbf_list
 
     async def delete(self, remote: Optional[bool] = False, *args, **kwargs):
         """
