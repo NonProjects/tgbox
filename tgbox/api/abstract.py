@@ -369,9 +369,7 @@ class Box(DecryptedLocalBox):
         work with Box, so we will
         clean up & close connections.
         """
-        await self.dlb.done()
-        await self.drb.done()
-
+        await gather(self.dlb.done(), self.drb.done())
 
 class BoxFile(DecryptedLocalBoxFile):
     """
