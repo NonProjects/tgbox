@@ -112,21 +112,40 @@ class TelegramClient(TTelegramClient):
                 after connecting and signing in via
                 ``TelegramClient.session.save()`` method.
 
+        ..note::
+            You can use ``.start()`` method on ``TelegramClient``
+            without specifying ``phone_number`` or ``session``,
+            otherwise ``phone_number`` OR ``session`` is required.
+
         ..tip::
             This ``TelegramClient`` support all keywoard
             arguments (**kwargs) that support parent
             ``telethon.TelegramClient`` object.
         """
-        if not session and not phone_number:
-            raise ValueError(
-                'You should specify at least ``session`` or ``phone_number``.'
-            )
         super().__init__(
             StringSession(session),
             api_id, api_hash, **kwargs
         )
         self._api_id, self._api_hash = api_id, api_hash
         self._phone_number = phone_number
+
+    def __check_session_phone_number(self):
+        if not self._session and not self._phone_number:
+            raise ValueError(
+                'You should set at least "session" or "phone_number".'
+            )
+
+    def set_phone_number(self, phone_number: str) -> None:
+        """Use this function if you didn't
+        specified ``phone_number`` on init.
+        """
+        self._phone_number = phone_number
+
+    def set_session(self, session: Union[str, StringSession]) -> None:
+        """Use this function if you didn't
+        specified ``session`` on init.
+        """
+        self._session = session
 
     async def send_code(self, force_sms: Optional[bool]=False) -> SentCode:
         """
@@ -136,6 +155,7 @@ class TelegramClient(TTelegramClient):
             force_sms (``bool``, optional):
                 Whether to force sending as SMS.
         """
+        self.__check_session_phone_number()
         logger.info(f'Sending login code to {self._phone_number}...')
 
         return await self.send_code_request(
@@ -157,6 +177,8 @@ class TelegramClient(TTelegramClient):
                 The code that Telegram sent you after calling
                 ``TelegramClient.send_code()`` method.
         """
+        self.__check_session_phone_number()
+
         if not await self.is_user_authorized():
             try:
                 logger.info(f'Trying to sign-in with {self._phone_number} and {code} code..')
@@ -189,6 +211,8 @@ class TelegramClient(TTelegramClient):
             sent_code = await tc.send_code()
             sent_code = await tc.resend_code(sent_code)
         """
+        self.__check_session_phone_number()
+
         logger.info(f'Resending login code to {self._phone_number}...')
         return await self(ResendCodeRequest(
             self._phone_number, sent_code.phone_code_hash)
