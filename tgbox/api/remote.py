@@ -2055,6 +2055,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                         if k == 'cattrs':
                             setattr(self, f'_{k}', PackedAttributes.unpack(v))
 
+                        if k == 'duration':
+                            setattr(self, f'_{k}', bytes_to_int(v))
+
                         elif k == 'efile_path':
                             if self._mainkey:
                                 file_path = AES(self._mainkey).decrypt(v)
