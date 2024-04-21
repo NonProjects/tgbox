@@ -2051,7 +2051,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 logger.debug(f'Updates to metadata for ID{self._id} found. Applying...')
 
                 for k,v in tuple(edited_metadata.items()):
-                    if k in self.__required_metadata:
+                    if k in (*self.__required_metadata, 'efile_path'):
                         if k == 'cattrs':
                             setattr(self, f'_{k}', PackedAttributes.unpack(v))
 
@@ -2539,7 +2539,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             if k in restricted_metadata:
                 raise ValueError(f'You can not change "{k}".')
 
-            if k in self.__required_metadata:
+            if k in (*self.__required_metadata, 'efile_path'):
                 if k == 'cattrs':
                     setattr(self, f'_{k}', PackedAttributes.unpack(v))
 

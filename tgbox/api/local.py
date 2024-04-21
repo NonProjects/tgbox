@@ -2935,7 +2935,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 logger.debug(f'Failed to unpack updated metadata {e}. Ignoring..')
             else:
                 for k,v in tuple(updates.items()):
-                    if k in self.__required_metadata:
+                    if k in (*self.__required_metadata, 'efile_path'):
                         if k == 'cattrs':
                             setattr(self, f'_{k}', PackedAttributes.unpack(v))
 
@@ -3129,7 +3129,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             if k in restricted_metadata:
                 raise ValueError(f'You can not change "{k}".')
 
-            if k in self.__required_metadata:
+            if k in (*self.__required_metadata, 'efile_path'):
                 if k == 'cattrs':
                     setattr(self, f'_{k}', PackedAttributes.unpack(v))
 
