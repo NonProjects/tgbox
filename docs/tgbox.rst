@@ -38,7 +38,7 @@ tgbox.api.utils module
    :inherited-members:
 
 tgbox.api.abstract module
-----------------------
+-------------------------
 
 .. automodule:: tgbox.api.abstract
    :members:
