@@ -2413,6 +2413,13 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 Metadata changes. You can specify a
                 ``None`` as value to remove key from updates.
 
+                You can change the next fields: 'duration',
+                'file_name', 'cattrs', 'mime', 'preview'
+
+                All values *must* be ``bytes``. Use the
+                ``tgbox.tools.int_to_bytes`` function for
+                'duration' field.
+
             dlb (``DecryptedLocalBox``, optional):
                 ``DecryptedLocalBox`` associated with
                 this ``DecryptedRemoteBox``. Will auto
@@ -2521,10 +2528,21 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 '''Updates wasn\'t commited to your RemoteBox '''
                f'''because of MessageNotModifiedError: {e}'''
             )
+
+        # Here is Metadata parts that is impossible to change
+        restricted_metadata = ('file_size',)
+
         for k,v in tuple(updates.items()):
+            if k in restricted_metadata:
+                raise ValueError(f'You can not change "{k}".')
+
             if k in self.__required_metadata:
                 if k == 'cattrs':
                     setattr(self, f'_{k}', PackedAttributes.unpack(v))
+
+                elif k == 'duration':
+                    setattr(self, f'_{k}', bytes_to_int(v))
+
                 elif k == 'efile_path':
                     self._file_path = new_file_path
                 else:

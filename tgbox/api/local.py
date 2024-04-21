@@ -3118,10 +3118,20 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             'UPDATE FILES SET UPDATED_METADATA=? WHERE ID=?',
             (_updated_metadata, self._id)
         ))
+
+        # Here is Metadata parts that is impossible to change
+        restricted_metadata = ('file_size',)
+
         for k,v in tuple(updates.items()):
+            if k in restricted_metadata:
+                raise ValueError(f'You can not change "{k}".')
+
             if k in self.__required_metadata:
                 if k == 'cattrs':
                     setattr(self, f'_{k}', PackedAttributes.unpack(v))
+
+                elif k == 'duration':
+                    setattr(self, f'_{k}', bytes_to_int(v))
 
                 elif k == 'efile_path':
                     if isinstance(self._lb, DecryptedLocalBox) or self._mainkey:
@@ -3164,6 +3174,13 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             changes (``Dict[str, Union[bytes, None]]``):
                 Metadata changes. You can specify a
                 ``None`` as value to remove key from updates.
+
+                You can change the next fields: 'duration',
+                'file_name', 'cattrs', 'mime', 'preview'
+
+                All values *must* be ``bytes``. Use the
+                ``tgbox.tools.int_to_bytes`` function for
+                'duration' field.
 
             dlb (``DecryptedLocalBox``, optional):
                 If current local file wasn't decrypted with the
