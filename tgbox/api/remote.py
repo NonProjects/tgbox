@@ -2080,7 +2080,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     del edited_metadata[k]
 
             except Exception:
-                logger.debug(
+                logger.warning(
                     f'''Updates to metadata for ID{self._id} failed. '''
                     f'''Traceback:\n{format_exc()}'''
                 )

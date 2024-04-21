@@ -2932,7 +2932,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 )
                 updates = PackedAttributes.unpack(updates)
             except Exception as e:
-                logger.debug(f'Failed to unpack updated metadata {e}. Ignoring..')
+                logger.warning(f'Failed to unpack updated metadata {e}. Ignoring..')
             else:
                 for k,v in tuple(updates.items()):
                     if k in (*self.__required_metadata, 'efile_path'):
