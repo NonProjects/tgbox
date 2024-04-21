@@ -2549,7 +2549,11 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 elif k == 'efile_path':
                     self._file_path = new_file_path
                 else:
-                    setattr(self, f'_{k}', v)
+                    # str attributes
+                    if k in ('mime', 'file_name'):
+                        setattr(self, f'_{k}', v.decode())
+                    else:
+                        setattr(self, f'_{k}', v)
             else:
                 self._residual_metadata[k] = v
 
