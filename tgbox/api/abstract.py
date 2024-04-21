@@ -579,7 +579,22 @@ class BoxFile(DecryptedLocalBoxFile):
         ``drbf`` is auto passed to ``update_metadata()``.
         """
         self.__raise_initialized()
-        return await self.dlbf.update_metadata(*args, **kwargs, drbf=self.drbf)
+
+        r = await self.dlbf.update_metadata(
+            *args, **kwargs, drbf=self.drbf)
+
+        # self.dlbf & self.drbf will be updated
+        # after 'update_metadata()', but 'self'
+        # will stay the same, so we need to
+        # explicitly update class properties
+        self._cattrs = self.dlbf._cattrs
+        self._duration = self.dlbf._duration
+        self._file_name = self.dlbf._file_name
+        self._mime = self.dlbf._mime
+        self._preview = self.dlbf._preview
+        #
+        self._file_path = self.dlbf._file_path
+        self._directory = self.dlbf._directory
 
     async def update(self, *args, **kwargs):
         """
