@@ -1114,10 +1114,12 @@ class DecryptedLocalBox(EncryptedLocalBox):
         logger.debug('Making LocalBox path parts from PreparedFile file path...')
         part_id = (await self._make_local_path(pf.filepath)).part_id
 
+        updated_metadata = getattr(pf, 'updated_enc_metadata', None)
+
         await self._tgbox_db.FILES.insert(
             pf.file_id, eupload_time,
             part_id, efilekey, pf.fingerprint,
-            pf.metadata, None
+            pf.metadata, updated_metadata
         )
         elbf = EncryptedLocalBoxFile(pf.file_id, self._elb)
         return await elbf.decrypt(dlb=self)

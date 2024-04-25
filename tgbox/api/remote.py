@@ -907,7 +907,7 @@ class EncryptedRemoteBox:
     async def _push_file(
             self, pf: 'PreparedFile',
             progress_callback: Optional[Callable[[int, int], None]] = None,
-            message_to_edit: Optional[Union[int, Message]] = None,
+            message_to_edit: Optional[Message] = None,
             use_slow_upload: Optional[bool] = False) -> 'DecryptedRemoteBoxFile':
         """
         Uploads ``PreparedFile`` to the ``RemoteBox``
@@ -922,7 +922,7 @@ class EncryptedRemoteBox:
                 A callback function accepting two parameters:
                 (downloaded_bytes, total).
 
-            message_to_edit (``Union[int, Message]``, optional):
+            message_to_edit (``Message``, optional):
                 If specified, will update existing ``RemoteBox``
                 (edit) file instead of uploading new.
 
@@ -979,7 +979,49 @@ class EncryptedRemoteBox:
                 progress_callback=progress_callback)
         try:
             if message_to_edit:
-                file_message = await message_to_edit.edit(file=ifile)
+                # This variable will be changed if Message has
+                # Updated Metadata and if it was successfully
+                # decrypted, re-encrypted and encoded.
+                reenc_encoded_updated_metadata = None
+
+                # Updated Encrypted Metadata
+                if message_to_edit.message:
+                    try:
+                        decoded_ue_metadata = urlsafe_b64decode(
+                            message_to_edit.message)
+                    except Exception as e:
+                        logger.warning(
+                            '''It seems that file you want to update have '''
+                            '''Updated Metadata, but we can\'t decode. Updates '''
+                            '''to Metadata will be ignored. {e}''')
+                    else:
+                        # urlsafe_b64decode was successfull, now we need
+                        # to get FileKey to decrypt the Metadata updates
+                        # and then re-encrypt them with a new FileKey
+                        dlbf = await pf.dlb.get_file(message_to_edit.id)
+
+                        try:
+                            dec_updated_metadata = AES(dlbf._filekey).decrypt(
+                                decoded_ue_metadata # Decrypt with original FileKey
+                            )
+                        except ValueError: # Invalid padding byte (AES Error)
+                            logger.warning(
+                                '''It seems that file you want to update have '''
+                                '''Updated Metadata, but we can\'t decrypt. '''
+                                '''Updates to Metadata will be ignored. {e}''')
+                        else:
+                            reenc_updated_metadata = AES(pf.filekey).encrypt(
+                                dec_updated_metadata # Re-encrypt with new FileKey
+                            )
+                            pf.set_updated_enc_metadata( # Add re-encrypted Metadata
+                                reenc_updated_metadata   # to PreparedFile object so
+                            )                            # we can re-use it in Local
+                            reenc_encoded_updated_metadata = urlsafe_b64encode(
+                                reenc_updated_metadata # Encode with Urlsafe b64
+                            ).decode()
+
+                file_message = await message_to_edit.edit(file=ifile,
+                    text=reenc_encoded_updated_metadata)
             else:
                 file_message = await self._tc.send_file(
                     self._box_channel, file=ifile,

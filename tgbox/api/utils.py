@@ -293,6 +293,17 @@ class PreparedFile:
         """You should set time after pushing to remote"""
         self.upload_time = upload_time
 
+    def set_updated_enc_metadata(self, ue_metadata: bytes):
+        """
+        If user requested to update some already pushed
+        to Remote file AND if target file HAS Updated
+        Encrypted Metadata in caption then we need to
+        re-encrypt it with a new filekey and attach here.
+
+        This is for internal usage, you can ignore it.
+        """
+        self.updated_enc_metadata = ue_metadata
+
 class DirectoryRoot:
     """
     Type used to specify that you want to
