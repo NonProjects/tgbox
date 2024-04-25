@@ -596,13 +596,19 @@ class BoxFile(DecryptedLocalBoxFile):
         self._file_path = self.dlbf._file_path
         self._directory = self.dlbf._directory
 
-    async def update(self, *args, **kwargs):
+    async def update(self, *args, **kwargs) -> 'BoxFile':
         """
         See ``help(DecryptedRemoteBox.update_file)``.
         ``rbf`` is auto passed to ``update_file()``.
+
+        ``self`` will be NOT updated! Instead, a new
+        ``BoxFile`` object will be returned.
         """
         self.__raise_initialized()
-        return await self.drb.update_file(self.drbf, *args, **kwargs)
+
+        drbf = await self.drb.update_file(self.drbf, *args, **kwargs)
+        dlbf = await self.dlb.get_file(self.drbf.id)
+        return await BoxFile(dlbf=dlbf, drbf=drbf).init()
 
     async def exists(self, *args, **kwargs):
         """
