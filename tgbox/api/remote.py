@@ -990,7 +990,7 @@ class EncryptedRemoteBox:
                         decoded_ue_metadata = urlsafe_b64decode(
                             message_to_edit.message)
                     except Exception as e:
-                        logger.warning(
+                        logger.info(
                             '''It seems that file you want to update have '''
                             '''Updated Metadata, but we can\'t decode. Updates '''
                             '''to Metadata will be ignored. {e}''')
@@ -1005,7 +1005,7 @@ class EncryptedRemoteBox:
                                 decoded_ue_metadata # Decrypt with original FileKey
                             )
                         except ValueError: # Invalid padding byte (AES Error)
-                            logger.warning(
+                            logger.info(
                                 '''It seems that file you want to update have '''
                                 '''Updated Metadata, but we can\'t decrypt. '''
                                 '''Updates to Metadata will be ignored. {e}''')
@@ -1964,7 +1964,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             try:
                 self._file_path = AES(self._mainkey).decrypt(erbf._efile_path)
             except ValueError: # ValueError: invalid padding byte
-                logger.warning(
+                logger.info(
                    f'''We can\'t decrypt real file path of ID{self._id} because '''
                     '''MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '''
                     '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
@@ -1980,7 +1980,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 self._dirkey = make_dirkey(self._mainkey, ppath_head)
         else:
             if erbf._efile_path: # v1.3+ but no MainKey
-                logger.warning(
+                logger.info(
                    f'''We can\'t decrypt real file path of ID{self._id} because '''
                     '''MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '''
                     '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
@@ -2068,7 +2068,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 )
                 self._file_path = Path(self._file_path.decode())
             else:
-                logger.warning(
+                logger.info(
                    f'''We can\'t decrypt real file path of ID{self._id} because '''
                     '''MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '''
                     '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
@@ -2084,7 +2084,11 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         self._residual_metadata = secret_metadata
 
-        if self._message.message:
+        # Here, "self._message.message.startswith('<')" check is for
+        # temporary '<This caption must be removed>' caption on
+        # 'push_file()'. Base64 doesn't have '<' character, so
+        # it's either this message or User specified thing.
+        if self._message.message and not self._message.message.startswith('<'):
             try:
                 edited_metadata = AES(self._filekey).decrypt(
                     urlsafe_b64decode(self._message.message)
@@ -2122,7 +2126,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     del edited_metadata[k]
 
             except Exception:
-                logger.warning(
+                logger.info(
                     f'''Updates to metadata for ID{self._id} failed. '''
                     f'''Traceback:\n{format_exc()}'''
                 )
