@@ -654,15 +654,6 @@ class EncryptedLocalBox:
                 Will **not** return LocalBoxFile associated
                 with the *LocalBoxDirectory* if ``False``.
         """
-        # We may use the _async_iter_from function if
-        # target async generators was syncified prior.
-        async def _async_iter_from(_iter_from):
-            try:
-                while True:
-                    yield await next(_iter_from)
-            except StopAsyncIteration:
-                return
-
         sfpid = (sfpid,) if sfpid else []
 
         if not sfpid:
@@ -684,19 +675,8 @@ class EncryptedLocalBox:
             yield lbfid
 
             if not ignore_files:
-                # ---------------------------------------------------------- #
-                # We need to wrap 'iterdir' method here if it was syncified,
-                # otherwise we will 'async for' on sync generator
-
-                iterdir_ = lbfid.iterdir(ignore_dirs=True)
-
-                if not isasyncgen(iterdir_): # Was syncified
-                    iterdir_ = _async_iter_from(iterdir_)
-
-                async for lbfi in iterdir_:
+                async for lbfi in lbfid.iterdir(ignore_dirs=True):
                     yield lbfi
-
-                # ---------------------------------------------------------- #
 
             child_pids = await self._tgbox_db.PATH_PARTS.execute((
                 'SELECT PART_ID FROM PATH_PARTS WHERE PARENT_PART_ID IS ?',
@@ -712,6 +692,13 @@ class EncryptedLocalBox:
                 contents = self.contents(csfpid, ignore_files=ignore_files)
 
                 if not isasyncgen(contents): # Was syncified
+                    async def _async_iter_from(_iter_from):
+                        try:
+                            while True:
+                                yield await next(_iter_from)
+                        except StopAsyncIteration:
+                            return
+
                     contents = _async_iter_from(contents)
 
                 async for content in contents:

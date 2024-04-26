@@ -25,10 +25,6 @@ from . import local
 from . import remote
 from . import abstract
 
-from .local import (
-    EncryptedLocalBoxDirectory,
-    DecryptedLocalBoxDirectory
-)
 from .abstract import Box, BoxFile
 from .utils import TelegramClient, syncify
 
@@ -70,10 +66,7 @@ def sync_agen(async_gen: AsyncGenerator):
 
 syncify(
     Box, BoxFile, TelegramClient,
-    local, remote, abstract,
-
-    EncryptedLocalBoxDirectory,
-    DecryptedLocalBoxDirectory
+    local, remote, abstract
 )
 # We inherit some methods from the parent classes
 # on __init__ in the 'abstract' module. We did not
