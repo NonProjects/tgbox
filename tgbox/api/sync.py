@@ -82,14 +82,14 @@ syncify(
 Box._needs_syncify = True # pylint: disable=W0212
 BoxFile._needs_syncify = True # pylint: disable=W0212
 
-# We import classes and functions from the abstract.py module
+# We import classes and functions from the 'api' package
 # in __init__.py (.) so they can be accessed via the
 # from 'tgbox.api import Box' (e.g). As this import comes
 # before the user imports 'tgbox.api.sync', __init__.py
 # caches the Async versions of this functions. So, for
 # example, after 'import tgbox.api.sync' the functions
 # or classes in __init__.py (get_box, Box, etc) will
-# stay the same, but in abstract.py they will be synced.
+# stay the same, but in 'api' they will be synced.
 #
 # from tgbox.api import get_box <-- Will stay Async
 # from tgbox.api.abstract import get_box <-- Will become Sync
@@ -102,11 +102,25 @@ from .abstract import (
     __dict__ as abstract__dict__,
     __all__ as abstract__all__
 )
+from .local import (
+    __dict__ as local__dict__,
+    __all__ as local__all__
+)
+from .remote import (
+    __dict__ as remote__dict__,
+    __all__ as remote__all__
+)
 from . import __dict__ as root__dict__
 
-for k,v in root__dict__.items():
-    # We update only things that presented in both
-    # modules AND in tgbox.api.abstract.__all__
-    if k in abstract__dict__ and k in abstract__all__:
-        logger.debug('__init__.%s was updated!' % k)
-        root__dict__[k] = abstract__dict__[k]
+__dict_to_update = (
+    (abstract__dict__, abstract__all__),
+    (local__dict__, local__all__),
+    (remote__dict__, remote__all__)
+)
+for x__dict__, x__all__ in __dict_to_update:
+    for k,v in root__dict__.items():
+        # We update only things that presented in both
+        # modules (sync & x) AND in x__all__
+        if k in x__dict__ and k in x__all__:
+            logger.debug('__init__.%s was updated!' % k)
+            root__dict__[k] = x__dict__[k]
