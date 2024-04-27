@@ -191,7 +191,7 @@ After you created *Box* with :func:`~tgbox.api.abstract.make_box` the :doc:`prot
 Understanding Box
 +++++++++++++++++
 
-As already been said, the :class:`~tgbox.api.abstract.Box` is a class that combines the methods from both of the :class:`~tgbox.api.local.DecryptedLocalBoxFile` and :class:`~tgbox.api.remote.DecryptedRemoteBoxFile`. You can access them like this:
+As already been said, the :class:`~tgbox.api.abstract.Box` is a class that combines the methods from both of the :class:`~tgbox.api.local.DecryptedLocalBox` and :class:`~tgbox.api.remote.DecryptedRemoteBox`. You can access them like this:
 
 .. code-block:: python
 
