@@ -33,9 +33,9 @@ setup(
     include_package_data = True,
 
     install_requires = [
-        'aiosqlite==0.18.0',
-        'telethon==1.29.2',
-        'ecdsa==0.18.0',
+        'aiosqlite==0.20.0',
+        'telethon==1.35.0',
+        'ecdsa==0.19.0',
         'filetype==1.2.0',
         'pysocks==1.7.1'
     ],
@@ -49,7 +49,7 @@ setup(
             'cryptg==0.4.0'
         ],
         'doc': [
-            'sphinx-book-theme==1.1.0',
+            'sphinx-book-theme==1.1.2',
             'sphinx-togglebutton==0.3.2'
         ]
     },
