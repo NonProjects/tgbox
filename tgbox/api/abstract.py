@@ -181,6 +181,12 @@ class Box(DecryptedLocalBox):
             drb (``DecryptedRemoteBox``):
                 The ``DecryptedRemoteBox`` object! Also Yang...
         """
+        if not isinstance(dlb, DecryptedLocalBox):
+            raise TypeError('dlb must be DecryptedLocalBox')
+
+        if not isinstance(drb, DecryptedRemoteBox):
+            raise TypeError('drb must be DecryptedRemoteBox')
+
         if not (dlb.box_channel_id == drb.box_channel_id):
             raise NotInitializedError('Box ID mismatch!')
 
@@ -478,6 +484,12 @@ class BoxFile(DecryptedLocalBoxFile):
             if not (dlbf.id == drbf.id):
                 raise NotInitializedError('File ID mismatch!')
 
+            if not isinstance(dlbf, DecryptedLocalBoxFile):
+                raise TypeError('dlbf must be DecryptedLocalBoxFile')
+
+            if not isinstance(drbf, DecryptedRemoteBoxFile):
+                raise TypeError('drbf must be DecryptedRemoteBoxFile')
+
             self.__id = dlbf.id
             self.dlb = dlbf._lb
             self.drb = drbf._rb
@@ -485,6 +497,12 @@ class BoxFile(DecryptedLocalBoxFile):
             self.dlbf = dlbf
             self.drbf = drbf
         else:
+            if not isinstance(dlb, DecryptedLocalBox):
+                raise ValueError('dlb must be DecryptedLocalBox')
+
+            if not isinstance(drb, DecryptedRemoteBox):
+                raise ValueError('drb must be DecryptedRemoteBox')
+
             self.__id = id
             self.dlb = dlb
             self.drb = drb
