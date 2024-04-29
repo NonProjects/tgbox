@@ -7,7 +7,7 @@ from asyncio import gather
 
 from typing import (
     Optional, Union, NoReturn,
-    BinaryIO, Callable
+    BinaryIO, Callable, List
 )
 from .local import (
     DecryptedLocalBox, make_localbox,
@@ -285,7 +285,7 @@ class Box(DecryptedLocalBox):
     async def push(self, file: Union[str, BinaryIO, bytes, TelegramVirtualFile, list],
             progress_callback: Optional[Callable[[int, int], None]] = None,
             use_slow_upload: Optional[bool] = False, *args, **kwargs
-            ) -> Union['BoxFile', list['BoxFile']]:
+            ) -> Union['BoxFile', List['BoxFile']]:
         """
         This is a wrapper around ``DecryptedRemoteBox.push_file``. Will
         automatically use ``DecryptedLocalBox.prepare_file``. See
