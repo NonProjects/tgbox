@@ -1509,7 +1509,19 @@ class DecryptedLocalBox(EncryptedLocalBox):
             session = AES(basekey).encrypt(self._session.encode())
             self._elb._session = session
 
-            sql_tuple = ('UPDATE BOX_DATA SET SESSION = ?',(session,))
+            # Also Update API_ID & API_HASH values (In case User
+            # changed them in the new TelegramClient instance)
+
+            # API_ID & API_HASH is encrypted with MainKey
+            mainkey = make_mainkey(basekey, self._box_salt)
+
+            api_id = AES(mainkey).encrypt(int_to_bytes(tc._api_id))
+            api_hash = AES(mainkey).encrypt(bytes.fromhex(tc._api_hash))
+
+            sql_tuple = (
+                'UPDATE BOX_DATA SET SESSION=?, API_ID=?, API_HASH=?',
+                (session, api_id, api_hash)
+            )
             await self._tgbox_db.BOX_DATA.execute(sql_tuple)
 
     async def search_file(
