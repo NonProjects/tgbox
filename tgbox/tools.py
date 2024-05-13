@@ -6,7 +6,7 @@ from asyncio import (
 from copy import deepcopy
 from pprint import pformat
 from hashlib import sha256
-from random import randrange
+from random import Random
 
 from typing import (
     BinaryIO, Optional, Dict,
@@ -15,8 +15,9 @@ from typing import (
 from subprocess import PIPE, run as subprocess_run
 
 from io import BytesIO
-from os import PathLike
 from functools import partial
+
+from os import urandom, PathLike
 from re import search as re_search
 
 from platform import system as platform_system
@@ -28,8 +29,6 @@ from .errors import (
     DurationImpossible
 )
 from .defaults import FFMPEG
-from .keys import MainKey
-from .crypto import AESwState as AES
 
 __all__ = [
     'prbg', 'anext',
@@ -242,9 +241,15 @@ class PackedAttributes:
     so the max key/value length is 256^3-1.
 
     <key-length>key<value-length>value<...>
+
+    Every key/value will be randomly
+    shuffled on the packing process.
     """
     @staticmethod
-    def pack(**kwargs) -> bytes:
+    def pack(
+         *, random_seed: Optional[bytes] = None,
+            protected_keys: Optional[tuple] = None,
+            **kwargs) -> bytes:
         """
         Will make bytestring from your kwargs.
         Any kwarg **always** must be ``bytes``.
@@ -252,14 +257,38 @@ class PackedAttributes:
         ``make(x=5)`` will not work;
         ``make(x=b'\x05')`` is correct.
 
+        We shuffle all key/value before packing, so
+        you can specify ``random_seed``. Otherwise,
+        ``urandom(32)`` will be used instead.
+
+        Keys specified in the ``protect_key``
+        tuple will *never* be in the start or
+        or in the end of the packed bytestring.
+
+        ``protect_key`` is for internal usage.
         """
+        # We randomize all keys before packing
+        random = Random(random_seed or urandom(32))
+
+        rnd_keys = list(kwargs.keys())
+        random.shuffle(rnd_keys)
+
+        for pkey in protected_keys or ():
+            _check = (
+                rnd_keys.index(pkey) == 0, # Start
+                rnd_keys.index(pkey) == (len(rnd_keys) - 1) # End
+            )
+            if any(_check):
+                rnd_keys.pop(rnd_keys.index(pkey))
+                rnd_keys.insert(len(rnd_keys) // 2, pkey)
+
         pattr = bytes([0xFF])
-        for k,v in kwargs.items():
-            if not isinstance(v, bytes):
+        for k in rnd_keys:
+            if not isinstance(kwargs[k], bytes):
                 raise TypeError('Values must be bytes')
 
-            pattr += int_to_bytes(len(k),3) + k.encode()
-            pattr += int_to_bytes(len(v),3) + v
+            pattr += int_to_bytes(len(k), 3) + k.encode()
+            pattr += int_to_bytes(len(kwargs[k]), 3) + kwargs[k]
         return pattr
 
     @staticmethod
@@ -305,8 +334,9 @@ class OpenPretender:
     """
     def __init__(
             self, flo: BinaryIO,
-            aes_state: AES,
-            file_size: Optional[int] = None
+            aes_state: 'tgbox.crypto.AESwState',
+            hmac_state: 'hashlib.HMAC',
+            file_size: Optional[int] = None,
         ):
         """
         Arguments:
@@ -315,25 +345,39 @@ class OpenPretender:
 
             aes_state (``AESwState``):
                 ``AESwState`` with Key and IV.
+
+            hmac_state (``hmac.HMAC``):
+                ``HMAC`` initialized with ``HMACKey``
+
+            file_size (``int``, optional):
+                File size of ``flo``. If not specified,
+                we will try to seek.
         """
         self._aes_state = aes_state
+        self._hmac_state = hmac_state
         self._flo = flo
 
+        self._file_size = file_size
+        self._current_size = file_size
+
         self._buffered_bytes = b''
-        self._total_size = file_size
         self._stop_iteration = False
 
+        self._hmac_returned = False
+        self._padding_added = False
+
+        self._concated_metadata_size = None
         self._position = 0
 
     def __repr__(self):
         return (
             f'''<class {self.__class__.__name__}({self._flo}, {repr(self._aes_state)}, '''
-            f'''{self._total_size})>'''
+            f'''{self._current_size})>'''
         )
     def __str__(self):
         return (
             f'''<class {self.__class__.__name__}({self._flo}, {repr(self._aes_state)}, '''
-            f'''{self._total_size})> # {self._position=}, {len(self._buffered_bytes)=}'''
+            f'''{self._current_size})> # {self._position=}, {len(self._buffered_bytes)=}'''
         )
     def concat_metadata(self, metadata: bytes) -> None:
         """Concates metadata to the file as (metadata + file)."""
@@ -341,6 +385,7 @@ class OpenPretender:
             raise ConcatError('Concat must be before any usage of object.')
         else:
             self._buffered_bytes += metadata
+            self._concated_metadata_size = len(metadata)
 
     async def read(self, size: int=-1) -> bytes:
         """
@@ -361,13 +406,21 @@ class OpenPretender:
         if size % 16 and not size == -1:
             raise ValueError('size must be divisible by 16 or -1 (return all)')
 
-        if self._total_size is None:
-            self._total_size = self._flo.seek(0,2) # Move to file end
+        if self._current_size is None:
+            self._current_size = self._flo.seek(0,2) # Move to file end
             self._flo.seek(0,0) # Move to file start
 
-        if self._total_size <= 0 or size <= len(self._buffered_bytes) and size != -1:
-            block = self._buffered_bytes[:size]
-            self._buffered_bytes = self._buffered_bytes[size:]
+        if (self._current_size <= 0 and self._padding_added)\
+            or (size <= len(self._buffered_bytes) and size != -1):
+                if self._hmac_returned:
+                    return b''
+
+                elif self._current_size <= 0 and len(self._buffered_bytes) == 0:
+                    block = self._hmac_state.digest()
+                    self._hmac_returned = True
+                else:
+                    block = self._buffered_bytes[:size]
+                    self._buffered_bytes = self._buffered_bytes[size:]
         else:
             buffered = self._buffered_bytes
             self._buffered_bytes = b''
@@ -376,20 +429,32 @@ class OpenPretender:
                 chunk = self._flo.read()
                 chunk = await chunk if iscoroutine(chunk) else chunk
 
+                self._hmac_state.update(chunk)
+
                 block = buffered + self._aes_state.encrypt(
                     chunk, pad=True, concat_iv=False)
+
+                block += self._hmac_state.digest()
+                self._hmac_returned = True
+                self._padding_added = True
+
+                self._current_size = 0
             else:
                 chunk = self._flo.read(size)
                 chunk = await chunk if iscoroutine(chunk) else chunk
+
+                self._hmac_state.update(chunk)
 
                 if len(chunk) % 16:
                     shift = int(-(len(chunk) % 16))
                 else:
                     shift = None
 
-                if self._total_size <= 0 or size > self._total_size or shift != None:
+                if self._current_size <= 0 or size > self._current_size or shift != None:
                     chunk = buffered + self._aes_state.encrypt(
                         chunk, pad=True, concat_iv=False)
+
+                    self._padding_added = True
                 else:
                     chunk = buffered + self._aes_state.encrypt(
                         chunk, pad=False, concat_iv=False)
@@ -399,7 +464,7 @@ class OpenPretender:
                 if shift is not None:
                     self._buffered_bytes = chunk[shift:]
 
-                self._total_size -= size
+                self._current_size -= size
                 block = chunk[:shift]
 
         self._position += len(block)
@@ -443,7 +508,7 @@ def pad_request_size(request_size: int, bsize: int=4096) -> int:
         request_size = ((request_size + bsize) // bsize) * bsize
     return request_size
 
-def ppart_id_generator(path: Path, mainkey: MainKey) -> Generator[tuple, None, None]:
+def ppart_id_generator(path: Path, mainkey: 'MainKey') -> Generator[tuple, None, None]:
     """
     This generator will iterate over path parts and
     yield their unique IDs. We will use this to better
@@ -476,7 +541,8 @@ def ppart_id_generator(path: Path, mainkey: MainKey) -> Generator[tuple, None, N
 
 def prbg(size: int) -> bytes:
     """Will generate ``size`` pseudo-random bytes."""
-    return bytes([randrange(256) for _ in range(size)])
+    random = Random()
+    return bytes([random.randrange(256) for _ in range(size)])
 
 def int_to_bytes(
         int_: int, length: Optional[int] = None,
@@ -560,7 +626,7 @@ def make_safe_file_path(path: Union[str, Path]) -> Path:
         drive_letter = path.parts[0][0]
         return Path(drive_letter, *path.parts[1:])
 
-def make_file_fingerprint(mainkey: MainKey, file_path: Union[str, Path]) -> bytes:
+def make_file_fingerprint(mainkey: 'MainKey', file_path: Union[str, Path]) -> bytes:
     """
     Function to make a file Fingerprint.
 

@@ -30,9 +30,10 @@ from ..crypto import (
 from ..keys import (
     make_filekey, make_requestkey,
     EncryptedMainkey, make_mainkey,
-    make_sharekey, make_dirkey, MainKey,
-    RequestKey, ShareKey, ImportKey,
-    FileKey, BaseKey, DirectoryKey
+    make_sharekey, make_dirkey,
+    make_hmackey, MainKey, RequestKey,
+    ShareKey, ImportKey, FileKey,
+    BaseKey, DirectoryKey, HMACKey
 )
 from ..defaults import (
     PREFIX, VERBYTE, DEF_TGBOX_NAME,
@@ -1744,6 +1745,10 @@ class DecryptedLocalBox(EncryptedLocalBox):
         # FileKey is a Key that encrypts File and it's
         # metadata (except the efile_path [- MainKey]).
         filekey = make_filekey(dirkey, file_salt)
+        # HMACKey is a Key that will be used to make
+        # a HMAC of File on upload. It's a result of
+        # HMAC(filekey, file_salt)
+        hmackey = make_hmackey(filekey, file_salt)
 
         # We should always encrypt FILE_PATH with MainKey.
         file_path_no_name = str(file_path.parent).encode()
@@ -1758,8 +1763,42 @@ class DecryptedLocalBox(EncryptedLocalBox):
             file_size = int_to_bytes(file_size),
             file_name = file_path.name.encode(),
             mime = mime_type.encode(),
-            cattrs = cattrs
+            cattrs = cattrs,
+            has_hmac_sha256 = b'\x01', # To signal that File has HMAC
+
+            # The 'has_hmac_sha256' will be protected to NOT
+            # be in the Start OR End of packed string. This
+            # will ensure that if Secret Metadata will be
+            # Bit-Flipped, then the whole PackedAttributes
+            # will be invalid & unpack with errors.
+            protected_keys = ('has_hmac_sha256',)
         )
+        # v1.5: Here comes the Protection against the Bit-Flipping
+        # attack. In TGBOX, it was small and insignificant breach.
+        # You can read more about this Protection in the Docs.
+        #  -
+        # (1) Started from the v1.5, PackedAttributes will always shuffle
+        # all key/value positions. This will prevent attacker from
+        # understanding the structure of Secret Metadata. As we *must*
+        # support files without HMAC from previous versions, we will
+        # check if 'secret_metadata' has 'has_hmac_sha256' key. See Docs.
+        #  ---
+        # (2.0) Started from the v1.5, first argument of Secret Metadata
+        # will be *always* the '_BFP' (protection) with Pseudo Random
+        # 5 len bytestring. This will prevent attacker from Bit-Fliping
+        # first CBC block by changing IV (which doesn't create any
+        # garbage in the text after Decryption), as '_BFP' doesn't
+        # really do anything and will be ignored on unpack.
+        #  ---
+        # (2.1)
+        # Any garbage in the unpacked 'secret_metadata' on file
+        # decryption process will result in Error due to way the
+        # PackedAttributes algorithm works. This way, we don't
+        # need to add HMAC to 'secret_metadata' and break the
+        # backward-compatibility with versions < 1.5.
+        protection = PackedAttributes.pack(_BFP=prbg(5))
+        secret_metadata = protection + secret_metadata[1:]
+
         secret_metadata = AES(filekey).encrypt(secret_metadata)
 
         metadata = PackedAttributes.pack(
@@ -1801,6 +1840,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             filesize = total_file_size,
             filepath = Path(file_path_no_name.decode()),
             filesalt = file_salt,
+            hmackey = hmackey,
             fingerprint = file_fingerprint,
             metadata = constructed_metadata,
             imported = False
@@ -1852,6 +1892,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             filesize = drbf._size,
             filepath = file_path,
             filesalt = drbf._file_salt,
+            hmackey = None, # We don't need HMACKey on importing
             fingerprint = drbf._fingerprint,
             metadata = drbf._erbf._metadata,
             imported = True
@@ -2910,6 +2951,18 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 )
                 self._file_path = self._defaults.DEF_NO_FOLDER
 
+        # Started from the v1.5, Secret Metadata contains a 'has_hmac_sha256'
+        # key. If it's presented, then we should check file HMAC on download
+        self._has_hmac_sha256 = bool(secret_metadata.pop('has_hmac_sha256', None))
+
+        if self._has_hmac_sha256:
+            # _BFP is Pseudo-random bytes that protect first block
+            # of AES CBC against the Bit-flipping attack on IV.
+            secret_metadata.pop('_BFP') # version 1.5+ (if has_hmac_sha256)
+            self._hmackey = make_hmackey(self._filekey, self._file_salt)
+        else:
+            self._hmackey = None # File was uploaded from version < 1.5
+
         for attr in self.__required_metadata:
             secret_metadata.pop(attr)
 
@@ -2953,7 +3006,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                             else:
                                 setattr(self, f'_{k}', v)
                     else:
-                        self._residual_metadata[k] = v
+                        # Check for keys that we should ignore
+                        if k not in ('_BFP',):
+                            self._residual_metadata[k] = v
 
         if self._erase_encrypted_metadata:
             self._elbf._initialized = False
@@ -2979,6 +3034,16 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         will read file of a higher version.
         """
         return self._residual_metadata
+
+    @property
+    def has_hmac_sha256(self) -> bool:
+        """Will return ``True`` if file has HMAC (v1.5+)"""
+        return self._has_hmac_sha256
+
+    @property
+    def hmackey(self) -> Union[HMACKey, None]:
+        """Returns ``HMACKey`` of this file if present."""
+        return self._hmackey
 
     @property
     def file_path(self) -> Path:
@@ -3294,9 +3359,20 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 if k in self._residual_metadata:
                     del self._residual_metadata[k]
 
-        updates_packed = PackedAttributes.pack(**updates)
-        updates_encrypted = AES(self._filekey).encrypt(updates_packed)
-        updates_encoded = urlsafe_b64encode(updates_encrypted).decode()
+        updates.pop('_BFP', None) # Remove previous _BFP
+
+        if updates:
+            # "protection" is a Bit-flipping attack protection
+            # for the first AES CBC block. Garbage due to non-IV
+            # bit-flipped blocks will invalidate PackedAttributes
+            protection = PackedAttributes.pack(_BFP=prbg(5))
+            updates_packed = PackedAttributes.pack(**updates)
+            updates_packed = protection + updates_packed[1:]
+
+            updates_encrypted = AES(self._filekey).encrypt(updates_packed)
+            updates_encoded = urlsafe_b64encode(updates_encrypted).decode()
+        else:
+            updates_encoded = ''
 
         await self.refresh_metadata(_updated_metadata=updates_encoded)
 

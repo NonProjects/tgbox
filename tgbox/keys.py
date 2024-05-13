@@ -1,5 +1,6 @@
 """This module stores all keys and key making functions."""
 
+from hmac import HMAC
 from os import urandom
 from random import SystemRandom
 
@@ -16,8 +17,7 @@ from .defaults import Scrypt, WORDS_PATH, READTHEDOCS
 
 from .crypto import (
     AESwState as AES, FAST_ENCRYPTION,
-    Salt, BoxSalt, FileSalt
-)
+    Salt, BoxSalt, FileSalt)
 try:
     from hashlib import sha256, scrypt
 except ImportError: # No Scrypt installed
@@ -59,6 +59,7 @@ __all__ = [
     'FileKey',
     'EncryptedMainkey',
     'DirectoryKey',
+    'HMACKey',
 
     'make_basekey',
     'make_mainkey',
@@ -66,7 +67,8 @@ __all__ = [
     'make_requestkey',
     'make_sharekey',
     'make_importkey',
-    'make_dirkey'
+    'make_dirkey',
+    'make_hmackey'
 ]
 
 class Phrase:
@@ -137,6 +139,7 @@ class Key:
                     6: ``FileKey``
                     7: ``EncryptedMainkey``
                     8: ``DirectoryKey``
+                    9: ``HMACKey``
         """
         self._key = key
         self._key_type = key_type
@@ -148,7 +151,8 @@ class Key:
             5: 'ImportKey',
             6: 'FileKey',
             7: 'EncryptedMainkey',
-            8: 'DirectoryKey'
+            8: 'DirectoryKey',
+            9: 'HMACKey'
         }
     def __hash__(self) -> int:
         return hash((self._key, self._key_type))
@@ -196,7 +200,8 @@ class Key:
     def decode(cls, encoded_key: str) -> Union[
             'BaseKey','MainKey','RequestKey',
             'ShareKey','ImportKey','FileKey',
-            'EncryptedMainkey', 'DirectoryKey']:
+            'EncryptedMainkey', 'DirectoryKey',
+            'HMACKey']:
         """
         Decodes Key by prefix and returns
         ``Key`` in one of ``Key`` classes.
@@ -209,6 +214,7 @@ class Key:
         F: ``FileKey``
         E: ``EncryptedMainkey``
         D: ``DirectoryKey``
+        H: ``HMACKey``
 
         Key example:
             ``MSGVsbG8hIEkgYW0gTm9uISBJdCdzIDI5LzExLzIwMjE=``.
@@ -219,8 +225,10 @@ class Key:
                 'B': BaseKey,    'M': MainKey,
                 'R': RequestKey, 'S': ShareKey,
                 'I': ImportKey,  'F': FileKey,
+
                 'E': EncryptedMainkey,
-                'D': DirectoryKey
+                'D': DirectoryKey,
+                'H': HMACKey
             }
             ekey_type = ekey_types[encoded_key[0]]
             return ekey_type(urlsafe_b64decode(encoded_key[1:]))
@@ -336,6 +344,15 @@ class DirectoryKey(Key):
     def __init__(self, key: bytes):
         super().__init__(key, 8)
 
+class HMACKey(Key):
+    """
+    ``HMACKey`` is a ``Key`` that is used to make a
+    *HMAC* of the bytestring. Typically, ``HMACKey``
+    is a result of a ``tgbox.keys.make_hmackey`` func.
+    """
+    def __init__(self, key: bytes):
+        super().__init__(key, 9)
+
 def make_basekey(
         phrase: Union[bytes, Phrase],
         *,
@@ -436,6 +453,23 @@ def make_filekey(key: Union[MainKey, DirectoryKey], file_salt: FileSalt) -> File
             ``FileSalt`` generated on file prepare.
     """
     return FileKey(sha256(key + file_salt).digest())
+
+def make_hmackey(filekey: FileKey, file_salt: FileSalt) -> HMACKey:
+    """
+    Function to create ``HMACKey``.
+
+    ``HMACKey`` is a ``Key`` that is used exclusively
+    to derive a *HMAC* (by default *SHA256*) of a
+    *File* or any target bytestring.
+
+    Arguments:
+        filekey (``FileKey``):
+            ``FileKey`` which will be used to make a ``HMACKey``.
+
+        file_salt (``FileSalt``):
+            ``FileSalt`` that correspond to ``FileKey``.
+    """
+    return HMACKey(HMAC(filekey.key, file_salt.salt, 'sha256').digest())
 
 def make_dirkey(mainkey: MainKey, part_id: bytes) -> DirectoryKey:
     """

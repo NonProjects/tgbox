@@ -17,6 +17,7 @@ from base64 import (
     urlsafe_b64decode
 )
 from asyncio import iscoroutinefunction
+from hmac import HMAC, compare_digest as hmac_compare_digest
 
 from telethon.utils import resolve_id
 from telethon.tl.custom.file import File
@@ -44,10 +45,10 @@ from ..crypto import (
     BoxSalt, FileSalt, IV
 )
 from ..keys import (
-    make_mainkey, make_sharekey, MainKey,
-    ShareKey, ImportKey, FileKey, BaseKey,
-    make_filekey, make_requestkey, RequestKey,
-    DirectoryKey, make_dirkey
+    make_mainkey, make_sharekey, MainKey, ShareKey,
+    ImportKey, FileKey, BaseKey, HMACKey, make_filekey,
+    make_requestkey, RequestKey, DirectoryKey, make_dirkey,
+    make_hmackey
 )
 from ..defaults import (
     VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME,
@@ -950,10 +951,12 @@ class EncryptedRemoteBox:
                 f'''Max allowed filesize for you is {UploadLimits.DEFAULT} '''
                 f'''bytes, your file is {pf.filesize} bytes in size.'''
             )
-        # Last 16 bytes of metadata is IV
+        # Last 16 bytes of metadata is File IV
         aes_state = AES(pf.filekey, pf.metadata[-16:])
+        # The hmac_state will be used to make a HMAC of File
+        hmac_state = HMAC(pf.hmackey.key, digestmod='sha256')
 
-        oe = OpenPretender(pf.file, aes_state, pf.filesize)
+        oe = OpenPretender(pf.file, aes_state, hmac_state, pf.filesize)
         oe.concat_metadata(pf.metadata)
         try:
             assert not use_slow_upload, 'use_slow_upload enabled'
@@ -2079,6 +2082,18 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             # part of the Required Metadata fields.
             secret_metadata.pop('efile_path')
 
+        # Started from the v1.5, Secret Metadata contains a 'has_hmac_sha256'
+        # key. If it's presented, then we should check file HMAC on download
+        self._has_hmac_sha256 = bool(secret_metadata.pop('has_hmac_sha256', None))
+
+        if self._has_hmac_sha256:
+            # _BFP is Pseudo-random bytes that protect first block
+            # of AES CBC against the Bit-flipping attack on IV.
+            secret_metadata.pop('_BFP') # version 1.5+ (if has_hmac_sha256)
+            self._hmackey = make_hmackey(self._filekey, self._file_salt)
+        else:
+            self._hmackey = None # File was uploaded from version < 1.5
+
         for attr in self.__required_metadata:
             secret_metadata.pop(attr)
 
@@ -2136,6 +2151,16 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             self._erbf._initialized = False
             self._erbf._secret_metadata = None
             self._erbf._metadata = None
+
+    @property
+    def has_hmac_sha256(self) -> bool:
+        """Will return ``True`` if file has HMAC (v1.5+)"""
+        return self._has_hmac_sha256
+
+    @property
+    def hmackey(self) -> Union[HMACKey, None]:
+        """Returns ``HMACKey`` of this file if present."""
+        return self._hmackey
 
     @property
     def size(self) -> Union[int, None]:
@@ -2237,7 +2262,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             decrypt: bool=True, request_size: int=524288,
             offset: Optional[int] = None,
             progress_callback: Optional[Callable[[int, int], None]] = None,
-            use_slow_download: Optional[bool] = False) -> BinaryIO:
+            use_slow_download: Optional[bool] = False,
+            omit_hmac_check: Optional[bool] = False) -> BinaryIO:
         """
         Downloads and saves remote box file to the ``outfile``.
 
@@ -2287,10 +2313,19 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 Will use default download function from the Telethon
                 library instead of function from `fastelethon.py`.
                 Use this if you have problems with download.
+
+            omit_hmac_check (``bool``, optional):
+                Will omit HMAC check on download if ``True``. As
+                we make HMAC of plaintext on upload, HMAC check
+                be always skipped if ``decrypt`` is ``False``.
         """
         self.__raise_initialized()
 
         logger.info(f'Downloading DRBF (ID{self._id})...')
+
+        if not decrypt:
+            # We can't calculate HMAC without plaintext
+            omit_hmac_check = True
 
         if outfile is None:
             outfile = self._defaults.DOWNLOAD_PATH
@@ -2372,6 +2407,10 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             if decrypt:
                 aws = AES(self._filekey, stream_iv)
 
+            if not omit_hmac_check and self._has_hmac_sha256:
+                hmac_state = HMAC(self.hmackey.key, digestmod='sha256')
+            else:
+                logger.info('"omit_hmac_check" is True, so HMAC check was disabled')
             try:
                 # By default we will try to download file via the
                 # fast "download_file" coroutine from fastelethon
@@ -2406,6 +2445,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     chunk = aws.decrypt(chunk, unpad=False) if decrypt else chunk
                     outfile.write(chunk)
 
+                    if not omit_hmac_check and self._has_hmac_sha256:
+                        hmac_state.update(chunk)
+
                     if progress_callback:
                         total += len(chunk)
                         logger.debug(
@@ -2419,8 +2461,26 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
                 if buffered:
                     logger.debug(f'ID{self._id}: Writing the last buffered bytes...')
-                    outfile.write(aws.decrypt(buffered, unpad=True) if decrypt else chunk)
 
+                    file_hmac = buffered[-32:]
+                    buffered = buffered[:-32]
+
+                    chunk = aws.decrypt(buffered, unpad=True) if decrypt else chunk
+                    outfile.write(chunk)
+
+                    if not omit_hmac_check and self._has_hmac_sha256:
+                        hmac_state.update(chunk)
+
+                        if not hmac_compare_digest(file_hmac, hmac_state.digest()):
+                            raise InvalidFile(
+                               f'File ID={self._id} was modified!!!! Calculated '
+                               f'HMAC is {hmac_state.digest().hex()=}, but HMAC '
+                               f'attached to Remote File is {file_hmac.hex()=}. '
+
+                               f'DO NOT TRUST downloaded data of File ID={self._id}! '
+                               f'File name: {self._file_name}, Outfile: {outfile} '
+                                'Consider to review it & then purge!'
+                            )
                     if progress_callback:
                         if iscoroutinefunction(progress_callback):
                             await progress_callback(
@@ -2432,6 +2492,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 break # Download is successfull so we can exit this loop
 
             except Exception as e:
+                if isinstance(e, InvalidFile):
+                    raise e from e
+
                 if download_error_switch == 0:
                     download_error_switch = 1
                     logger.warning(
@@ -2440,7 +2503,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     continue
                 else:
                     logger.error('Both fast and slow download methods failed')
-                    raise e
+                    raise e from e
 
         return outfile
 
@@ -2558,8 +2621,16 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 if k in self._residual_metadata:
                     del self._residual_metadata[k]
 
+        updates.pop('_BFP', None) # Remove previous _BFP
+
         if updates:
+            # "protection" is a Bit-flipping attack protection
+            # for the first AES CBC block. Garbage due to non-IV
+            # bit-flipped blocks will invalidate PackedAttributes
+            protection = PackedAttributes.pack(_BFP=prbg(5))
             updates_packed = PackedAttributes.pack(**updates)
+            updates_packed = protection + updates_packed[1:]
+
             updates_encrypted = AES(self._filekey).encrypt(updates_packed)
             updates_encoded = urlsafe_b64encode(updates_encrypted).decode()
         else:
@@ -2601,7 +2672,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     else:
                         setattr(self, f'_{k}', v)
             else:
-                self._residual_metadata[k] = v
+                # Check for keys that we should ignore
+                if k not in ('_BFP',):
+                    self._residual_metadata[k] = v
 
         if dlb:
             dlbf = await dlb.get_file(self._id)

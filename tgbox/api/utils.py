@@ -281,6 +281,7 @@ class PreparedFile:
     filesize: int
     filepath: PathLike
     filesalt: 'tgbox.crypto.FileSalt'
+    hmackey: 'tgbox.keys.HMACKey'
     fingerprint: bytes
     metadata: bytes
     imported: bool
