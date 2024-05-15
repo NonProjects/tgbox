@@ -2263,6 +2263,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             offset: Optional[int] = None,
             progress_callback: Optional[Callable[[int, int], None]] = None,
             use_slow_download: Optional[bool] = False,
+            hmac_state: Optional[HMAC] = None,
             omit_hmac_check: Optional[bool] = False) -> BinaryIO:
         """
         Downloads and saves remote box file to the ``outfile``.
@@ -2273,6 +2274,14 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 will be downloaded. ``self.defaults.DOWNLOAD_PATH`` by default.
 
                 If ``outfile`` has ``.write()`` method then we will use it.
+
+                If ``outfile`` is ``str`` or ``Path`` and ``offset``, --
+                we will open in ``ab+`` mode, ``wb`` otherwise.
+
+                If ``outfile`` is your custom object, then you need to
+                implement a ``.write()`` at minumum. If you download
+                from ``offset`` then also ``.read()`` and ``.seek()``
+                or pass ``hmac_state`` as keyword argument instead.
 
             hide_folder (``bool``, optional):
                 Saves to folder which this file belongs to if False,
@@ -2313,6 +2322,54 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 Will use default download function from the Telethon
                 library instead of function from `fastelethon.py`.
                 Use this if you have problems with download.
+
+            hmac_state (``hmac.HMAC``, optional):
+                If you download file from some ``offset`` and your
+                ``outfile`` is NOT readable, then we can't compute
+                and verify the HMAC checksum. In this case, you
+                will need to provide a ``hmac.HMAC`` state with
+                bytes updated up to the ``offset``. For example:
+
+                .. code-block:: python
+
+                    ... # Most code was omited
+
+                    from hmac import HMAC
+
+                    # Let's assume that our download process was
+                    # disrupted by some event. We already fetched
+                    # big part of file, so we don't want to make a
+                    # full re-download. Also, we assume that we
+                    # download to custom 'outfile' which is NOT
+                    # readable (for example, here we will open it
+                    # in 'ab' mode, however, 'ab+' would be readable)
+
+                    outfile = open('video.mp4','ab') # NOT readable!
+
+                    # This is corresponding file that we want to download
+                    drbf = await drb.get_file(dlb.get_last_file_id())
+
+                    # Create 'hmac_state' and init with DRBF 'HMACKey'
+                    hmac_state = HMAC(drbf.hmackey.key, digestmod='sha256')
+
+                    # Now we need to update a 'hmac_state' with bytes
+                    # that we already downloaded. AGAIN, this is a
+                    # STUPID example. If you can make the 'outfile'
+                    # readable (i.e 'ab+'), then just pass it to
+                    # 'download()' method as is! OTHERWISE:
+
+                    with open(outfile.name,'rb') as f:
+                        hmac_state.update(f.read()) # Update hmac_state
+                        offset = f.tell() # Easily retrieve offset
+
+                    await drbf.download(
+                        outfile=outfile,
+                        offset=offset,
+                        hmac_state=hmac_state
+                    )
+                    # This is just example with 'open()'. If you
+                    # have custom object as 'outfile' then you need
+                    # to made it in different way suitable for you
 
             omit_hmac_check (``bool``, optional):
                 Will omit HMAC check on download if ``True``. As
@@ -2356,7 +2413,14 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             outfile = Path(outfile, path, name.lstrip('/'))
             outfile.parent.mkdir(exist_ok=True, parents=True)
 
-            outfile = open(outfile,'wb')
+            if offset:
+                if hmac_state or omit_hmac_check:
+                    # We don't need to read outfile
+                    outfile = open(outfile,'ab')
+                else:
+                    outfile = open(outfile,'ab+')
+            else:
+                outfile = open(outfile,'wb')
 
         elif isinstance(outfile, BinaryIO) or hasattr(outfile, 'write'):
             pass # We already can write
@@ -2408,7 +2472,15 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 aws = AES(self._filekey, stream_iv)
 
             if not omit_hmac_check and self._has_hmac_sha256:
-                hmac_state = HMAC(self.hmackey.key, digestmod='sha256')
+                if not hmac_state:
+                    hmac_state = HMAC(self.hmackey.key, digestmod='sha256')
+
+                    if offset:
+                        outfile.seek(0,0) # Seek to start of file
+
+                        # Update 'hmac_state' with 128MB chunks
+                        while (read_ := outfile.read(128000000)):
+                            hmac_state.update(read_)
             else:
                 logger.info('"omit_hmac_check" is True, so HMAC check was disabled')
             try:
