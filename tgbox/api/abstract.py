@@ -568,6 +568,13 @@ class BoxFile(DecryptedLocalBoxFile):
             )
             if not all((self.dlbf, self.drbf)):
                 raise InvalidFile('Your Box is out of Sync! Use .sync(deep=True)')
+
+            if not self.dlbf.has_hmac_sha256 == self.drbf.has_hmac_sha256:
+                raise InvalidFile(
+                   f'Your Remote File ID{dlbf.id} was changed by third person!!!! '
+                    'Review the peoples that have access to editing YOUR files and'
+                    'then review changed File! DO NOT TRUST IT! Consider re-upload!'
+                )
         else:
             if not self.dlbf._elbf.initialized:
                 await self.dlbf._elbf.init()

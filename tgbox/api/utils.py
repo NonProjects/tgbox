@@ -118,7 +118,7 @@ class TelegramClient(TTelegramClient):
             otherwise ``phone_number`` OR ``session`` is required.
 
         ..tip::
-            This ``TelegramClient`` support all keywoard
+            This ``TelegramClient`` support all keyword
             arguments (**kwargs) that support parent
             ``telethon.TelegramClient`` object.
         """

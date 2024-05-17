@@ -2092,6 +2092,15 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             secret_metadata.pop('_BFP') # version 1.5+ (if has_hmac_sha256)
             self._hmackey = make_hmackey(self._filekey, self._file_salt)
         else:
+            if self._minor_version >= 5:
+                raise InvalidFile(
+                   f'Your Local File ID{dlbf.id} does NOT have "has_hmac_sha256" '
+                    'key, however, it is REQUIRED from version v1.5. Either your '
+                    'Secret Metadata was changed by a stupid attacker or there is '
+                    'another problem with Metadata. Consider to review peoples '
+                    'that have access (editing/posing) to your RemoteBox Channel '
+                    'and then re-upload this file. DO NOT TRUST IT!!!'
+                )
             self._hmackey = None # File was uploaded from version < 1.5
 
         for attr in self.__required_metadata:
