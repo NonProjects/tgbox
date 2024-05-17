@@ -2964,7 +2964,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         else:
             if self._minor_version >= 5:
                 raise InvalidFile(
-                   f'Your Local File ID{dlbf.id} does NOT have "has_hmac_sha256" '
+                   f'Your Local File ID{self._id} does NOT have "has_hmac_sha256" '
                     'key, however, it is REQUIRED from version v1.5. Either your '
                     'Secret Metadata was changed by a stupid attacker or there is '
                     'another problem with Metadata. Consider to review peoples '
