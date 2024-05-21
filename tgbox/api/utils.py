@@ -127,7 +127,7 @@ class TelegramClient(TTelegramClient):
             api_id, api_hash, **kwargs
         )
         self._api_id, self._api_hash = api_id, api_hash
-        self._phone_number = phone_number
+        self._phone_number, self._session = phone_number, session
 
     def __check_session_phone_number(self):
         if not self._session and not self._phone_number:
