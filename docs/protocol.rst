@@ -1,15 +1,36 @@
 Protocol
 ========
 
-The TGBOX *Protocol* is a number of rules and algorithms that define how all of things (like *Encryption*, packing *Metadata*, *File sharing* & etc) work. As TGBOX is built around the Telegram messenger, we can call a *TGBOX* as an additional layer which adds more features.
+The TGBOX *Protocol* is a number of **rules** and **algorithms** that define how all of things (like *Encryption*, packing *Metadata*, *File sharing* & etc) work. As *TGBOX* is built around the *Telegram messenger*, we can call a *TGBOX* as an **additional layer** which adds some new features.
 
 Algorithms used in Encryption
 -----------------------------
 
 - For encryption, we use the `AES CBC <https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Cipher_block_chaining_(CBC)>`_ with **256 bit** key. First 16 bytes of **any** encrypted by library data is `IV <https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Initialization_vector_(IV)>`_;
-- For making the ``BaseKey`` (an absolute key that is used to derive all sub-keys) we propose *and* use by default a `Scrypt <https://en.wikipedia.org/wiki/Scrypt>`_ PBKDF;
-- As `hash function <https://en.wikipedia.org/wiki/Hash_function>`_, we always use the `SHA256 <https://en.wikipedia.org/wiki/SHA-2>`_;
-- For *File* and *Box* :ref:`Sharing` we propose *and* use by default `ECDH <https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange>`_ on `SECP256k1 <https://en.bitcoin.it/wiki/Secp256k1>`_ curve.
+- For making the ``BaseKey`` (a key that is used to derive all sub-keys) we use by default `Scrypt <https://en.wikipedia.org/wiki/Scrypt>`_ PBKDF;
+- As `hash function <https://en.wikipedia.org/wiki/Hash_function>`_ (for various purposes) we always use the `SHA256 <https://en.wikipedia.org/wiki/SHA-2>`_;
+- For *File* and *Box* :ref:`Sharing` we propose *and* use by default `ECDH <https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange>`_ on `SECP256k1 <https://en.bitcoin.it/wiki/Secp256k1>`_ curve;
+- Started from *version 1.5* we use `HMAC <https://en.wikipedia.org/wiki/HMAC>`_-`SHA256 <https://en.wikipedia.org/wiki/SHA-2>`_ to verify that any bit of plaintext was **not** tweaked.
+
+.. admonition:: Reasoning behind using this algorithms
+    :class: dropdown
+
+    **Why AES-CBC-256?** *CBC* is *very* fast, secure and available on any platform. One may say that the *CBC* mode of Encryption is pretty old and considered **dangerous to use** because of `Padding-oracle attack <https://en.wikipedia.org/wiki/Padding_oracle_attack>`_ and also some smaller attacks like `Bit-flipping attack <https://en.wikipedia.org/wiki/Bit-flipping_attack>`_. **While this is True**, those attacks is applicable **only** on a raw *network protocols*, where Attacker **has** ability to **forge** *ciphertext* and **send** it to server to decrypt. Any of this attacks doesn't expose *Key* or *raw information* that was encrypted. Moreover, in *TGBOX*, we use *CBC* to encrypt *files*, and we use Telegram (connections to Telegram are secure) just as file storage (like local pendrive). **In such regard**, *CBC* **has no** known weaknesses.
+
+    We also **don't need** *parallel decryption* or ability to *partially re-encrypt* some bytes in ciphertext, as Telegram don't offer any way to implement this mechanic.
+
+    .. admonition:: **Yes.** AES-*GCM* (or any AE mode) would be better.
+
+        I started developing and prototyping the *TGBOX* a **years** ago. To be honest, I did **not** expected it to be *pretty big* project where *CBC* is not enough. While there is **nothing wrong security-wise here** in *CBC*, on code-wise side we could omit implementing *HMAC* as a separate thing. Changing mode of encryption will require to break the whole codebase to *version 2.0*, which is not worth it nor required.
+
+    **Why Scrypt?** *Scrypt* is an amazing PBKDF that is intense on RAM. We use it only to make a first *Key* that is then derived into many other. By default, *User* will need to give us **1 gigabyte** of RAM for a couple of **seconds** to unlock his *Box*, but *Attacker* will need to give 1 GB for **each** brute force attempt.
+
+    **Why SHA256?** *SHA256* is enough for our purposes. While we use *SHA256* to *derive* most keys, we do it in a way where `Length extension attack <https://en.wikipedia.org/wiki/Length_extension_attack>`_ is **not** applicable.
+
+    **Why ECDH-SECP256k1?** I'm in love with Bitcoin, so *SECP256k1* is our way to go. It's also **not** *NIST based*, which is definitely cool. Also, in *Protocol* we always use different *Private key* on :ref:`Sharing`.
+
+    **Why HMAC-SHA256?** Started from *version 1.5*, the *TGBOX* Protocol will compute and attach `HMAC <https://en.wikipedia.org/wiki/HMAC>`_ (E&M) to encrypted files. While *Bit-flipping attack* can be made **only** by the *Telegram Messenger* owners **OR** by the users which have enough privileges in your Telegram :doc:`remotebox` *Channel*, I decided to add this feature as additional security improvement.
+
 
 Abstract Box
 ------------
@@ -55,7 +76,7 @@ The *Phrase* →
 The *BaseKey* →
 +++++++++++++++
 
-*BaseKey* is a **master Key** that is used to **derive all other sub-keys**. By default, we make this *Key* with a :meth:`tgbox.keys.make_basekey` function, which utilize the `Scrypt <https://en.wikipedia.org/wiki/Scrypt>`_ KDF under the hood and then **hash result** with *SHA256*. The *Scrypt* is configured to require a **1GB of RAM** to make a key, and uses **non unique** salt: :data:`tgbox.defaults.Scrypt`. Expirienced users may want to **change it** to make a brute-force attack impossible, **but should not lost it** (we **do not** store it in any way). Random *Phrase* or secure password should be **just enough** to protect your *Box*. You can wrap any other key in the :class:`~tgbox.keys.BaseKey` class if you want a different implementation.
+*BaseKey* is a **master Key** that is used to **derive all other sub-keys**. By default, we make this *Key* with a :meth:`tgbox.keys.make_basekey` function, which utilize the `Scrypt <https://en.wikipedia.org/wiki/Scrypt>`_ KDF under the hood and then **hash result** with *SHA256*. The *Scrypt* is configured to require a **1GB of RAM** to make a key, and uses **non unique** salt: :data:`tgbox.defaults.Scrypt`. Experienced users may want to **change it** to make a brute-force attack impossible, **but should not lost it** (we **do not** store it in any way). Random *Phrase* or secure password should be **just enough** to protect your *Box*. You can wrap any other key in the :class:`~tgbox.keys.BaseKey` class if you want a different implementation.
 
 We also use *BaseKey* to encrypt *Telegram session* (give an **access to the Account**) in the :doc:`localbox`.
 
@@ -76,11 +97,15 @@ The *DirectoryKey* →
 
 In fact, the *DirectoryKey* is **more a deterministic bytes** than a *Key*. It doesn't encrypt anything, but used only to make a *file keys*.
 
-The *FileKey*
-+++++++++++++
+The *FileKey* →
++++++++++++++++
 
 *FileKey* is a *Key* that is used to **encrypt file and its Metadata**. On :meth:`~tgbox.api.local.DecryptedLocalBox.prepare_file` we receive a 32 random bytes, -- the :class:`~tgbox.crypto.FileSalt`. Just identical to :func:`~tgbox.keys.make_mainkey`, we make a :class:`~tgbox.keys.FileKey` with :func:`~tgbox.keys.make_filekey`. Started from the version *1.3*, to derive a *file keys* we use a :class:`~tgbox.keys.DirectoryKey`. For files that was uploaded *prior* to the *v1.3*, we use a :class:`~tgbox.keys.MainKey`.
 
+The *HMACKey*
++++++++++++++
+
+*HMACKey* is a *Key* that is used from *v1.5* to compute a *HMAC* of a file (plaintext) on upload. We make a :class:`~tgbox.keys.HMACKey` with :func:`~tgbox.keys.make_hmackey`, which under the hood utilize the ``hmac.HMAC`` on *SHA256* with a :class:`~tgbox.keys.FileKey` and :class:`~tgbox.crypto.FileSalt` as message to derive a :class:`~tgbox.keys.HMACKey`.
 
 Box file & its Metadata
 -----------------------
@@ -92,18 +117,20 @@ valid and if it is, we construct the *Box file Metadata*, which consist of the n
 - **box_salt** *(bytes: required, public)* -- *BoxSalt is used for MainKey creation*
 - **file_fingerprint** *(bytes: v1.1+, public)* -- *A SHA256 of the File's path plus MainKey*
 - **efile_path** *(bytes: v1.3+, public)* -- *Encrypted (by MainKey) File's path*
-- **minor** *(int: v1.3+, public)* -- *The minor version of the TGBOX protocol*
+- **minor_version** *(int: v1.3+, public)* -- *The minor version of the TGBOX protocol*
 
+- **_BFP** *(bytes: v1.5+, required, secret)* -- *5 random bytes for IV Bit-flipping protection*
 - **file_name** *(bytes: required, secret)* -- *File's name*
 - **file_size** *(int: required, secret)* -- *Pure file's size, no metadata included*
 - **duration** *(float: optional, FFMPEG required, secret)* -- *File's duration (if video/audio)*
+- **has_hmac_sha256** *(bytes: v1.5+, required, secret)* -- *Signal that file has HMAC checksum*
 - **preview** *(bytes: optional, FFMPEG required, secret)* -- *File's preview (if file is media)*
 - **mime** *(bytes: required, secret)* -- *File's mime type*
 
 Unpacked *Metadata* also have some fixed bytes at the beginning, which consist of the:
-        - **prefix** -- *Bytes to identify the TGBOX encrypted file*
+        - **prefix** -- *Bytes (6) to identify the TGBOX encrypted file*
         - **verbyte** -- *Protocol global version as one byte*
-        - **metadata_size** -- *Bytesize of the Metadata to unpack*
+        - **metadata_size** -- *Bytesize (3) of the Metadata to unpack*
 
 Packing Algorithm
 +++++++++++++++++
@@ -113,8 +140,6 @@ To pack a *Key-Value* container we use the simple algorithm, that in *Protocol* 
 
 .. image:: images/pattrs.png
    :align: center
-
-|
 
 In the upper image example, **FF** (is hexed *[int 255]*, as well as *Key length* & *Value length*) is a *Magic number* that identify a *PackedAttributes* bytestring. The **000005** is a *Key length*, the next is a *Key*, which is "*field*". So, we slice the first three bytes after *Magic number*, get a *Key length*, then we slice a *Key length*, get a *Key*. After *Key* there should be the next three bytes that represent a *Value length*. We make the same operation as with *Key* and receive a *Value*, which is "*data*". Repeat this until packed string *is not empty*.
 
@@ -128,11 +153,62 @@ In the upper image example, **FF** (is hexed *[int 255]*, as well as *Key length
     print(PackedAttributes.unpack(pattrs))
     # {'field': b'data', 'x': b'test'}
 
+.. versionchanged:: v1.5
+   **(1)** Now positions of Key/Value in :class:`~tgbox.tools.PackedAttributes` output bytestring is **always** randomized (``random_seed`` *kwarg*, default is ``urandom(32)``). **(2)** The keys, specified in ``protected_keys`` tuple *kwarg* will **never** be at the start or at the *end* of *packed string* (optional).
+
+Bit-flipping Protection
++++++++++++++++++++++++
+
+Started from the *version 1.5* we implement some basic protection against the attacks that involve file modification. While it can be done only by Telegram server maintainers & peoples who have enough privileges to edit your files in :doc:`remotebox`, I believe that it would be nice addition to security stack of the *TGBOX* protocol.
+
+.. note::
+   Prior to *v1.5* we **didn't** have any protection against *Bit-flipping* because *TGBOX* **isn't** a network protocol, it's a something like file-storage **provider**, where it **is not necessary**. However, it's nice-to-have thing, so here we go!
+
+Secret Metadata protection
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. important::
+    **Why bother?** Started from *version 1.5*, *Secret Metadata* will store the new ``has_hmac_sha256`` key, which would signal *Protocol* that we **must** check *HMAC* of this file on :meth:`~tgbox.api.remote.DecryptedRemoteBoxFile.download`. Attacker *potentially* can *Bit-flip* some bytes in *Secret Metadata* to disable this check.
+
+    Below is additions that **should prevent** such scenario.
+
+*Secret Metadata* is a part of *Metadata*, fields of which is packed with :class:`~tgbox.tools.PackedAttributes` and encrypted with :class:`~tgbox.keys.FileKey`. We can't just add *HMAC-SHA256* to it, as it will break the backward-compatibility. Instead, we will use different approach
+
+1. In short, changing any bit in block of encrypted data will result in garbaging the whole block after decryption (see `Bit-flipping attack <https://en.wikipedia.org/wiki/Bit-flipping_attack>`_). As you can see in :ref:`Packing Algorithm`, *packed string* contains information bytes(3) that help us separate the *Key* from *Value*. Garbaging *any* of this bytes will result in incorrect unpacking & **error**;
+
+2. To **prevent** attacker from understanding the structure of *packed* bytestring and higher up chances of garbaging *Secret Metadata* in **controlled** way, Key/Value order of *dict* is additionally **randomized** on packing process, as stated in :ref:`Packing Algorithm`;
+
+3. To protect **first block** of encrypted *Secret Metadata* from *Bit-flipping* with *IV* (flipping *IV* would **not** result in garbage after decryption), first *Key* of packed *Secret Metadata* will be **always** ``_BFP`` with **five** pseudo-random bytes. Total of ``\xff`` (*magic number*, 1), ``\x00\x00\x04`` (*key size*, 3), ``_BFP`` (*key*, 4), ``\x00\x00\x05`` (*value size*, 3), ``\x00\x00\x00\x00\x00`` (*i.e some 5 pseudo-random bytes*, 5) will form **16 bytes**, or whole first *CBC* **block**. Changing this block will make **zero** sense or will lead to unpacking **error**;
+
+4. We will add ``has_hmac_sha256`` to ``protected_keys`` tuple *kwarg*, which will **ensure** that this key will **never** be after ``_BFP`` or **never** be last *Key/Value* in *Secret Metadata*. All *Keys/Values* in this part of *Metadata* are **required**, meaning that even **one** lost *Key/Value* (except ``has_hmac_sha256``, which we protect here) will result in invalid unpacking;
+
+5. Attacker will **never know** result of *Bit-flipping* before You download file and tell them.
+
+All this things (with more *little* checks in the code) **should** ensure that ``has_hmac_sha256`` will **not** be changed.
+
+Encrypted File protection
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Started from the *version 1.5* we will protect original file with *HMAC-SHA256* on upload process. On download routine, we will *verify* this checksum if ``has_hmac_sha256`` present in *Secret Metadata* **or** if ``minor_version >= 5``. We compute *HMAC-SHA256* over **plaintext** *(E&M)* and append it to the *end* of encrypted file.
+
+.. note::
+    Last *32 bytes* of encrypted *v1.5+* file is **always** HMAC.
+
+**Why E&M while we can use EtM?** While *EtM* makes sense in networking protocols, here in *TGBOX* we operate over **big** chunks of bytes (up to 4GB). It will be strange if firstly we would download whole encrypted file to RAM (or disk), then check *HMAC*, then decrypt & save. Either we will compute *HMAC* of *encrypted bytedata* chunk-by-chunk on decryption (which doesn't make sense, we're already decrypting), or this will be bizarre overhead. Instead, we make *HMAC* over *plaintext*. First of all, it will guarantee *file* authenticity (**any** change in *encrypted* bytes will affect *decrypted*). Secondly, this approach will allow us to verify a *partially downloaded* file. For example, if our download process was interrupted for some reason, we have ability to continue fetching bytes from specified *offset*. With *EtM* we would need to *Update HMAC* with **all** previously downloaded **encrypted** bytes to restore *HMAC state*. But with *E&M* we can easily calculate over already downloaded **decrypted** bytes.
+
+.. tip::
+   `See general information about AE on Wikipedia <https://en.wikipedia.org/wiki/Authenticated_encryption#Approaches_to_authenticated_encryption>`_.
+
+.. note::
+   Every unique *Box file* has unique *HMACKey*, thus **no** correlations about file contents can be made.
+
+
 Metadata in depth
 +++++++++++++++++
 
 .. image:: images/rbfm_schema.png
    :align: center
+   :width: 700px
 
 On this schema:
     - Only *Metadata* keys shown;
@@ -140,7 +216,7 @@ On this schema:
     - The *secret_metadata* field is encrypted with *FileKey*.
 
 .. note::
-   *Metadata* is **always** placed in the start of the *Box file*.
+   *Metadata* is **always** placed at the start of the *Box file*.
 
 Describing in Code
 ^^^^^^^^^^^^^^^^^^
@@ -170,12 +246,14 @@ This code example will decrypt and parse example file that was uploaded in my pu
 
 .. code-block:: python
 
+        # = Decrypt File Metadata ============================================ #
+
         import pathlib, tgbox
 
         # The MainKey of the example Box is already disclosed, see t.me/nontgbox_non
         MAINKEY = tgbox.keys.Key.decode('MbxTyN4T2hzq4sb90YSfWB4uFtL03aIJjiITNUyTqdoU=')
-        # You need to download the encrypted example Box file: t.me/nontgbox_non/89
-        BOXFILE = open('LJNbud8SoQGlzZGRk6RkVbwT3eXC7hAaXZE6AeRView=','rb').read()
+        # You need to download the encrypted example Box file: t.me/nontgbox_non/90
+        BOXFILE = open('awtgMbMtFpEvxXdwrRMruZeJEJEbwk28QyeYr6oaEWM=','rb').read()
 
         # There is PREFIX, VERBYTE and METADATA_SIZE which is always
         # fixed in the first 10 bytes of the encrypted by Protocol file
@@ -184,30 +262,30 @@ This code example will decrypt and parse example file that was uploaded in my pu
         PREFIX = FIXED_METADATA[:6] # b'\x00TGBOX' (is signature)
         VERBYTE = FIXED_METADATA[6:7] # b'\x01' (major Protocol version)
 
-        METADATA_SIZE = FIXED_METADATA[7:] # b'\x00\x01}' (size of the Metadata)
+        METADATA_SIZE = FIXED_METADATA[7:] # b'\x00\x01\x9d' (size of the Metadata)
         # Convert the bytes METADATA_SIZE to the integer type
-        METADATA_SIZE = tgbox.tools.bytes_to_int(METADATA_SIZE) # 381
+        METADATA_SIZE = tgbox.tools.bytes_to_int(METADATA_SIZE) # 413
 
         # Actual Metadata goes after Fixed, so slice from 10 to METADATA_SIZE+10 (Fixed Metadata bytesize)
-        METADATA = BOXFILE[10:METADATA_SIZE+10] # b"\xff\x00\x00\x08box_salt\x00\x00 \x..>
-        UNPACKED_METADATA = tgbox.tools.PackedAttributes.unpack(METADATA) # {'box_salt': b'\xd3M4\xd3M4\xd3M4\xd3M4..>
+        METADATA = BOXFILE[10:METADATA_SIZE+10] # b'\xff\x00\x00\x0fsecret_metadata\x00\x00...>
+        UNPACKED_METADATA = tgbox.tools.PackedAttributes.unpack(METADATA) # {'secret_metadata': b'\x08\xff\xfa<\x04...>
 
         # To decrypt the Secret Metadata we need to make a DirectoryKey, and
         # then the FileKey, so firstly we will decrypt the efile_path and
         # make a DirectoryKey from the last Path Part ID
         file_path = tgbox.crypto.AESwState(MAINKEY).decrypt(UNPACKED_METADATA['efile_path'])
-        file_path = pathlib.Path(file_path.decode()) # '/home/tgbox/v1.3', ppart_id_generator require Path object
+        file_path = pathlib.Path(file_path.decode()) # '/home/tgbox/v1.5', ppart_id_generator require Path object
 
         for path_part in tgbox.tools.ppart_id_generator(file_path, MAINKEY):
             part_id = path_part[2] # ppart_id_generator yields tuple
 
         # Started from v1.3 we make FileKeys from DirectoryKey, not MainKey
         dirkey = tgbox.keys.make_dirkey(MAINKEY, part_id)
-        # We make a FileKey from DirectoryKey and FileSalt (always in pub.Metadata)
+        # We make a FileKey from DirectoryKey and FileSalt (always in public Metadata)
         filekey = tgbox.keys.make_filekey(dirkey, UNPACKED_METADATA['file_salt'])
 
-        secret_metadata = tgbox.crypto.AESwState(filekey).decrypt(UNPACKED_METADATA['secret_metadata']) # b'\xff\x00\x00\x07prev..>
-        secret_metadata = tgbox.tools.PackedAttributes.unpack(secret_metadata) # {'preview': b'', 'dur..>
+        secret_metadata = tgbox.crypto.AESwState(filekey).decrypt(UNPACKED_METADATA['secret_metadata']) # b'\xff\x00\x00\x04_BFP...>
+        secret_metadata = tgbox.tools.PackedAttributes.unpack(secret_metadata) # {'_BFP': b'i\x95\xe0\xc1\x9b'...>
 
         print(secret_metadata)
 
@@ -225,14 +303,14 @@ This code example will decrypt and parse example file that was uploaded in my pu
         secret_metadata_iv = UNPACKED_METADATA['secret_metadata'][:16]
 
         # Write the encrypted Secret Metadata (without IV!) to file
-        open('LJNbud_sm','wb').write(UNPACKED_METADATA['secret_metadata'][16:])
+        open('awtgMbMtF','wb').write(UNPACKED_METADATA['secret_metadata'][16:])
 
         # You can < print(' '.join(subprocess_command)) > to get a CMD command
-        subprocess_command = ['openssl', 'aes-256-cbc', '-d', '-in', 'LJNbud_sm',
+        subprocess_command = ['openssl', 'aes-256-cbc', '-d', '-in', 'awtgMbMtF',
             '-K', filekey.hex(), '-iv', secret_metadata_iv.hex()]
 
         sp_result = subprocess_run(subprocess_command, capture_output=True)
-        print(sp_result.stdout) # b'\xff\x00\x00\x07prev..>
+        print(sp_result.stdout) # b'\xff\x00\x00\x04_BFP...>
 
         # Compare the Unpacked Secret Metadata that was decrypted within Protocol code
         # with the Unpacked Secret Metadata that was decrypted within OpenSSL 1.1.1n
@@ -242,19 +320,38 @@ This code example will decrypt and parse example file that was uploaded in my pu
 
         # = Decrypt actual File ============================================ #
 
+        from hmac import HMAC, compare_digest # v1.5+ files require HMAC
+
         # Actual encrypted File (original file that was uploaded by user)
         # position is FIXED_METADATA size (10, -- PREFIX + VERBYTE +
         # METADATA_SIZE) plus METADATA_SIZE (integer)
-        encrypted_file_pos = 10 + METADATA_SIZE # 391
+        encrypted_file_pos = 10 + METADATA_SIZE # 423
 
         # encrypted_file includes IV as first 16 bytes
         encrypted_file = BOXFILE[encrypted_file_pos:]
 
+        # Last 32 bytes of encrypted file is HMAC-SHA256 if
+        # 'secret_metadata' has 'has_hmac_sha256' Key (v1.5+)
+        if secret_metadata.get('has_hmac_sha256', None):
+            hmac_sha256 = encrypted_file[-32:]
+            encrypted_file = encrypted_file[:-32]
+
+            # We need to verify HMAC if File has it,
+            # we do so with Plaintext and HMACKey
+            hmackey = tgbox.keys.make_hmackey(filekey=filekey,
+                file_salt = tgbox.crypto.FileSalt(file_salt))
+        else:
+            hmac_sha256 = None
+
         # Just similar to Secret Metadata, we decrypt File with FileKey
         decrypted_file = tgbox.crypto.AESwState(filekey).decrypt(encrypted_file)
 
+        if hmac_sha256:
+            hmac_state = HMAC(hmackey.key, decrypted_file, digestmod='sha256')
+            print(compare_digest(hmac_sha256, hmac_state.digest())) # True
+
         # I made & uploaded an example text File, so we can print it
-        print(decrypted_file) # b'This file will be deconstructed in v1.3 docs! :)\n'
+        print(decrypted_file) # b'This file will be deconstructed in v1.5 docs! :)\n...>
 
 
 .. admonition:: Prove that *File* encryption is properly implemented
@@ -262,21 +359,24 @@ This code example will decrypt and parse example file that was uploaded in my pu
 
     .. code-block:: python
 
+        # 'encrypted_file' here is already without HMAC as we
+        # removed it in the "Decrypt actual File" chapter. Do
+        # not forget to remove it from bytes before decrypting
+
         from subprocess import run as subprocess_run
 
         # First 16 bytes of any encrypted by Protocol data is IV of AES CBC (256bit)
         encrypted_file_iv = encrypted_file[:16]
 
         # Write the encrypted user File (without IV!) to file
-        open('LJNbud_ef','wb').write(encrypted_file[16:])
+        open('awtgMbMtF','wb').write(encrypted_file[16:])
 
         # You can < print(' '.join(subprocess_command)) > to get a CMD command
-        subprocess_command = ['openssl', 'aes-256-cbc', '-d', '-in', 'LJNbud_ef',
+        subprocess_command = ['openssl', 'aes-256-cbc', '-d', '-in', 'awtgMbMtF',
             '-K', filekey.hex(), '-iv', encrypted_file_iv.hex()]
 
         sp_result = subprocess_run(subprocess_command, capture_output=True)
-        print(sp_result.stdout) # b'This file will be deconstructed in v1.3 docs! :)\n'
-
+        print(sp_result.stdout) # b'This file will be deconstructed in v1.5 docs! :)\n...>
 
 File Storage
 ------------

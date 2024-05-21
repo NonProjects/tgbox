@@ -676,7 +676,7 @@ In order to share a *DirectoryKey* you need to forward to *Requester* at least *
         from tgbox.api.sync import sync_agen
 
         # Make a SearchFilter to search *only* in the exact
-        # directory with the 'scope' fitler.
+        # directory with the 'scope' filter.
         sf = tgbox.tools.SearchFilter(scope='/home/user/Pictures')
 
         # Extract IDs from the matched DecryptedLocalBox files
@@ -725,7 +725,7 @@ III. *(Owner)* **Make a ShareKey from RequestKey**
         from tgbox.api.sync import sync_coro
 
         # Make a SearchFilter to search *only* in the exact
-        # directory with the 'scope' fitler.
+        # directory with the 'scope' filter.
         sf = tgbox.tools.SearchFilter(scope='/home/user/Pictures')
 
         # We need only one file that attached to requested Directory
