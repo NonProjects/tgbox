@@ -2543,8 +2543,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 if buffered:
                     logger.debug(f'ID{self._id}: Writing the last buffered bytes...')
 
-                    file_hmac = buffered[-32:]
-                    buffered = buffered[:-32]
+                    if not omit_hmac_check and self._has_hmac_sha256:
+                        file_hmac = buffered[-32:]
+                        buffered = buffered[:-32]
 
                     chunk = aws.decrypt(buffered, unpad=True) if decrypt else chunk
                     outfile.write(chunk)
