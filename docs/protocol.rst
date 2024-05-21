@@ -257,7 +257,7 @@ This code example will decrypt and parse example file that was uploaded in my pu
 
         # There is PREFIX, VERBYTE and METADATA_SIZE which is always
         # fixed in the first 10 bytes of the encrypted by Protocol file
-        FIXED_METADATA = BOXFILE[:10] # b'\x00TGBOX\x01\x00\x01}'
+        FIXED_METADATA = BOXFILE[:10] # b'\x00TGBOX\x01\x00\x01\x9d'
 
         PREFIX = FIXED_METADATA[:6] # b'\x00TGBOX' (is signature)
         VERBYTE = FIXED_METADATA[6:7] # b'\x01' (major Protocol version)
