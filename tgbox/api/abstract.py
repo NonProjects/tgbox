@@ -131,6 +131,14 @@ class Box(DecryptedLocalBox):
     data from your *LocalBox* only, then you can use a ``Box.dlb`` or
     similarly ``Box.drb`` for the *RemoteBox* only features.
 
+    Also, you can set a ``lazy_files`` kwarg to ``True`` so file
+    obtaining methods will return a "Lazy" ``BoxFile`` objects.
+
+    "Lazy" ``BoxFile`` will **not** load ``DecryptedRemoteBoxFile``
+    until the ``load_drbf()`` call, thus, can be useful for only
+    retrieving information about files without need to use a
+    ``Box.dlb`` ``DecryptedLocalBox`` object.
+
     .. tip::
         To understand more about the TGBOX Protocol you can use a
         ``help()`` on every class/method from the ``tgbox.api``
@@ -186,6 +194,32 @@ class Box(DecryptedLocalBox):
             async for dlbf in box.dlb.search_file(sf):
                 drbf = await box.drb.get_file(dlbf.id)
                 await drbf.download()
+
+            await box.done() # Close all connections
+
+        asyncio.run(main())
+
+
+    Or just use a 'lazy_files' kwarg!:
+
+    .. code-block:: python
+
+        import asyncio
+        import tgbox
+
+        async def main():
+            box = await tgbox.get_box(
+                basekey = tgbox.keys.make_basekey(b'OZZY'),
+                lazy_files = True
+            )
+            sf = tgbox.tools.SearchFilter(
+                scope='/home/user/Music',
+                file_path='Black Rain',
+                mime='audio'
+            )
+            async for bf in box.search_file(sf):
+                await bf.load_drbf()
+                await bf.download()
 
             await box.done() # Close all connections
 
@@ -467,6 +501,9 @@ class BoxFile(DecryptedLocalBoxFile):
     to take off unnecessary load. You can access ``BoxFile.dlb``,
     ``BoxFile.drb``, ``BoxFile.dlbf`` and ``BoxFile.drbf``
     from this class if you need to use methods explicitly.
+
+    ``BoxFile`` can be "Lazy". Such objects don't load the
+    ``DecryptedLocalBoxFile`` until ``load_drbf()`` call.
 
     .. note::
         This class must be initialized firstly via ``init() coro.``
