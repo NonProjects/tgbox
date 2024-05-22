@@ -287,7 +287,7 @@ This code example will decrypt and parse example file that was uploaded in my pu
         secret_metadata = tgbox.crypto.AESwState(filekey).decrypt(UNPACKED_METADATA['secret_metadata']) # b'\xff\x00\x00\x04_BFP...>
         secret_metadata = tgbox.tools.PackedAttributes.unpack(secret_metadata) # {'_BFP': b'i\x95\xe0\xc1\x9b'...>
 
-        print(secret_metadata)
+        print(secret_metadata) # {'_BFP': b'i\x95\xe0\xc1\x9b', 'file_name': b'doc...>
 
 .. tip::
    The next code blocks can be inserted in the end of the code above
