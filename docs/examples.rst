@@ -6,7 +6,10 @@ The "Abstract" Module
 
 The ``v1.5`` introduces two *new* modules: the :mod:`tgbox.api.abstract`, which include *high-level* classes & functions with purpose to **unite** the :doc:`localbox` and the :doc:`remotebox` into the **single** class: :class:`~tgbox.api.abstract.Box`; and the magic :mod:`tgbox.api.sync` module, which turn all *Async* code in :mod:`tgbox.api.abstract` to *Sync* on import.
 
-Writing code with the features of ``abstract`` and ``sync`` modules may be easier and more straightforward, *however*, it goes with a *cost* of speed. Methods from the :class:`~tgbox.api.abstract.Box` will use functions from the :class:`~tgbox.api.local.DecryptedLocalBox` where possible, but will return the :class:`~tgbox.api.abstract.BoxFile` objects, which **always** download file information & *Metadata* from the :doc:`remotebox`. This will **significantly** slow iteration over your *Box*. Make sure you understand this.
+Writing code with the features of ``abstract`` and ``sync`` modules may be easier and more straightforward, *however*, it goes with a *cost* of speed. Methods from the :class:`~tgbox.api.abstract.Box` will use functions from the :class:`~tgbox.api.local.DecryptedLocalBox` where possible, but will return the :class:`~tgbox.api.abstract.BoxFile` objects, which, by default, **always** download file information & *Metadata* from the :doc:`remotebox`. This will **significantly** slow iteration over your *Box*.
+
+.. tip::
+   **You can** make a *"Lazy"* :class:`~tgbox.api.abstract.BoxFile` objects which **will not** load :class:`~tgbox.api.remote.DecryptedRemoteBoxFile`. It's as easy as pass ``lazy_files`` kwarg to :class:`~tgbox.api.abstract.Box` \| :func:`~tgbox.api.abstract.get_box` \| :func:`~tgbox.api.abstract.make_box`. You can also use :meth:`~tgbox.api.abstract.Box.make_files_lazy` \| :meth:`~tgbox.api.abstract.Box.make_files_unlazy`.
 
 .. note::
    The :class:`~tgbox.api.abstract.Box` (and also :class:`~tgbox.api.abstract.BoxFile`) has the ``dlb`` (:class:`~tgbox.api.local.DecryptedLocalBox`) and ``drb`` (:class:`~tgbox.api.remote.DecryptedRemoteBox`) properties. You can use generators from the ``Box.dlb`` if you *only* want to fetch *information* about files.
@@ -490,7 +493,8 @@ You can get :class:`~tgbox.api.abstract.BoxFile` objects by iterating over the :
 
 .. note::
     The TGBOX :doc:`protocol` support *Directories* (see :ref:`How does we store file paths` for information on *how* this implemented). You can get a :class:`~tgbox.api.local.DecryptedLocalBoxDirectory` object via :class:`~tgbox.api.abstract.Box.get_directory` method, load and iterate over it with :class:`~tgbox.api.local.DecryptedLocalBoxDirectory.iterdir`. You can also use the :meth:`~tgbox.api.abstract.Box.contents` generator which behaves like :meth:`~tgbox.api.abstract.Box.files` *but* also returns *Directory* objects.
-   | Please read the docs for classes, as examples here will not cover all features of API.
+
+   | Please read the docs for classes, as examples here will **not** cover all features of API.
 
 Understanding Files
 +++++++++++++++++++
@@ -529,6 +533,48 @@ The :class:`~tgbox.api.abstract.BoxFile` is an object that contains all **inform
         # file 'offset' if you already downloaded part of it.
         outfile = abbf.download() # Here is just simple download, see
                                   # help() on BoxFile.download
+
+Obtaining "Lazy" Files
+++++++++++++++++++++++
+
+*Lazy* :class:`~tgbox.api.abstract.BoxFile` is an object that **doesn't** load a :class:`~tgbox.api.remote.DecryptedRemoteBoxFile`. It means that iteration speed over :class:`~tgbox.api.abstract.Box` will be almost the same as over :class:`~tgbox.api.local.DecryptedLocalBox`, as *lazy box files* would **not** download information from :doc:`remotebox` *implicitly*. However, you can request it *explicitly* with :meth:`~tgbox.api.abstract.BoxFile.load_drbf` method.
+
+.. note::
+   *Lazy box files* is an **alternative** to requesting files directly from the ``Box.dlb`` (:class:`~tgbox.api.local.DecryptedLocalBox`)
+
+.. code-block:: python
+
+        # "Opening Box" code was omitted, insert it here ...
+
+        # By default, Box will NOT return Lazy files. We can
+        # change it with the 'make_files_lazy' method on Box
+        box.make_files_lazy() # We can also pass 'lazy_files'
+                              # kwarg in get_box/make_box/Box
+                              # to set "Lazy files"
+
+        # ---- get_file() ------------------------------------------- #
+
+        lfid = box.get_last_file_id() # Get ID of last uploaded file to Box
+        abbf = box.get_file(lfid) # Directly get file by ID, no DRBF!
+        print(lfid, abbf.drbf) # DecryptedRemoteBoxFile IS NOT loaded
+
+        abbf.load_drbf() # We can load DRBF on need at any moment
+        print(lfid, abbf.drbf) # DecryptedRemoteBoxFile IS loaded
+
+        # ----------------------------------------------------------- #
+
+        # ---- files() ---------------------------------------------- #
+
+        # The files() is a generator that you can use to iterate over
+        # the whole Box and get every single file from it. Here,
+        # min_id and max_id is just a reminder that all generators
+        # that will be shown here is configurable. See module docs.
+        for abbf in box.files(min_id=None, max_id=None):
+            print(abbf.id, abbf.file_name)
+                # ^
+                # | Here 'box.files' will NOT load DRBF, thus
+                # | iteration speed will be close to DLB
+
 
 Updating Files & Metadata
 +++++++++++++++++++++++++
