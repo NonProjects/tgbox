@@ -40,7 +40,8 @@ async def make_box(
         rb_prefix: Optional[str] = REMOTEBOX_PREFIX,
         box_image: Optional[Union[PathLike, str]] = BOX_IMAGE_PATH,
         box_path: Optional[Union[PathLike, str]] = None,
-        box_salt: Optional[BoxSalt] = None) -> 'Box':
+        box_salt: Optional[BoxSalt] = None,
+        lazy_files: Optional[bool] = False) -> 'Box':
     """
     Makes Box object. See ``help(tgbox.api.abstract.Box)``
 
@@ -61,6 +62,14 @@ async def make_box(
             Path in which we will make a database
             file. Current Working Dir if not specified.
 
+        lazy_files (``bool``, optional):
+            If ``True``, files returned by this ``Box`` will **not**
+            load ``DecryptedRemoteBoxFile`` until the ``load_drbf``
+            method will be called on target ``BoxFile``. Should be
+            useful if you only want to fetch information about files.
+
+            You can "lazy" files via ``make_files_lazy()`` and "unlazy"
+            via ``make_files_unlazy()`` method respectively (on ``Box``).
     """
     erb = await make_remotebox(
         tc=tc, box_name=box_name, rb_prefix=rb_prefix,
@@ -71,11 +80,12 @@ async def make_box(
         box_name=box_name, box_path=box_path
     )
     drb = await erb.decrypt(dlb=dlb)
-    return Box(dlb=dlb, drb=drb)
+    return Box(dlb=dlb, drb=drb, lazy_files=lazy_files)
 
 async def get_box(basekey: BaseKey,
         tgbox_db_path: Optional[Union[PathLike, str]] = DEF_TGBOX_NAME,
-        proxy: Optional[Union[tuple, list, dict]] = None) -> 'Box':
+        proxy: Optional[Union[tuple, list, dict]] = None,
+        lazy_files: Optional[bool] = False) -> 'Box':
     """
     Return Box object. See ``help(tgbox.api.abstract.Box)``
 
@@ -93,10 +103,19 @@ async def get_box(basekey: BaseKey,
             ('hostname', port, 'secret'). Otherwise, it’s meant to store
             function parameters for PySocks, like (type, 'hostname', port).
             See https://github.com/Anorov/PySocks#usage-1 for more info.
+
+        lazy_files (``bool``, optional):
+            If ``True``, files returned by this ``Box`` will **not**
+            load ``DecryptedRemoteBoxFile`` until the ``load_drbf``
+            method will be called on target ``BoxFile``. Should be
+            useful if you only want to fetch information about files.
+
+            You can "lazy" files via ``make_files_lazy()`` and "unlazy"
+            via ``make_files_unlazy()`` method respectively (on ``Box``).
     """
     dlb = await get_localbox(basekey=basekey, tgbox_db_path=tgbox_db_path)
     drb = await get_remotebox(dlb=dlb, proxy=proxy)
-    return Box(dlb=dlb, drb=drb)
+    return Box(dlb=dlb, drb=drb, lazy_files=lazy_files)
 
 
 class Box(DecryptedLocalBox):
@@ -172,7 +191,8 @@ class Box(DecryptedLocalBox):
 
         asyncio.run(main())
     """
-    def __init__(self, dlb: DecryptedLocalBox, drb: DecryptedRemoteBox):
+    def __init__(self, dlb: DecryptedLocalBox, drb: DecryptedRemoteBox,
+            lazy_files: Optional[bool] = False):
         """
         Arguments:
             dlb (``DecryptedLocalBox``):
@@ -180,6 +200,15 @@ class Box(DecryptedLocalBox):
 
             drb (``DecryptedRemoteBox``):
                 The ``DecryptedRemoteBox`` object! Also Yang...
+
+            lazy_files (``bool``, optional):
+                If ``True``, files returned by this ``Box`` will **not**
+                load ``DecryptedRemoteBoxFile`` until the ``load_drbf``
+                method will be called on target ``BoxFile``. Should be
+                useful if you only want to fetch information about files.
+
+                You can "lazy" files via ``make_files_lazy()`` and "unlazy"
+                via ``make_files_unlazy()`` method respectively.
         """
         if not isinstance(dlb, DecryptedLocalBox):
             raise TypeError('dlb must be DecryptedLocalBox')
@@ -195,6 +224,8 @@ class Box(DecryptedLocalBox):
         self.dlb = dlb
         self.drb = drb
 
+        self.lazy_files = lazy_files
+
         # Methods from the DecryptedRemoteBox
         self.tc = self.drb.tc
         self.box_channel = self.drb.box_channel
@@ -204,15 +235,28 @@ class Box(DecryptedLocalBox):
         self.update_file = self.drb.update_file
         self.left = self.drb.left
 
-        # Here we Syncify inherited methods of super()
         if getattr(self, '_needs_syncify', None):
-            syncify(self); self._needs_syncify = False # pylint: disable=W0201
+            syncify(self) # Here we Syncify inherited methods of super()
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({repr(self.dlb)}, {repr(self.drb)})'
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__}({str(self.dlb)}, {str(self.drb)})'
+
+    def make_files_lazy(self) -> None:
+        """
+        Will make files that this ``Box`` output 'Lazy'
+        (Lazy files don't load DRBF until ``load_drbf()``)
+        """
+        self.lazy_files = True
+
+    def make_files_unlazy(self) -> None:
+        """
+        Will make files that this ``Box`` output 'Unlazy'
+        (Unlazy files load DRBF without ``load_drbf()``)
+        """
+        self.lazy_files = False
 
     async def is_synced(self) -> bool:
         """
@@ -233,7 +277,8 @@ class Box(DecryptedLocalBox):
     async def get_file(
             self, id: int, cache_preview: bool=True,
             erase_encrypted_metadata: bool=True,
-            decrypt: Optional[None] = None) -> 'BoxFile':
+            decrypt: Optional[None] = None,
+            lazy: Optional[bool] = None) -> 'BoxFile':
         """
         This method returns ``BoxFile`` object, which
         class contains the methods from the both of
@@ -257,10 +302,15 @@ class Box(DecryptedLocalBox):
                 Guess what? Does nothing! Inherited methods
                 like ``files()`` expect this kwarg, but here
                 we don't need it at all. Ignored.
+
+            lazy (``bool``, optional):
+                Lazy files don't load DRBF until ``load_drbf()``
+                is called. If ``None``, will use ``self.lazy_files``
         """
         bf = BoxFile(id=id, dlb=self.dlb, drb=self.drb,
             cache_preview=cache_preview,
-            erase_encrypted_metadata=erase_encrypted_metadata
+            erase_encrypted_metadata=erase_encrypted_metadata,
+            lazy=(lazy if lazy is not None else self.lazy_files)
         )
         return await bf.init()
 
@@ -435,7 +485,8 @@ class BoxFile(DecryptedLocalBoxFile):
             drbf: Optional[DecryptedRemoteBoxFile] = None,
 
             cache_preview: Optional[bool] = True,
-            erase_encrypted_metadata: Optional[bool] = True):
+            erase_encrypted_metadata: Optional[bool] = True,
+            lazy: Optional[bool] = False):
         """
         Arguments:
             id (``int``):
@@ -466,6 +517,14 @@ class BoxFile(DecryptedLocalBoxFile):
 
             erase_encrypted_metadata (``bool``, optional):
                 Will remove metadata to save more RAM if ``True``.
+
+            lazy (``bool``, optional):
+                If ``True``, will **not** load ``DecryptedRemoteBoxFile``
+                until ``load_drbf()`` method call. Should be useful
+                if you only want to *fetch* information, not download.
+
+                All DRBF-related methods will be ``None`` if ``lazy``
+                until you call ``load_drbf()`` method.
 
         .. note::
             Must be specified ``id``, ``dlb`` and ``drb`` or
@@ -512,6 +571,7 @@ class BoxFile(DecryptedLocalBoxFile):
 
         self.cache_preview = cache_preview
         self.erase_encrypted_metadata = erase_encrypted_metadata
+        self.lazy = lazy
 
         # Methods from the DecryptedRemoteBoxFile will be initialized
         # after(/inside) the BoxFile.init() call. Otherwise None.
@@ -540,6 +600,12 @@ class BoxFile(DecryptedLocalBoxFile):
         """Returns ``True`` if you called ``.init()``"""
         return self.__initialized
 
+    async def load_drbf(self):
+        """Will load and set ``self.drbf`` if it's ``None``"""
+        if not self.drbf:
+            self.lazy = False
+            await self.init()
+
     async def init(self) -> 'BoxFile':
         """
         Will initialize ``BoxFile`` object. Part of
@@ -552,7 +618,7 @@ class BoxFile(DecryptedLocalBoxFile):
         """
         logger.debug('DLBF+DRBF initialization...')
 
-        if not self.__initialized and not all((self.dlbf, self.drbf)):
+        if not self.__initialized or not all((self.dlbf, self.drbf)):
             elbf = EncryptedLocalBoxFile(
                 id=self.__id, elb=self.dlb._elb,
                 cache_preview=self.cache_preview)
@@ -562,38 +628,47 @@ class BoxFile(DecryptedLocalBoxFile):
             super().__init__(elbf=elbf, dlb=self.dlb, cache_preview=self.cache_preview,
                 erase_encrypted_metadata=self.erase_encrypted_metadata)
 
-            self.dlbf, self.drbf = await gather(
-                self.dlb.get_file(self.id, cache_preview=self.cache_preview),
-                self.drb.get_file(self.id, cache_preview=self.cache_preview)
-            )
-            if not all((self.dlbf, self.drbf)):
-                raise InvalidFile('Your Box is out of Sync! Use .sync(deep=True)')
+            if self.lazy:
+                self.dlbf = await self.dlb.get_file(self.id,
+                    cache_preview=self.cache_preview)
+            else:
+                if not self.drbf and self.dlbf is not None:
+                    self.drbf = await self.drb.get_file(self.id,
+                        cache_preview=self.cache_preview)
+                else:
+                    self.dlbf, self.drbf = await gather(
+                        self.dlb.get_file(self.id, cache_preview=self.cache_preview),
+                        self.drb.get_file(self.id, cache_preview=self.cache_preview)
+                    )
+                if not all((self.dlbf, self.drbf)):
+                    raise InvalidFile('Your Box is out of Sync! Use .sync(deep=True)')
 
-            if not self.dlbf.has_hmac_sha256 == self.drbf.has_hmac_sha256:
-                raise InvalidFile(
-                   f'Your Remote File ID{dlbf.id} was changed by third person!!!! '
-                    'Review the peoples that have access to editing YOUR files and'
-                    'then review changed File! DO NOT TRUST IT! Consider re-upload!'
-                )
+                if not self.dlbf.has_hmac_sha256 == self.drbf.has_hmac_sha256:
+                    raise InvalidFile(
+                       f'Your Remote File ID{dlbf.id} was changed by third person!!!! '
+                        'Review the peoples that have access to editing YOUR files and'
+                        'then review changed File! DO NOT TRUST IT! Consider re-upload!'
+                    )
         else:
             if not self.dlbf._elbf.initialized:
                 await self.dlbf._elbf.init()
 
-            super().__init__(elbf=self.dlbf._elbf, dlb=self.dlb,
-                cache_preview=self.cache_preview,
-                erase_encrypted_metadata=self.erase_encrypted_metadata)
+            if not self.__initialized:
+                super().__init__(elbf=self.dlbf._elbf, dlb=self.dlb,
+                    cache_preview=self.cache_preview,
+                    erase_encrypted_metadata=self.erase_encrypted_metadata)
 
-        self.download = self.drbf.download
-        self.sender = self.drbf.sender
-        self.file = self.drbf.file
-        self.message = self.drbf.message
-        self.file_size = self.drbf.file_size
-        self.file_file_name = self.drbf.file_file_name
-        self.box_channel = self.drbf.box_channel
+        if not self.lazy:
+            self.download = self.drbf.download
+            self.sender = self.drbf.sender
+            self.file = self.drbf.file
+            self.message = self.drbf.message
+            self.file_size = self.drbf.file_size
+            self.file_file_name = self.drbf.file_file_name
+            self.box_channel = self.drbf.box_channel
 
         if getattr(self, '_needs_syncify', None):
-            # Here we Syncify inherited methods of super()
-            syncify(self); self._needs_syncify = False # pylint: disable=W0201
+            syncify(self) # Here we Syncify inherited methods of super()
 
         self.__initialized = True
         return self
