@@ -543,7 +543,8 @@ class EncryptedLocalBox:
                 )
                 # Set parent part id as ppath_head to recursive
                 # check for useless path parts
-                ppath_head = (await parent_part_id.fetchone())[0]
+                ppath_head = await parent_part_id.fetchone()
+                ppath_head = ppath_head[0] if ppath_head else None
 
                 if not ppath_head:
                     break
