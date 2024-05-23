@@ -2485,11 +2485,20 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     hmac_state = HMAC(self.hmackey.key, digestmod='sha256')
 
                     if offset:
+                        if not outfile.readable():
+                            raise ValueError(
+                                'outfile is not readable, can not check HMAC. '
+                                'Either make outfile readable [Good] or use '
+                                'omit_hmac_check [Bad]'
+                            )
                         outfile.seek(0,0) # Seek to start of file
 
-                        # Update 'hmac_state' with 128MB chunks
-                        while (read_ := outfile.read(128000000)):
-                            hmac_state.update(read_)
+                        try:
+                            # Update 'hmac_state' with 128MB chunks
+                            while (read_ := outfile.read(128000000)):
+                                hmac_state.update(read_)
+                        except Exception as e:
+                            raise ValueError('Can not read outfile to make HMAC') from e
             else:
                 logger.info('"omit_hmac_check" is True, so HMAC check was disabled')
             try:
@@ -2543,7 +2552,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 if buffered:
                     logger.debug(f'ID{self._id}: Writing the last buffered bytes...')
 
-                    if not omit_hmac_check and self._has_hmac_sha256:
+                    if self._has_hmac_sha256:
                         file_hmac = buffered[-32:]
                         buffered = buffered[:-32]
 
