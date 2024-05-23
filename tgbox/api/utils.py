@@ -434,6 +434,17 @@ async def search_generator(
                         yield_result[indx] = False
                         break
 
+            for minor_version in filter['minor_version']:
+                if minor_version == file.minor_version:
+                    if indx == 1:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['minor_version']:
+                    if indx == 0:
+                        yield_result[indx] = False
+                        break
+
             for mime in filter['mime']:
                 if in_func(mime, file.mime):
                     if indx == 1:

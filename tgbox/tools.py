@@ -170,6 +170,8 @@ class SearchFilter:
         * **verbyte**   *bytes*: File version byte
         * **mime**      *str*: File mime type
 
+        * **minor_version** *integer*: File minor version
+
         * **min_id** *integer*: File ID should be > min_id
         * **max_id** *integer*: File ID should be < max_id
 
@@ -201,6 +203,7 @@ class SearchFilter:
             'mime':      _TypeList(str),
             'imported':  _TypeList(bool),
             're':        _TypeList(bool),
+            'minor_version': _TypeList(int),
             'non_recursive_scope': _TypeList(bool),
         }
         self.ex_filters = deepcopy(self.in_filters)
