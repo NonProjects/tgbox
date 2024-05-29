@@ -2731,8 +2731,10 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     if k in updates_cattrs:
                         updates_cattrs.pop(k)
 
-            updates_cattrs.update({k:v for k,v in changes_cattrs.items() if v})
-            current_changes['cattrs'] = PackedAttributes.pack(**updates_cattrs)
+            updates_cattrs.update({k:v for k,v in changes_cattrs.items()})
+
+            if updates_cattrs:
+                current_changes['cattrs'] = PackedAttributes.pack(**updates_cattrs)
 
         updates.update(current_changes)
 
