@@ -2720,21 +2720,28 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         # with new from the "changes" dict. If any key of CAttrs will
         # be with empty value (i.e x=b"") then it will be removed from
         # the Updated Metadata bytestring.
-        if 'cattrs' in current_changes and 'cattrs' in updates:
-            updates_cattrs = PackedAttributes.unpack(updates.pop('cattrs'))
+        if 'cattrs' in current_changes:
             changes_cattrs = PackedAttributes.unpack(current_changes.pop('cattrs'))
 
-            for k,v in tuple(changes_cattrs.items()):
-                if not v.strip():
-                    changes_cattrs.pop(k)
+            if 'cattrs' in updates:
+                updates_cattrs = PackedAttributes.unpack(updates.pop('cattrs'))
 
-                    if k in updates_cattrs:
-                        updates_cattrs.pop(k)
+                for k,v in tuple(changes_cattrs.items()):
+                    if not v.strip():
+                        changes_cattrs.pop(k)
 
-            updates_cattrs.update({k:v for k,v in changes_cattrs.items()})
+                        if k in updates_cattrs:
+                            updates_cattrs.pop(k)
 
-            if updates_cattrs:
-                current_changes['cattrs'] = PackedAttributes.pack(**updates_cattrs)
+                updates_cattrs.update({k:v for k,v in changes_cattrs.items()})
+
+                if updates_cattrs:
+                    current_changes['cattrs'] = PackedAttributes.pack(**updates_cattrs)
+            else:
+                changes_cattrs = {k:v for k,v in changes_cattrs.items() if v.strip()}
+
+                if changes_cattrs:
+                    current_changes['cattrs'] = PackedAttributes.pack(**changes_cattrs)
 
         updates.update(current_changes)
 
