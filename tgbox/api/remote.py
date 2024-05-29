@@ -2136,9 +2136,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 for k,v in tuple(edited_metadata.items()):
                     if k in (*self.__required_metadata, 'efile_path'):
                         if k == 'cattrs':
-                            setattr(self, f'_{k}', PackedAttributes.unpack(v))
+                            self._cattrs.update(PackedAttributes.unpack(v))
 
-                        if k == 'duration':
+                        elif k == 'duration':
                             setattr(self, f'_{k}', bytes_to_int(v))
 
                         elif k == 'efile_path':
@@ -2762,7 +2762,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
             if k in (*self.__required_metadata, 'efile_path'):
                 if k == 'cattrs':
-                    setattr(self, f'_{k}', PackedAttributes.unpack(v))
+                    self._cattrs.update(PackedAttributes.unpack(v))
 
                 elif k == 'duration':
                     setattr(self, f'_{k}', bytes_to_int(v))

@@ -3019,8 +3019,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         if self._mainkey:
             self._directory = DecryptedLocalBoxDirectory(
-                self._elbf._directory, dlb=self._lb
-            )
+                self._elbf._directory, dlb=self._lb)
         else:
             self._directory = self._elbf._directory
 
@@ -3028,7 +3027,6 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         if self._elbf._updated_metadata:
             logger.debug(f'Updates to metadata for ID{self._id} found. Applying...')
-
             try:
                 updates = AES(self._filekey).decrypt(
                     self._elbf._updated_metadata
@@ -3040,9 +3038,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 for k,v in tuple(updates.items()):
                     if k in (*self.__required_metadata, 'efile_path'):
                         if k == 'cattrs':
-                            setattr(self, f'_{k}', PackedAttributes.unpack(v))
+                            self._cattrs.update(PackedAttributes.unpack(v))
 
-                        if k == 'duration':
+                        elif k == 'duration':
                             setattr(self, f'_{k}', bytes_to_int(v))
 
                         elif k == 'efile_path' and self._mainkey:
@@ -3246,7 +3244,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
             if k in (*self.__required_metadata, 'efile_path'):
                 if k == 'cattrs':
-                    setattr(self, f'_{k}', PackedAttributes.unpack(v))
+                    self._cattrs.update(PackedAttributes.unpack(v))
 
                 elif k == 'duration':
                     setattr(self, f'_{k}', bytes_to_int(v))
