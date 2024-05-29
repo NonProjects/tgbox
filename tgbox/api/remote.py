@@ -1441,6 +1441,7 @@ class EncryptedRemoteBoxFile:
         self._sender = None
 
         self._upload_time = None
+        self._updated_at_time = None
         self._box_channel = None
         self._box_channel_id = None
         self._file_size = None
@@ -1577,6 +1578,11 @@ class EncryptedRemoteBoxFile:
         return self._upload_time
 
     @property
+    def updated_at_time(self) -> Union[int, None]:
+        """Returns time when file was updated or ``None`` if not initialized"""
+        return self._updated_at_time
+
+    @property
     def file_salt(self) -> Union[FileSalt, None]:
         """Returns ``FileSalt`` or ``None`` if not initialized"""
         return self._file_salt
@@ -1665,6 +1671,7 @@ class EncryptedRemoteBoxFile:
 
         self._sender = self._message.post_author
         self._upload_time = int(self._message.date.timestamp())
+        self._updated_at_time = int(self._message.edit_date.timestamp())
         self._box_channel = self._message.chat
         self._box_channel_id = self._message.peer_id.channel_id
 
@@ -1937,6 +1944,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._file_iv, self._file_salt = erbf._file_iv, erbf._file_salt
         self._cattrs, self._file_path = None, None
         self._duration, self._version_byte = None, erbf._version_byte
+        self._updated_at_time = erbf._updated_at_time
 
         self._preview, self._imported = None, erbf._imported
         self._prefix, self._file_pos = erbf._prefix, erbf._file_pos

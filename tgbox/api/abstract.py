@@ -619,6 +619,7 @@ class BoxFile(DecryptedLocalBoxFile):
         self.file_size = None
         self.file_file_name = None
         self.box_channel = None
+        self.updated_at_time = None
 
     def __repr__(self) -> str:
         return (
@@ -703,6 +704,7 @@ class BoxFile(DecryptedLocalBoxFile):
             self.file_size = self.drbf.file_size
             self.file_file_name = self.drbf.file_file_name
             self.box_channel = self.drbf.box_channel
+            self.updated_at_time = self.drbf.updated_at_time
 
         if getattr(self, '_needs_syncify', None):
             syncify(self) # Here we Syncify inherited methods of super()
