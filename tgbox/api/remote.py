@@ -1671,7 +1671,12 @@ class EncryptedRemoteBoxFile:
 
         self._sender = self._message.post_author
         self._upload_time = int(self._message.date.timestamp())
-        self._updated_at_time = int(self._message.edit_date.timestamp())
+
+        if self._message.edit_date:
+            self._updated_at_time = int(self._message.edit_date.timestamp())
+        else:
+            self._updated_at_time = self._upload_time
+
         self._box_channel = self._message.chat
         self._box_channel_id = self._message.peer_id.channel_id
 
