@@ -3366,7 +3366,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 'SELECT UPDATED_METADATA FROM FILES WHERE ID=?',
                 (self._id,)
             ))
-            updates = AES(self._filekey).decrypt(old_updates)
+            updates = AES(self._filekey).decrypt(old_updates[0])
             updates = PackedAttributes.unpack(updates)
         except (ValueError, TypeError):
             updates = {}
