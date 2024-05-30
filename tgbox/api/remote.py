@@ -287,6 +287,8 @@ class EncryptedRemoteBox:
         # We can't use await in __init__, so
         # you should await get_box_salt firstly.
         self._box_salt = None
+        # Similar to box_salt, await get_box_description.
+        self._description = None
         # Similar to box_salt, await get_box_name.
         self._box_name = None
 
@@ -385,14 +387,25 @@ class EncryptedRemoteBox:
         ))
         return search.count
 
-    async def get_box_salt(self) -> BoxSalt:
+    async def get_box_salt(self, force: Optional[bool] = False) -> BoxSalt:
         """
-        Returns ``BoxSalt``. Will be cached
-        after first method call.
+        Returns ``BoxSalt``. Will be cached after first
+        method call. If ``force`` specified, will make
+        request & update ``box_salt`` & ``description``
         """
-        if not self._box_salt:
+        if force or not self._box_salt:
             full_rq = await self._tc(GetFullChannelRequest(channel=self._box_channel))
-            self._box_salt = BoxSalt(urlsafe_b64decode(full_rq.full_chat.about))
+
+            # Started from v1.5 users now can place additional Box
+            # description in format "User description @ <BOX_SALT>"
+            desc_data = full_rq.full_chat.about.split('@')
+
+            self._box_salt = BoxSalt(urlsafe_b64decode(desc_data[-1]))
+
+            if len(desc_data) > 1:
+                self._description = '@'.join(desc_data[:-1]).strip()
+            else:
+                self._description = None # Remove if cached
 
         return self._box_salt
 
@@ -405,6 +418,16 @@ class EncryptedRemoteBox:
             entity = await self._tc.get_entity(self._box_channel)
             self._box_name = entity.title.split(': ', 1)[-1]
         return self._box_name
+
+    async def get_box_description(self, force: Optional[bool] = False):
+        """
+        Returns *Box* description if presented. If ``force``
+        specified, will make request & update ``box_salt``
+        and ``description``.
+        """
+        if force or not self._description:
+            await self.get_box_salt(force=True)
+        return self._description
 
     async def file_exists(self, id: int) -> bool:
         """
@@ -1312,6 +1335,7 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
         self._box_channel_id = erb._box_channel_id
 
         self._box_salt = erb._box_salt
+        self._description = erb._description
         self._box_name = erb._box_name
 
         self._dlb = dlb

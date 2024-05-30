@@ -264,10 +264,12 @@ class Box(DecryptedLocalBox):
         self.tc = self.drb.tc
         self.box_channel = self.drb.box_channel
         self.file_exists = self.drb.file_exists
-
         self.push_file = self.drb.push_file
         self.update_file = self.drb.update_file
         self.left = self.drb.left
+
+        self.get_box_description = self.drb.get_box_description
+        self.get_box_name = self.drb.get_box_name
 
         if getattr(self, '_needs_syncify', None):
             syncify(self) # Here we Syncify inherited methods of super()
