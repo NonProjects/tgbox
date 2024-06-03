@@ -615,6 +615,12 @@ class EncryptedLocalBox:
 
             cache_preview (``bool``, optional):
                 Cache preview in class or not.
+
+            erase_encrypted_metadata (``bool``, optional):
+                Will remove metadata from the parent
+                ``EncryptedLocalBoxFile`` after decryption
+                to save more RAM if ``True``. You can call
+                ``.init()`` method on it to load it again.
         """
         if not any((id is not None, fingerprint)):
             raise ValueError('At least `id` or `fingerprint` must be specified.')
@@ -661,7 +667,8 @@ class EncryptedLocalBox:
 
     async def contents(
             self, sfpid: Optional[bytes] = None,
-            ignore_files: Optional[bool] = False
+            ignore_files: Optional[bool] = False,
+            erase_encrypted_metadata: Optional[bool] = True
                 ) -> AsyncGenerator[Union[
                 'EncryptedLocalBoxDirectory',
                 'DecryptedLocalBoxDirectory'], None
@@ -677,6 +684,12 @@ class EncryptedLocalBox:
             ignore_files (``bool``, optional):
                 Will **not** return LocalBoxFile associated
                 with the *LocalBoxDirectory* if ``False``.
+
+            erase_encrypted_metadata (``bool``, optional):
+                Will remove metadata from the parent
+                ``EncryptedLocalBoxFile`` after decryption
+                to save more RAM if ``True``. You can call
+                ``.init()`` method on it to load it again.
         """
         sfpid = (sfpid,) if sfpid else []
 
@@ -699,7 +712,11 @@ class EncryptedLocalBox:
             yield lbfid
 
             if not ignore_files:
-                async for lbfi in lbfid.iterdir(ignore_dirs=True):
+                _iterdir = lbfid.iterdir(
+                    ignore_dirs=True,
+                    erase_encrypted_metadata=erase_encrypted_metadata
+                )
+                async for lbfi in _iterdir:
                     yield lbfi
 
             child_pids = await self._tgbox_db.PATH_PARTS.execute((
@@ -713,8 +730,10 @@ class EncryptedLocalBox:
             # otherwise we will 'async for' on sync generator
 
             for csfpid in child_sfpid:
-                contents = self.contents(csfpid, ignore_files=ignore_files)
-
+                contents = self.contents(csfpid,
+                    ignore_files=ignore_files,
+                    erase_encrypted_metadata=erase_encrypted_metadata
+                )
                 if not isasyncgen(contents): # Was syncified
                     async def _async_iter_from(_iter_from):
                         try:
@@ -737,7 +756,8 @@ class EncryptedLocalBox:
             ids: Optional[int, list] = None,
             decrypt: Optional[bool] = None,
             reverse: Optional[bool] = False,
-            fetch_count: Optional[int] = 100)\
+            fetch_count: Optional[int] = 100,
+            erase_encrypted_metadata: Optional[bool] = True)\
             -> Union[
                 'DecryptedLocalBoxFile',
                 'EncryptedLocalBoxFile', None
@@ -777,6 +797,12 @@ class EncryptedLocalBox:
             fetch_count (``int``, optional):
                 Amount of files generator will fetch and cache from
                 SQLite table before return. ``100`` by default.
+
+            erase_encrypted_metadata (``bool``, optional):
+                Will remove metadata from the parent
+                ``EncryptedLocalBoxFile`` after decryption
+                to save more RAM if ``True``. You can call
+                ``.init()`` method on it to load it again.
         """
         assert fetch_count > 0, 'fetch_count must be > 0'
 
@@ -807,7 +833,8 @@ class EncryptedLocalBox:
             pending = [
                 self.get_file(
                     file_id[0], decrypt=decrypt,
-                    cache_preview=cache_preview
+                    cache_preview=cache_preview,
+                    erase_encrypted_metadata=erase_encrypted_metadata
                 )
                 for file_id in pending
             ]
@@ -1084,8 +1111,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
     async def _make_local_file(
             self, pf: 'PreparedFile',
-            update: Optional[bool] = None
-    ) -> 'DecryptedLocalBoxFile':
+            update: Optional[bool] = None) -> 'DecryptedLocalBoxFile':
         """
         Creates a LocalBoxFile.
 
@@ -1136,12 +1162,17 @@ class DecryptedLocalBox(EncryptedLocalBox):
         part_id = (await self._make_local_path(pf.filepath)).part_id
 
         updated_metadata = getattr(pf, 'updated_enc_metadata', None)
+        try:
+            await self._tgbox_db.FILES.insert(
+                pf.file_id, eupload_time,
+                part_id, efilekey, pf.fingerprint,
+                pf.metadata, updated_metadata
+            )
+        except Exception as e:
+            raise AlreadyImported(
+               f'Can not import File ID{pf.file_id}. Already '
+                'exist in LocalBox. Consider remove firstly.') from e
 
-        await self._tgbox_db.FILES.insert(
-            pf.file_id, eupload_time,
-            part_id, efilekey, pf.fingerprint,
-            pf.metadata, updated_metadata
-        )
         elbf = EncryptedLocalBoxFile(pf.file_id, self._elb)
         return await elbf.decrypt(dlb=self)
 
@@ -1171,6 +1202,44 @@ class DecryptedLocalBox(EncryptedLocalBox):
             )
             raise FingerprintExists(error_msg) from None
 
+    async def _merge_um_then_refresh(self, dlbf, drbf):
+        """
+        This local function will update Metadata Updates
+        of LocalBox file from the Metadata Updates of
+        the RemoteBox file (if any), preserving local
+        CAttrs and other changes in local Metadata
+        """
+        try:
+            rbf_um = urlsafe_b64decode(drbf._message.message)
+            rbf_um = AES(drbf._filekey).decrypt(rbf_um)
+            rbf_um = PackedAttributes.unpack(rbf_um)
+        except Exception as e:
+            logger.debug(
+                'Can not store Metadata Updates from RemoteBox '
+               f'file ID{dlbf.id} due to {e}'); return
+
+        if dlbf.cattrs:
+            # This part will preserve Local CAttrs (if any)
+            if cattrs := rbf_um.get('cattrs', {}):
+                cattrs = PackedAttributes.unpack(cattrs)
+
+            rbf_um['cattrs'] = PackedAttributes.pack(**(cattrs | dlbf.cattrs))
+
+        # ------------------------------------------------------------- #
+        # This part will merge Local Metadata Updates with Remote Updates
+
+        if dlbf._updated_metadata:
+            lbf_um = AES(dlbf._filekey).decrypt(dlbf._updated_metadata)
+            lbf_um = PackedAttributes.unpack(lbf_um) | rbf_um
+        else:
+            lbf_um = rbf_um # LocalBox file doesn't have Updated Metadata
+
+        # ------------------------------------------------------------- #
+
+        lbf_um = AES(dlbf._filekey).encrypt(PackedAttributes.pack(**lbf_um))
+        logger.debug(f'Refreshing Metadata of LocalBox file ID{dlbf.id}')
+        await dlbf.refresh_metadata(_updated_metadata=lbf_um)
+
     async def _fast_sync(
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
             progress_callback: Optional[Callable[[int, str], None]] = None):
@@ -1192,12 +1261,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 * ``fast_progress_callback(22, 'deleted')`` OR
                 * ``fast_progress_callback(22, 'updated')`` OR
                 * ``fast_progress_callback(22, 'imported')`` OR
-                * ``fast_progress_callback(22, 'metadata edited')``
+                * ``fast_progress_callback(22, 'metadata updated')``
         """
         drb_box_name = await drb.get_box_name()
         logger.info(f'Fast syncing {self._tgbox_db.db_path} with {drb_box_name}...')
 
-        delete_canidates = []
         try:
             box_admins = await drb.tc.get_participants(
                 entity = drb.box_channel,
@@ -1216,79 +1284,120 @@ class DecryptedLocalBox(EncryptedLocalBox):
         box_admins = [admin.id for admin in box_admins]
         box_admins.remove((await drb.tc.get_entity('me')).id)
 
-        last_event_id = None
-
         if not box_admins:
             logger.debug('No Admins except You found. Fast sync ignored.')
+            return
 
-        if box_admins:
-            admin_log_gen = drb.tc.iter_admin_log(
-                entity = drb.box_channel,
-                delete=True, edit=True,
-                admins = box_admins
+        last_event_id = None
+
+        id_to_update = []
+        id_to_remove = []
+
+        IMPORT_WHEN = 100
+
+        async def import_update_file(event):
+            # This function will Import or Update
+            # Local file or Update Metadata of File
+            drbf = await drb.get_file(event.old.id,
+                erase_encrypted_metadata=False
             )
-            async for event in admin_log_gen:
-                if event.id == self._fast_sync_last_event_id:
-                    break
+            if drbf is None:
+                return
 
-                elif last_event_id is None:
-                    last_event_id = event.id
+            action = None
+            try:
+                logger.debug(f'Trying to import ID{event.old.id}...')
+                await self.import_file(drbf)
+                action = 'imported'
 
-                if event.deleted_message:
-                    delete_canidates.append(event.old.id)
-                    action = 'deleted'
-
-                elif event.changed_message:
-                    drbf = await anext(drb.files(ids=event.old.id,
-                        erase_encrypted_metadata=False))
-
-                    if drbf is None:
-                        continue
+            except AlreadyImported:
+                if event.old.file.name != event.new.file.name:
+                    logger.debug(f'Updating file ID{drbf.id}...')
+                    await self.delete_files(lbf_ids=[drbf.id])
                     try:
-                        logger.debug(f'Trying to import ID{drbf.id}...')
-                        await self.import_file(drbf)
-                        action = 'imported'
-
+                        dlbf = await self.import_file(drbf)
                     except AlreadyImported:
-                        if event.old.file.name != event.new.file.name:
-                            logger.debug(f'Updating file ID{event.old.id}...')
-                            await self.delete_files(lbf_ids=[event.old.id])
-                            await self.import_file(drbf)
-                            action = 'updated'
-                        else:
-                            logger.debug(
-                               f'''ID{event.old.id} is already imported. '''
-                                '''Checking for updated metadata...''')
-                            try:
-                                dlbf = await self.get_file(drbf.id)
-                                await dlbf.refresh_metadata(drbf=drbf)
-                                action = 'metadata updated'
-                            except Exception as e:
-                                logger.debug(f'Caption metadata is invalid: {e}')
+                        logger.debug(f'Can not import ID{drbf.id}. Skipping.')
+                        return
 
-                if progress_callback:
-                    if iscoroutinefunction(progress_callback):
-                        await progress_callback(event.old.id, action)
-                    else:
-                        progress_callback(event.old.id, action)
+                    await self._merge_um_then_refresh(dlbf, drbf)
 
-            if delete_canidates:
-                await self.delete_files(lbf_ids=delete_canidates)
+                    action = 'updated'
+                else:
+                    logger.debug(
+                       f'''ID{drbf.id} is already imported. '''
+                        '''Checking for updated metadata...'''
+                    )
+                    action = 'metadata updated'
 
-            if last_event_id and self._fast_sync_last_event_id != last_event_id:
-                self._fast_sync_last_event_id = last_event_id
+                    dlbf = await self.get_file(drbf.id,
+                        erase_encrypted_metadata=False
+                    )
+                    if not dlbf:
+                        return
 
-                last_event_id = AES(self._mainkey).encrypt(
-                    int_to_bytes(last_event_id)
-                )
-                logger.debug(
-                    '''UPDATE BOX_DATA SET FAST_SYNC_'''
-                   f'''LAST_EVENT_ID={last_event_id}'''
-                )
-                await self._tgbox_db.BOX_DATA.execute((
-                    'UPDATE BOX_DATA SET FAST_SYNC_LAST_EVENT_ID=?',
-                    (last_event_id,)
-                ))
+                    await self._merge_um_then_refresh(dlbf, drbf)
+
+            if progress_callback:
+                if iscoroutinefunction(progress_callback):
+                    await progress_callback(drbf.id, action)
+                else:
+                    progress_callback(drbf.id, action)
+
+
+        admin_log_gen = drb.tc.iter_admin_log(
+            entity = drb.box_channel,
+            delete=True, edit=True,
+            admins = box_admins
+        )
+        async for event in admin_log_gen:
+            # We can ignore here 'id_to_remove' as we will remove
+            # all target files after imports/updates would be done
+            if len(id_to_update) >= IMPORT_WHEN:
+                await gather(*id_to_update)
+                id_to_update.clear()
+
+            if event.id == self._fast_sync_last_event_id:
+                break # Already checked all IDs
+
+            elif last_event_id is None:
+                last_event_id = event.id
+
+            if event.deleted_message:
+                id_to_remove.append(event.old.id)
+
+            elif event.changed_message:
+                id_to_update.append(import_update_file(event))
+
+
+        id_to_update.append(self.delete_files(lbf_ids=id_to_remove))
+        await gather(*id_to_update) # Gather reminder + id_to_remove
+
+        if progress_callback:
+            pc_list = []
+            for id in id_to_remove:
+                if iscoroutinefunction(progress_callback):
+                    pc_list.append(progress_callback(id, 'deleted'))
+                else:
+                    progress_callback(id, 'deleted')
+
+            await gather(*pc_list)
+
+
+        if last_event_id and self._fast_sync_last_event_id != last_event_id:
+            self._fast_sync_last_event_id = last_event_id
+
+            last_event_id = AES(self._mainkey).encrypt(
+                int_to_bytes(last_event_id)
+            )
+            logger.debug(
+                '''UPDATE BOX_DATA SET FAST_SYNC_'''
+               f'''LAST_EVENT_ID={last_event_id}'''
+            )
+            await self._tgbox_db.BOX_DATA.execute((
+                'UPDATE BOX_DATA SET FAST_SYNC_LAST_EVENT_ID=?',
+                (last_event_id,)
+            ))
 
     async def _deep_sync(
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
@@ -1355,6 +1464,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
         # We will stack here files to import
         drbf_to_import, IMPORT_WHEN = [], 100
 
+        dlbf_to_update = []
+
         async def import_stack(stack: list):
             logger.debug(f'Importing new stack of files [{len(stack)}]')
             await gather(*stack); stack.clear()
@@ -1364,6 +1475,17 @@ class DecryptedLocalBox(EncryptedLocalBox):
             # saved file from Local and import it again
             await self.delete_files(lbf_ids=[drbf.id])
             await self.import_file(drbf)
+
+        async def update_after_import(drbfx, dlb, elbfx):
+            # Will update Metadata Updates of LocalBox
+            # file (if any) with Metadata Updates of
+            # RemoteBox file (if any presented)
+            if elbfx:
+                dlbf = await elbfx.decrypt(dlb=dlb)
+            else:
+                dlbf = await dlb.get_file(drbfx.id)
+
+            await self._merge_um_then_refresh(dlbf, drbfx)
 
         while True:
             if len(drbf_to_import) >= IMPORT_WHEN:
@@ -1421,6 +1543,17 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     logger.debug(f'Caching import of updated ID{drbfx.id} from {drb_box_name}')
                     drbf_to_import.append(re_import(drbfx))
 
+                # If drbfx._message has '.message' (caption), -- it means that
+                # RemoteBox file stores Updated Metadata in it. Then, if there
+                # is NO elbfx (no LocalBox file, == RemoteBox file NOT imported)
+                # we will just save 'drbfx._message.message' b64-decoded string
+                # in the 'UPDATED_METADATA' field of the LocalBox file. However,
+                # if there IS elbfx (RemoteBox file is already imported) and
+                # LocalBox file already has something in 'UPDATED_METADATA',
+                # then we will *extend* & preserve Metadata Updates in LocalBox
+                if drbfx and drbfx._message.message: # _message.message is caption
+                    dlbf_to_update.append(update_after_import(drbfx, self, elbfx))
+
             # Here we will remove all local files which ID is between
             # the previous_drbf2.id <...X...> drbf1.id and also
             # between the drbf1.id <...X...> drbf2.id
@@ -1449,6 +1582,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
         # Awaiting remainder of import_file coros
         if drbf_to_import:
             await import_stack(drbf_to_import)
+
+        # After all files was imported we will update
+        # them with Updated Metadata (if any)
+        if dlbf_to_update:
+            await gather(*dlbf_to_update)
 
     async def sync(
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
@@ -1495,7 +1633,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
             * ``fast_progress_callback(22, 'deleted')`` OR
             * ``fast_progress_callback(22, 'imported')`` OR
-            * ``fast_progress_callback(22, 'metadata edited')``
+            * ``fast_progress_callback(22, 'metadata updated')``
 
         .. note::
             * By default this method will use a fast
@@ -1562,9 +1700,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
             self, sf: SearchFilter,
             cache_preview: bool=True,
             reverse: bool=False,
-            fetch_count: int=100) -> AsyncGenerator[
-                'DecryptedLocalBoxFile', None
-            ]:
+            fetch_count: int=100,
+            erase_encrypted_metadata: bool=True) -> AsyncGenerator[
+                'DecryptedLocalBoxFile', None]:
         """
         Use this method search for files in your ``DecryptedLocalBox``.
 
@@ -1583,13 +1721,20 @@ class DecryptedLocalBox(EncryptedLocalBox):
             fetch_count (``int``, optional):
                 Amount of files generator will fetch and cache from
                 SQLite table before return. ``100`` by default.
+
+            erase_encrypted_metadata (``bool``, optional):
+                Will remove metadata from the parent
+                ``EncryptedLocalBoxFile`` after decryption
+                to save more RAM if ``True``. You can call
+                ``.init()`` method on it to load it again.
         """
         assert fetch_count > 0, 'fetch_count must be > 0'
 
         sgen = search_generator(
             sf=sf, lb=self, reverse=reverse,
             cache_preview=cache_preview,
-            fetch_count=fetch_count
+            fetch_count=fetch_count,
+            erase_encrypted_metadata=erase_encrypted_metadata
         )
         async for file in sgen:
             yield file
@@ -2182,7 +2327,8 @@ class EncryptedLocalBoxDirectory:
         ignore_dirs: bool=False,
         ignore_files: bool=False,
         cache_preview: bool=True,
-        ppid: Optional[Union[bytes, DirectoryRoot]] = None) -> Union[
+        ppid: Optional[Union[bytes, DirectoryRoot]] = None,
+        erase_encrypted_metadata: Optional[bool] = True) -> Union[
             'EncryptedLocalBoxFile',
             'DecryptedLocalBoxFile',
             'EncryptedLocalBoxDirectory',
@@ -2211,6 +2357,12 @@ class EncryptedLocalBoxDirectory:
                 absolute LocalBox directory root if it's
                 ``DirectoryRoot``. Will use ``self.part_id``
                 if not specified (by default).
+
+            erase_encrypted_metadata (``bool``, optional):
+                Will remove metadata from the parent
+                ``EncryptedLocalBoxFile`` after decryption
+                to save more RAM if ``True``. You can call
+                ``.init()`` method on it to load it again.
         """
         assert not all((ignore_files, ignore_dirs)), 'Specify at least one'
 
@@ -2258,7 +2410,8 @@ class EncryptedLocalBoxDirectory:
 
                 pending = [
                     self._lb.get_file(file_row[0],
-                        cache_preview=cache_preview
+                        cache_preview=cache_preview,
+                        erase_encrypted_metadata=erase_encrypted_metadata
                     )
                     for file_row in pending
                 ]
@@ -3155,7 +3308,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
     async def refresh_metadata(
             self, drb: Optional['tgbox.api.remote.DecryptedRemoteBox'] = None,
             drbf: Optional['tgbox.api.remote.DecryptedRemoteBoxFile'] = None,
-            _updated_metadata: Optional[bytes] = None
+            _updated_metadata: Optional[Union[str, bytes]] = None
         ):
         """
         This method will refresh local UPDATED_METADATA from
@@ -3174,7 +3327,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 metadata. You can use it as alternative to
                 the "drb" argument here.
 
-            _updated_metadata (``str``, optional):
+            _updated_metadata (``str``, ``bytes``, optional):
                 Updated metadata by itself. This is for
                 internal use, specify only ``drb``.
 
@@ -3195,8 +3348,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         # === Verifying updated metadata for validity === #
 
         if _updated_metadata:
-            _updated_metadata = urlsafe_b64decode(_updated_metadata)
-            assert _updated_metadata, 'empty after decode, invalid!'
+            if isinstance(_updated_metadata, str):
+                _updated_metadata = urlsafe_b64decode(_updated_metadata)
+                assert _updated_metadata, 'empty after decode, invalid!'
 
             updates = AES(self._filekey).decrypt(
                 _updated_metadata

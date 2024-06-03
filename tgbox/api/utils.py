@@ -318,7 +318,8 @@ async def search_generator(
         sf: SearchFilter, it_messages: Optional[AsyncGenerator] = None,
         lb: Optional['tgbox.api.local.DecryptedLocalBox'] = None,
         cache_preview: bool=True, reverse: bool=False,
-        fetch_count: Optional[int] = 100) -> AsyncGenerator:
+        fetch_count: Optional[int] = 100,
+        erase_encrypted_metadata: bool=True) -> AsyncGenerator:
     """
     Generator used to search for files in dlb and rb. It's
     only for internal use and you shouldn't use it in your
@@ -385,7 +386,8 @@ async def search_generator(
             ids = sf.in_filters['id'],
             cache_preview = cache_preview,
             reverse = reverse,
-            fetch_count=fetch_count
+            fetch_count=fetch_count,
+            erase_encrypted_metadata=erase_encrypted_metadata
         )
         if not isasyncgen(iter_from):
             # The .files() generator was syncified, so we can't

@@ -451,7 +451,8 @@ class EncryptedRemoteBox:
             decrypt: Optional[bool] = None,
             ignore_errors: bool=True,
             return_imported_as_erbf: bool=False,
-            cache_preview: bool=True) -> Union[
+            cache_preview: bool=True,
+            erase_encrypted_metadata: bool=True) -> Union[
                 'EncryptedRemoteBoxFile',
                 'DecryptedRemoteBoxFile', None
             ]:
@@ -502,6 +503,12 @@ class EncryptedRemoteBox:
             cache_preview (``bool``, optional):
                 Cache preview in returned by method
                 RemoteBoxFiles or not. ``True`` by default.
+
+            erase_encrypted_metadata (``bool``, optional):
+                Will remove metadata from the parent
+                ``EncryptedRemoteBoxFile`` after decryption
+                to save more RAM if ``True``. You can call
+                ``.init()`` method on it to load it again.
         """
         logger.info(f'Getting file ID{id} from the RemoteBox ID{self._box_channel_id}')
 
@@ -517,7 +524,8 @@ class EncryptedRemoteBox:
             key, dlb=dlb, decrypt=decrypt,
             ids=id, cache_preview=cache_preview,
             return_imported_as_erbf=return_imported_as_erbf,
-            ignore_errors=ignore_errors)
+            ignore_errors=ignore_errors,
+            erase_encrypted_metadata=erase_encrypted_metadata)
         try:
             return await anext(file_iter)
         # If there is no file by ``id``.
