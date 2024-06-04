@@ -413,12 +413,17 @@ class OpenPretender:
             self._current_size = self._flo.seek(0,2) # Move to file end
             self._flo.seek(0,0) # Move to file start
 
-        if (self._current_size <= 0 and self._padding_added)\
+        self._current_size -= size
+
+        if self._current_size < 0:
+            self._current_size = 0
+
+        if (self._current_size == 0 and self._padding_added)\
             or (size <= len(self._buffered_bytes) and size != -1):
                 if self._hmac_returned:
                     return b''
 
-                elif self._current_size <= 0 and len(self._buffered_bytes) == 0:
+                elif self._current_size == 0 and len(self._buffered_bytes) == 0:
                     block = self._hmac_state.digest()
                     self._hmac_returned = True
                 else:
@@ -453,7 +458,7 @@ class OpenPretender:
                 else:
                     shift = None
 
-                if self._current_size <= 0 or size > self._current_size or shift != None:
+                if self._current_size == 0:
                     chunk = buffered + self._aes_state.encrypt(
                         chunk, pad=True, concat_iv=False)
 
@@ -467,7 +472,6 @@ class OpenPretender:
                 if shift is not None:
                     self._buffered_bytes = chunk[shift:]
 
-                self._current_size -= size
                 block = chunk[:shift]
 
         self._position += len(block)

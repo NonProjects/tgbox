@@ -2566,6 +2566,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                         request_size = request_size,
                         offset = download_offset_prepared
                     )
+
                 buffered, total = b'', offset
                 async for chunk in iter_down:
                     if buffered:
@@ -2577,26 +2578,40 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                         buffered += chunk[slice_:]
                         continue
 
-                    chunk = aws.decrypt(chunk, unpad=False) if decrypt else chunk
+                    total += len(chunk)
+
+                    if total > self._size:
+                        total = self._size
+
+                    logger.debug(
+                        f'''ID{self._id}: Downloading... {total=} '''
+                        f'''from the {self._size=} bytes; {len(buffered)=}'''
+                    )
+                    if total == self._size and not buffered:
+                        if self._has_hmac_sha256:
+                            file_hmac = chunk[-32:]
+                            chunk = chunk[:-32]
+
+                        logger.debug(f'ID{self._id}: Writing last bytes (Unpad)...')
+                        chunk = aws.decrypt(chunk, unpad=True) if decrypt else chunk
+                    else:
+                        chunk = aws.decrypt(chunk, unpad=False) if decrypt else chunk
+
                     outfile.write(chunk)
 
                     if not omit_hmac_check and self._has_hmac_sha256:
                         hmac_state.update(chunk)
 
                     if progress_callback:
-                        total += len(chunk)
-                        logger.debug(
-                            f'''ID{self._id}: Downloaded {self._file_size} '''
-                            f'''from the {total} bytes'''
-                        )
                         if iscoroutinefunction(progress_callback):
-                            await progress_callback(total, self._file_size)
+                            await progress_callback(total, self._size)
                         else:
-                            progress_callback(total, self._file_size)
+                            progress_callback(total, self._size)
 
                 if buffered:
-                    logger.debug(f'ID{self._id}: Writing the last buffered bytes...')
-
+                    logger.debug(
+                        f'ID{self._id}: Writing last buffered bytes (Unpad)...'
+                    )
                     if self._has_hmac_sha256:
                         file_hmac = buffered[-32:]
                         buffered = buffered[:-32]
@@ -2604,26 +2619,25 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     chunk = aws.decrypt(buffered, unpad=True) if decrypt else chunk
                     outfile.write(chunk)
 
-                    if not omit_hmac_check and self._has_hmac_sha256:
-                        hmac_state.update(chunk)
+                    hmac_state.update(chunk)
 
-                        if not hmac_compare_digest(file_hmac, hmac_state.digest()):
-                            raise InvalidFile(
-                               f'File ID={self._id} was modified!!!! Calculated '
-                               f'HMAC is {hmac_state.digest().hex()=}, but HMAC '
-                               f'attached to Remote File is {file_hmac.hex()=}. '
-
-                               f'DO NOT TRUST downloaded data of File ID={self._id}! '
-                               f'File name: {self._file_name}, Outfile: {outfile} '
-                                'Consider to review it & then purge!'
-                            )
                     if progress_callback:
                         if iscoroutinefunction(progress_callback):
-                            await progress_callback(
-                                self._file_size, self._file_size)
+                            await progress_callback(self._size, self._size)
                         else:
-                            progress_callback(
-                                self._file_size, self._file_size)
+                            progress_callback(self._size, self._size)
+
+                if not omit_hmac_check and self._has_hmac_sha256:
+                    if not hmac_compare_digest(file_hmac, hmac_state.digest()):
+                        raise InvalidFile(
+                           f'File ID={self._id} was modified!!!! Calculated '
+                           f'HMAC is {hmac_state.digest().hex()=}, but HMAC '
+                           f'attached to Remote File is {file_hmac.hex()=}. '
+
+                           f'DO NOT TRUST downloaded data of File ID={self._id}! '
+                           f'File name: {self._file_name}, Outfile: {outfile} '
+                            'Consider to review it & then purge!'
+                        )
 
                 break # Download is successfull so we can exit this loop
 
