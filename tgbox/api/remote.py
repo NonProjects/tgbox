@@ -2619,7 +2619,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     chunk = aws.decrypt(buffered, unpad=True) if decrypt else chunk
                     outfile.write(chunk)
 
-                    hmac_state.update(chunk)
+                    if not omit_hmac_check and self._has_hmac_sha256:
+                        hmac_state.update(chunk)
 
                     if progress_callback:
                         if iscoroutinefunction(progress_callback):
