@@ -1,5 +1,7 @@
 """This module stores utils required by API."""
 
+import logging
+
 from asyncio import (
     iscoroutine, get_event_loop
 )
@@ -45,6 +47,7 @@ __all__ = [
     'make_safe_file_path',
     'make_file_fingerprint'
 ]
+logger = logging.getLogger(__name__)
 
 class _TypeList:
     """
@@ -406,16 +409,18 @@ class OpenPretender:
         if self._stop_iteration:
             raise Exception('Stream was closed')
 
-        if size % 16 and not size == -1:
-            raise ValueError('size must be divisible by 16 or -1 (return all)')
-
+        if size % 16 or size < 64 and not size == -1:
+            raise ValueError(
+                'size must be -1 (return all), or >= 64, divisible by 16'
+            )
         if self._current_size is None:
             self._current_size = self._flo.seek(0,2) # Move to file end
             self._flo.seek(0,0) # Move to file start
+            self._current_size += len(self._buffered_bytes)
 
         self._current_size -= size
 
-        if self._current_size < 0:
+        if size < 0 or self._current_size < 0:
             self._current_size = 0
 
         if (self._current_size == 0 and self._padding_added)\
@@ -423,9 +428,14 @@ class OpenPretender:
                 if self._hmac_returned:
                     return b''
 
-                elif self._current_size == 0 and len(self._buffered_bytes) == 0:
-                    block = self._hmac_state.digest()
-                    self._hmac_returned = True
+                elif self._current_size == 0:
+                    if len(self._buffered_bytes) + 32 < size: # + 32 is HMAC
+                        block = self._buffered_bytes + self._hmac_state.digest()
+                        self._buffered_bytes = b''
+                        self._hmac_returned = True
+                    else:
+                        block = self._buffered_bytes[:size]
+                        self._buffered_bytes = self._buffered_bytes[size:]
                 else:
                     block = self._buffered_bytes[:size]
                     self._buffered_bytes = self._buffered_bytes[size:]
@@ -437,6 +447,8 @@ class OpenPretender:
                 chunk = self._flo.read()
                 chunk = await chunk if iscoroutine(chunk) else chunk
 
+                logger.debug(f'Trying to read all bytes, got {len(chunk)=}')
+
                 self._hmac_state.update(chunk)
 
                 block = buffered + self._aes_state.encrypt(
@@ -445,20 +457,15 @@ class OpenPretender:
                 block += self._hmac_state.digest()
                 self._hmac_returned = True
                 self._padding_added = True
-
-                self._current_size = 0
             else:
                 chunk = self._flo.read(size)
                 chunk = await chunk if iscoroutine(chunk) else chunk
 
+                logger.debug(f'Trying to read {size=}, got {len(chunk)=}')
+
                 self._hmac_state.update(chunk)
 
-                if len(chunk) % 16:
-                    shift = int(-(len(chunk) % 16))
-                else:
-                    shift = None
-
-                if self._current_size == 0:
+                if len(chunk) < size:
                     chunk = buffered + self._aes_state.encrypt(
                         chunk, pad=True, concat_iv=False)
 
@@ -467,12 +474,17 @@ class OpenPretender:
                     chunk = buffered + self._aes_state.encrypt(
                         chunk, pad=False, concat_iv=False)
 
-                shift = size if len(chunk) > size else None
+                if len(chunk) > size:
+                    shift = size
+                else:
+                    shift = None
 
                 if shift is not None:
                     self._buffered_bytes = chunk[shift:]
 
                 block = chunk[:shift]
+
+        logger.debug(f'Return {len(block)=}; {self._current_size=}')
 
         self._position += len(block)
         return block
