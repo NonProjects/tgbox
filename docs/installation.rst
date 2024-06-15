@@ -28,5 +28,7 @@ Optional dependencies
 .. note::
    The `cryptography <https://github.com/pyca/cryptography>`_ project has `wheels <https://packaging.python.org/en/latest/glossary/#term-Wheel>`_ for many systems. Big chance that you **will not need to compile a C code**, so always try to install ``tgbox[fast]``.
 
+- Library will use the **Regex** python *package* (`PyPI <https://pypi.org/project/regex/>`_) if it's installed in environment.
+
 - With `FFmpeg <https://ffmpeg.org/download.html>`_, library can **make previews** for media files and **extract duration** to attach it to the *RemoteBox File*. To work, it should be in your System ``PATH`` (`see more about PATH <https://en.wikipedia.org/wiki/PATH_(variable)>`_). We will call it as ``ffmpeg`` (:const:`tgbox.defaults.FFMPEG`) shell command via `subprocess <https://docs.python.org/3/library/subprocess.html>`_.
 

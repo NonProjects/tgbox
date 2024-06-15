@@ -8,7 +8,13 @@ from typing import (
 )
 from os import PathLike
 from dataclasses import dataclass
-from re import search as re_search
+
+try:
+    # Try to use Third-party Regex if installed
+    from regex import search as re_search
+except ImportError:
+    from re import search as re_search
+
 from base64 import urlsafe_b64encode
 
 from asyncio import get_event_loop_policy, get_running_loop

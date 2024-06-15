@@ -20,7 +20,11 @@ from io import BytesIO
 from functools import partial
 
 from os import urandom, PathLike
-from re import search as re_search
+try:
+    # Try to use Third-party Regex if installed
+    from regex import search as re_search
+except ImportError:
+    from re import search as re_search
 
 from platform import system as platform_system
 from pathlib import PureWindowsPath, PurePosixPath, Path
