@@ -2677,7 +2677,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 ``None`` as value to remove key from updates.
 
                 You can change the next fields: 'duration',
-                'file_name', 'cattrs', 'mime', 'preview'
+                'file_name', 'cattrs', 'mime', 'preview' &
+                'file_path'.
 
                 All values *must* be ``bytes``. Use the
                 ``tgbox.tools.int_to_bytes`` function for

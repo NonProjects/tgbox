@@ -2052,11 +2052,15 @@ class DecryptedLocalBox(EncryptedLocalBox):
             await drbf._erbf.init()
 
         if not file_path:
+            update_metadata = False
+
             if drbf.file_path:
                 file_path = drbf.file_path
             else:
                 logger.debug(f'ID{drbf.id} doesn\'t have file_path. Set DEF_NO_FOLDER.')
                 file_path = self._defaults.DEF_NO_FOLDER
+        else:
+            update_metadata = True
 
         if isinstance(file_path, str):
             file_path = Path(file_path)
@@ -2078,7 +2082,13 @@ class DecryptedLocalBox(EncryptedLocalBox):
         pf.set_file_id(drbf._id)
         pf.set_upload_time(drbf._upload_time)
 
-        return await self._make_local_file(pf)
+        dlbf = await self._make_local_file(pf)
+
+        if update_metadata:
+            await dlbf.update_metadata(dlb=self,
+                {'file_path': str(file_path).encode()}
+            )
+        return dlbf
 
     async def get_directory(self, path: Union[Path, str])\
             -> Union[DecryptedLocalBoxDirectory, None]:
@@ -3446,7 +3456,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 ``None`` as value to remove key from updates.
 
                 You can change the next fields: 'duration',
-                'file_name', 'cattrs', 'mime', 'preview'
+                'file_name', 'cattrs', 'mime', 'preview' &
+                'file_path'.
 
                 All values *must* be ``bytes``. Use the
                 ``tgbox.tools.int_to_bytes`` function for
