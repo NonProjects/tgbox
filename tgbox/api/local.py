@@ -2086,7 +2086,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         if update_metadata:
             await dlbf.update_metadata(dlb=self,
-                {'file_path': str(file_path).encode()}
+                changes={'file_path': str(file_path).encode()}
             )
         return dlbf
 
