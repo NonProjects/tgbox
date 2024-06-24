@@ -50,7 +50,8 @@ setup(
         ],
         'doc': [
             'sphinx-book-theme==1.1.3',
-            'sphinx-togglebutton==0.3.2'
+            'sphinx-togglebutton==0.3.2',
+            'sphinxcontrib-jquery==4.1'
         ]
     },
     classifiers = [
