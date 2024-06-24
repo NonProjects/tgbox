@@ -40,8 +40,7 @@ extensions = [
     'sphinx.ext.apidoc',
     'sphinx.ext.autosectionlabel',
     'sphinx.ext.viewcode',
-    'sphinx_togglebutton',
-    'sphinxcontrib.jquery'
+    'sphinx_togglebutton'
 ]
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
