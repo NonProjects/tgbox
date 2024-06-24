@@ -49,7 +49,7 @@ setup(
             'cryptg==0.4.0'
         ],
         'doc': [
-            'sphinx-book-theme==1.1.2',
+            'sphinx-book-theme==1.1.3',
             'sphinx-togglebutton==0.3.2'
         ]
     },
