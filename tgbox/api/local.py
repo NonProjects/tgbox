@@ -2455,9 +2455,9 @@ class EncryptedLocalBoxDirectory:
 
     async def delete(self) -> None:
         """
-        Will delete this folder with all files from your LocalBox.
-        All files will stay in ``RemoteBox``, so you can restore
-        all your folders by importing files.
+        Will delete this directory with all sub-dirs and files
+        from your LocalBox. All of them will stay in ``RemoteBox``,
+        so you can restore all your data by syncing Box.
         """
         logger.debug(f'DELETE FROM FILES WHERE PPATH_HEAD={self._part_id}')
         await self._tgbox_db.FILES.execute(
@@ -2466,6 +2466,10 @@ class EncryptedLocalBoxDirectory:
         logger.debug(f'DELETE FROM PATH_PARTS WHERE PART_ID={self._part_id}')
         await self._tgbox_db.PATH_PARTS.execute(
             ('DELETE FROM PATH_PARTS WHERE PART_ID=?',(self._part_id,))
+        )
+        logger.debug(f'DELETE FROM PATH_PARTS WHERE PARENT_PART_ID={self._part_id}')
+        await self._tgbox_db.PATH_PARTS.execute(
+            ('DELETE FROM PATH_PARTS WHERE PARENT_PART_ID=?',(self._part_id,))
         )
     async def decrypt(
             self, key: Optional[Union[BaseKey, MainKey]] = None,
