@@ -66,7 +66,7 @@ from ..errors import (
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter, OpenPretender,
     pad_request_size, PackedAttributes, prbg, anext,
-    make_safe_file_path, ppart_id_generator
+    make_safe_file_path, make_general_path, ppart_id_generator
 )
 from .utils import (
     TelegramClient, RemoteBoxDefaults,
@@ -2020,7 +2020,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 self._file_path = self._defaults.DEF_NO_FOLDER
                 self._dirkey = None
             else:
-                self._file_path = Path(self._file_path.decode())
+                self._file_path = make_general_path(self._file_path.decode())
 
                 for path_part in ppart_id_generator(self._file_path, self._mainkey):
                     ppath_head = path_part[2]

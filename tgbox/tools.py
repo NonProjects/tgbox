@@ -613,8 +613,17 @@ def make_general_path(path: Union[str, Path]) -> Path:
 
     path = path if isinstance(path, str) else str(path)
 
+    # If path has Letter drive (i.e C:) then it's
+    # definitely a Windows-like path
     if (win_path := PureWindowsPath(path)).drive:
         return Path(*win_path.parts)
+
+    # If user specified 'path' is the same as converted
+    # to pathlib.Path (contains only one part) it means
+    # that it's most probably a Windows path that
+    # doesn't have drive letter.
+    if str(path) == Path(path).parts[0]:
+        return Path(*PureWindowsPath(path).parts)
 
     return Path(path)
 

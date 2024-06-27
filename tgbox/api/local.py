@@ -3034,7 +3034,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         # This "If Statement" will be True only if File is version 1.3+
         if self._mainkey and elbf._efile_path is not None and not self._imported:
             self._file_path = AES(self._mainkey).decrypt(elbf._efile_path)
-            self._file_path = Path(self._file_path.decode())
+            self._file_path = make_general_path(self._file_path.decode())
+
             self._original_file_path = self._file_path
 
             for path_part in ppart_id_generator(self._file_path, self._mainkey):
