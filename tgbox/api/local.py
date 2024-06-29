@@ -1452,6 +1452,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         ))
 
         drbf_generator = drb.files(
+            dlb=self,
             min_id=start_from,
             cache_preview=False,
             return_imported_as_erbf=True,
