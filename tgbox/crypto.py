@@ -56,6 +56,11 @@ class IV:
     def __len__(self) -> int:
         return len(self.iv)
 
+    def __eq__(self, other) -> bool:
+        if hasattr(other, 'iv'):
+            return self.iv == other.iv
+        return False
+
     @classmethod
     def generate(cls, bytelength: Optional[int] = 16):
         """
@@ -87,6 +92,11 @@ class Salt:
 
     def __len__(self) -> int:
         return len(self.salt)
+
+    def __eq__(self, other) -> bool:
+        if hasattr(other, 'salt'):
+            return self.salt == other.salt
+        return False
 
     @classmethod
     def generate(cls, bytelength: Optional[int] = 32):
