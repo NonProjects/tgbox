@@ -407,13 +407,14 @@ class OpenPretender:
 
         Arguments:
             size (``int``):
-                Amount of bytes to return. By
-                default is negative (return all).
+                Amount of bytes to return. By default is
+                negative (return all). Must be divisible
+                by 16, and >= 64.
         """
         if self._stop_iteration:
             raise Exception('Stream was closed')
 
-        if size % 16 or size < 64 and not size == -1:
+        if (size % 16 or size < 64) and not size == -1:
             raise ValueError(
                 'size must be -1 (return all), or >= 64, divisible by 16'
             )
