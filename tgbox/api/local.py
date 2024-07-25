@@ -1088,7 +1088,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
             file_path (``Path``):
                 File path. No filename included.
         """
-        file_path = make_general_path(file_path)
         ppidg = ppart_id_generator(file_path, self._mainkey)
 
         for part, parent_part_id, part_id in ppidg:
@@ -2104,7 +2103,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 make an ``DecryptedLocalBoxDirectory``.
         """
         ppidg = ppart_id_generator(
-            path = make_general_path(path),
+            path = path,
             mainkey = self._mainkey
         )
         part_id = None

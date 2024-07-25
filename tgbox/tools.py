@@ -546,12 +546,7 @@ def ppart_id_generator(path: Path, mainkey: 'MainKey') -> Generator[tuple, None,
 
     Will yield a tuple (PART, PARENT_PART_ID, PART_ID)
     """
-    if guess_path_type(path) == 'unix':
-        path = str(PurePosixPath(path))
-        path = PurePosixPath(path.lstrip('\\'))
-    else:
-        path = PureWindowsPath(path)
-
+    path = make_general_path(path) # Convert Win-like paths to UNIX-like
     parent_part_id = b'' # The root (/ anchor) doesn't have parent
 
     for part in path.parts:
@@ -598,8 +593,21 @@ def guess_path_type(path: Union[str, Path]) -> str:
 
     Returns 'windows' or 'unix'
     """
-    if PureWindowsPath(path).drive:
+    path = path if isinstance(path, str) else str(path)
+
+    # If path has Letter drive (i.e C:) then it's
+    # definitely a Windows-like path
+    if (win_path := PureWindowsPath(path)).drive:
         return 'windows'
+
+    # If user specified 'path' is the same as converted
+    # to pathlib.Path (contains only one part) it means
+    # that it's most probably a Windows path that
+    # doesn't have drive letter.
+    if str(path) == Path(path).parts[0]\
+        and str(path) not in ('/', '//'):
+            return 'windows'
+
     return 'unix'
 
 def make_general_path(path: Union[str, Path]) -> Path:
@@ -612,18 +620,7 @@ def make_general_path(path: Union[str, Path]) -> Path:
     if platform_system().lower() == 'windows':
         return Path(path) if isinstance(path, str) else path
 
-    path = path if isinstance(path, str) else str(path)
-
-    # If path has Letter drive (i.e C:) then it's
-    # definitely a Windows-like path
-    if (win_path := PureWindowsPath(path)).drive:
-        return Path(*win_path.parts)
-
-    # If user specified 'path' is the same as converted
-    # to pathlib.Path (contains only one part) it means
-    # that it's most probably a Windows path that
-    # doesn't have drive letter.
-    if str(path) == Path(path).parts[0]:
+    if guess_path_type(path) == 'windows':
         return Path(*PureWindowsPath(path).parts)
 
     return Path(path)
