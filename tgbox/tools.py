@@ -661,9 +661,10 @@ def make_file_fingerprint(mainkey: 'MainKey', file_path: Union[str, Path]) -> by
     Function to make a file Fingerprint.
 
     Fingerprint is a SHA256 over ``mainkey`` and
-    ``file_path``, not a hash of a file itself
-    in any form. We use it to check if prepared
-    file is unique or not (and raise error).
+    ``file_path`` parts, not a hash of a file. We
+    use it to check if prepared file is unique
+    or not (and raise error if Box already have
+    some file with the same name and path).
 
     Arguments:
         mainkey (``MainKey``):
@@ -674,10 +675,31 @@ def make_file_fingerprint(mainkey: 'MainKey', file_path: Union[str, Path]) -> by
             Fingerprint. It **should** include a
             file name!
 
-            /home/xxx/ (directory) is NOT OK!
-            /home/xxx/file.txt (file) is OK!
+            /home/user/ (directory) is NOT OK!
+            /home/user/file.txt (file) is OK!
     """
-    return sha256(str(file_path).encode() + mainkey.key).digest()
+    file_path = make_general_path(file_path)
+    fingerprint = sha256()
+    # Here we update fingerprint SHA256 by path
+    # parts plus b'/' symbol except the last
+    # path part. This way we will guarantee
+    # that Fingerprints would be the same
+    # on all platforms and at least will not
+    # break old f-prints on Linux, as it's
+    # currently main system tgbox is used
+    # on (as I believe) [changed in the v1.6]
+    path_parts = list(file_path.parts)
+    while path_parts:
+        part = path_parts.pop(0).encode()
+
+        # We also don't concat a '/' to '/'
+        if path_parts and part != b'/':
+            part += b'/'
+
+        fingerprint.update(part)
+
+    fingerprint.update(mainkey.key)
+    return fingerprint.digest()
 
 async def anext(aiterator, default=...):
     """Analogue to Python 3.10+ anext()"""

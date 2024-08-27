@@ -1503,7 +1503,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     raise RemoteFileNotFound(
                         '''Can not init sync() with start_from='''
                        f'''{start_from}: message doesn\'t exists '''
-                       '''or "start_from" equals last file id.'''
+                        '''or "start_from" equals last file id.'''
                     )
                 sql_tuple = ('DELETE FROM FILES WHERE ID > ?', (previous_drbf2.id,))
                 logger.debug(f'self._tgbox_db.FILES.execute(sql_tuple={sql_tuple})')
@@ -2067,6 +2067,10 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         drbf.set_file_path(file_path)
 
+        fingerprint = make_file_fingerprint(
+            mainkey = self._mainkey,
+            file_path = (file_path / drbf.file_name)
+        )
         pf = PreparedFile(
             dlb = self,
             file = BytesIO(),
@@ -2075,7 +2079,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             filepath = file_path,
             filesalt = drbf._file_salt,
             hmackey = None, # We don't need HMACKey on importing
-            fingerprint = drbf._fingerprint,
+            fingerprint = fingerprint,
             metadata = drbf._erbf._metadata,
             imported = True
         )
@@ -3149,7 +3153,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 # part of the Required Metadata fields.
                 secret_metadata.pop('efile_path')
 
-                self._file_path = Path(self._file_path.decode())
+                self._file_path = make_general_path(self._file_path.decode())
                 self._original_file_path = self._file_path
             else:
                 logger.warning(
@@ -3213,7 +3217,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
                         elif k == 'efile_path' and self._mainkey:
                             self._file_path = AES(self._mainkey).decrypt(v)
-                            self._file_path = Path(self._file_path.decode())
+                            self._file_path = make_general_path(
+                                self._file_path.decode())
                         else:
                             # str attributes
                             if k in ('mime', 'file_name'):
@@ -3421,7 +3426,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 elif k == 'efile_path':
                     if isinstance(self._lb, DecryptedLocalBox) or self._mainkey:
                         mainkey = self._mainkey if self._mainkey else self._lb._mainkey
-                        self._file_path = Path(AES(mainkey).decrypt(v).decode())
+                        self._file_path = AES(mainkey).decrypt(v).decode()
+                        self._file_path = make_general_path(self._file_path)
                     else:
                         logger.warning(
                             '''Updated metadata contains efile_path, however, '''

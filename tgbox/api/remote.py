@@ -66,7 +66,8 @@ from ..errors import (
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter, OpenPretender,
     pad_request_size, PackedAttributes, prbg, anext,
-    make_safe_file_path, make_general_path, ppart_id_generator
+    ppart_id_generator, make_file_fingerprint,
+    make_safe_file_path, make_general_path
 )
 from .utils import (
     TelegramClient, RemoteBoxDefaults,
@@ -1973,9 +1974,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         self._box_salt = erbf._box_salt
         self._file_size = erbf._file_size
-
-        self._fingerprint = erbf._fingerprint
         self._minor_version = erbf._minor_version
+        self._fingerprint = erbf._fingerprint
 
         self._upload_time, self._size = erbf._upload_time, None
         self._file_iv, self._file_salt = erbf._file_iv, erbf._file_salt
@@ -1989,7 +1989,6 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._file_file_name = erbf._file_file_name
         self._mime, self._file_name = None, None
         self._residual_metadata = None
-
 
         if isinstance(key, MainKey):
             logger.debug('key is MainKey, self._mainkey is present')
@@ -2114,7 +2113,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 self._file_path = AES(self._mainkey).decrypt(
                     secret_metadata['efile_path']
                 )
-                self._file_path = Path(self._file_path.decode())
+                self._file_path = make_general_path(self._file_path.decode())
             else:
                 logger.info(
                    f'''We can\'t decrypt real file path of ID{self._id} because '''
@@ -2126,6 +2125,19 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             # Started from the v1.3, the EFILE_PATH is not a
             # part of the Required Metadata fields.
             secret_metadata.pop('efile_path')
+
+        if self._mainkey:
+            self._fingerprint = make_file_fingerprint(
+                file_path = (self._file_path / self._file_name),
+                mainkey = self._mainkey
+            )
+            if self._fingerprint != self._erbf._fingerprint:
+                logger.info(
+                   f'Fingerprints of ID{self._id} differ after decryption!! '
+                   f'ERBF={self._erbf._fingerprint.hex()}, DRBF='
+                   f'{self._fingerprint.hex()}. It means that fingerprint '
+                    'of Remote file was calculated differently or vice-versa.'
+                )
 
         # Started from the v1.5, Secret Metadata contains a 'has_hmac_sha256'
         # key. If it's presented, then we should check file HMAC on download
@@ -2175,8 +2187,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
                         elif k == 'efile_path':
                             if self._mainkey:
-                                file_path = AES(self._mainkey).decrypt(v)
-                                self._file_path = Path(file_path.decode())
+                                self._file_path = AES(self._mainkey).decrypt(v)
+                                self._file_path = make_general_path(file_path.decode())
                             else:
                                 logger.debug(
                                     '''Updated metadata contains efile_path, but '''
