@@ -45,7 +45,7 @@ setup(
     ],
     extras_require = {
         'fast': [
-            'cryptography',
+            'cryptography<43.0.0',
             'cryptg==0.4.0'
         ],
         'doc': [
