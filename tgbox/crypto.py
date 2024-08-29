@@ -233,11 +233,11 @@ class AESwState:
             self._aes_cbc = Cipher(algorithms.AES(self.key), modes.CBC(self.iv.iv))
 
             if mode == 1: # Encryption
-                self._aes_cbc = self._aes_cbc.encryptor()
-                setattr(self._aes_cbc, 'encrypt', self._aes_cbc.update)
+                encryptor = self._aes_cbc.encryptor()
+                setattr(self._aes_cbc, 'encrypt', encryptor.update)
             else: # Decryption
-                self._aes_cbc = self._aes_cbc.decryptor()
-                setattr(self._aes_cbc, 'decrypt', self._aes_cbc.update)
+                decryptor = self._aes_cbc.decryptor()
+                setattr(self._aes_cbc, 'decrypt', decryptor.update)
         else:
             self._aes_cbc = _PyaesState(self.key, self.iv)
 
