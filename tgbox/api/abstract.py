@@ -625,8 +625,8 @@ class BoxFile(DecryptedLocalBoxFile):
 
     def __repr__(self) -> str:
         return (
-            f'''<{self.__class__.__name__} @ {self.dlbf.file_name} '''
-            f'''>> {self.dlbf=}, {self.drbf=}'''
+            f'<{self.__class__.__name__} @ {self.dlbf.file_name} '
+            f'>> {self.dlbf=}, {self.drbf=}'
         )
     def __str__(self) -> str:
         return repr(self)
@@ -685,7 +685,7 @@ class BoxFile(DecryptedLocalBoxFile):
 
                 if not self.dlbf.has_hmac_sha256 == self.drbf.has_hmac_sha256:
                     raise InvalidFile(
-                       f'Your Remote File ID{dlbf.id} was changed by third person!!!! '
+                       f'Your Remote File ID{self.dlbf.id} was changed by third person!!!! '
                         'Review the peoples that have access to editing YOUR files and'
                         'then review changed File! DO NOT TRUST IT! Consider re-upload!'
                     )
@@ -721,9 +721,9 @@ class BoxFile(DecryptedLocalBoxFile):
         """
         self.__raise_initialized()
 
-        r = await self.dlbf.update_metadata(
-            *args, **kwargs, drbf=self.drbf)
-
+        await self.dlbf.update_metadata(
+            *args, **kwargs, drbf=self.drbf
+        )
         # self.dlbf & self.drbf will be updated
         # after 'update_metadata()', but 'self'
         # will stay the same, so we need to

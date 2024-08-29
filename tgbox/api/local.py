@@ -108,10 +108,10 @@ async def make_localbox(
         await tgbox_db.close()
 
         raise InUseException(
-           f'''"{box_path}" file is already exists. '''
-            '''Please move old file or create RemoteBox with '''
-            '''the different box name (see help(tgbox.api.re'''
-            '''mote.make_remotebox) and use kwarg "box_name")'''
+           f'"{box_path}" file is already exists. '
+            'Please move old file or create RemoteBox with '
+            'the different box name (see help(tgbox.api.re'
+            'mote.make_remotebox) and use kwarg "box_name")'
         )
     box_salt = await erb.get_box_salt()
     mainkey = make_mainkey(basekey, box_salt)
@@ -230,9 +230,9 @@ async def clone_remotebox(
         await tgbox_db.close()
 
         raise InUseException(
-            f'''TgboxDB file "{box_path}" already exists. Specify new box_path or, '''
-            '''if your clone process was interrupted for some reason, '''
-            '''use the .sync(..., deep=True) on your LocalBox instead.'''
+            f'TgboxDB file "{box_path}" already exists. Specify new box_path or, '
+            'if your clone process was interrupted for some reason, '
+            'use the .sync(..., deep=True) on your LocalBox instead.'
         )
 
     logger.info(f'Cloning DecryptedRemoteBox to LocalBox {box_path}')
@@ -384,8 +384,8 @@ class EncryptedLocalBox:
     def __str__(self) -> str:
         box_salt = None if not self._initialized else urlsafe_b64encode(self.box_salt.salt).decode()
         return (
-            f'''{self.__class__.__name__}({repr(self._tgbox_db)}, {repr(self._defaults)}) '''
-            f'''# {self._initialized=}, {self._box_channel_id=}, {box_salt=}'''
+            f'{self.__class__.__name__}({repr(self._tgbox_db)}, {repr(self._defaults)}) '
+            f'# {self._initialized=}, {self._box_channel_id=}, {box_salt=}'
         )
     def __hash__(self) -> int:
         if not self._initialized:
@@ -528,8 +528,8 @@ class EncryptedLocalBox:
 
                 if delete_ppath_head:
                     logger.debug(
-                        '''Removing orphaned directory | DELETE FROM '''
-                       f'''PATH_PARTS WHERE PART_ID={ppath_head}'''
+                        'Removing orphaned directory | DELETE FROM '
+                       f'PATH_PARTS WHERE PART_ID={ppath_head}'
                     )
                     await self._tgbox_db.PATH_PARTS.execute((
                         'DELETE FROM PATH_PARTS WHERE PART_ID=?',
@@ -1095,8 +1095,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 parent_part_id = None
 
             logger.debug(
-               f'''Adding ({part}, {parent_part_id}, {part_id}) '''
-                '''to the PATH_PARTS if it\'s not already in'''
+               f'Adding ({part}, {parent_part_id}, {part_id}) '
+                'to the PATH_PARTS if it\'s not already in'
             )
             sql_query = (
                 'INSERT OR IGNORE INTO PATH_PARTS VALUES (?,?,?)',
@@ -1196,8 +1196,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
             pass
         else:
             error_msg = (
-                f'''{FingerprintExists.__doc__} (ID={id[0]}). If you '''
-                 '''want to UPDATE file, set skip_fingerprint_check=True'''
+                f'{FingerprintExists.__doc__} (ID={id[0]}). If you '
+                 'want to UPDATE file, set skip_fingerprint_check=True'
             )
             raise FingerprintExists(error_msg) from None
 
@@ -1324,8 +1324,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     action = 'updated'
                 else:
                     logger.debug(
-                       f'''ID{drbf.id} is already imported. '''
-                        '''Checking for updated metadata...'''
+                       f'ID{drbf.id} is already imported. '
+                        'Checking for updated metadata...'
                     )
                     action = 'metadata updated'
 
@@ -1390,8 +1390,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 int_to_bytes(last_event_id)
             )
             logger.debug(
-                '''UPDATE BOX_DATA SET FAST_SYNC_'''
-               f'''LAST_EVENT_ID={last_event_id}'''
+                'UPDATE BOX_DATA SET FAST_SYNC_'
+               f'LAST_EVENT_ID={last_event_id}'
             )
             await self._tgbox_db.BOX_DATA.execute((
                 'UPDATE BOX_DATA SET FAST_SYNC_LAST_EVENT_ID=?',
@@ -1442,8 +1442,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
         last_drbf = await anext(drb.files(reverse=True))
 
         logger.debug(
-            '''Removing all files from LocalBox which ID is less '''
-            '''than the first RemoteBox file...'''
+            'Removing all files from LocalBox which ID is less '
+            'than the first RemoteBox file...'
         )
         await self._tgbox_db.FILES.execute(sql_tuple=(
             'DELETE FROM FILES WHERE ID < ?',
@@ -1501,9 +1501,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 # "start_from" arg is incorrect
                 if not previous_drbf2:
                     raise RemoteFileNotFound(
-                        '''Can not init sync() with start_from='''
-                       f'''{start_from}: message doesn\'t exists '''
-                        '''or "start_from" equals last file id.'''
+                        'Can not init sync() with start_from='
+                       f'{start_from}: message doesn\'t exists '
+                        'or "start_from" equals last file id.'
                     )
                 sql_tuple = ('DELETE FROM FILES WHERE ID > ?', (previous_drbf2.id,))
                 logger.debug(f'self._tgbox_db.FILES.execute(sql_tuple={sql_tuple})')
@@ -1534,8 +1534,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                         drbf_to_import.append(self.import_file(drbfx))
                     else:
                         logger.debug(
-                            '''We don\'t have a FileKey to ID'''
-                           f'''{drbfx.id}. Skipping.'''
+                            'We don\'t have a FileKey to ID'
+                           f'{drbfx.id}. Skipping.'
                         )
                 elif all((drbfx, elbfx)) and elbfx.file_salt != drbfx.file_salt:
                     # File was updated (re-uploaded) so we should
@@ -1557,7 +1557,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             # Here we will remove all local files which ID is between
             # the previous_drbf2.id <...X...> drbf1.id and also
             # between the drbf1.id <...X...> drbf2.id
-            for pair in (pairs := ((previous_drbf2, drbf1), (drbf1, drbf2))):
+            for pair in ((previous_drbf2, drbf1), (drbf1, drbf2)):
                 if None in pair or (pair[1].id - pair[0].id) < 2:
                     continue
 
@@ -1649,8 +1649,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
         """
         if self.box_channel_id != drb.box_channel_id:
             raise RemoteBoxInaccessible(
-                '''LocalBox ID != RemoteBox ID (is different). You should '''
-                '''sync LocalBox only from the associated RemoteBox.''')
+                'LocalBox ID != RemoteBox ID (is different). You should '
+                'sync LocalBox only from the associated RemoteBox.')
         if deep:
             await self._deep_sync(drb, start_from, deep_progress_callback, timeout)
         else:
@@ -1844,17 +1844,17 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
                     elif hasattr(file,'seek') and file.seekable():
                         logger.debug(
-                            '''"file" has a seek() method, we will use '''
-                            '''it to obtain file_size.'''
+                            '"file" has a seek() method, we will use '
+                            'it to obtain file_size.'
                         )
                         file.seek(0,2)
                         file_size = file.tell()
                         file.seek(0,0)
                     else:
                         logger.warning(
-                            '''You didn\'t specified a file_size, so the best '''
-                            '''option for now is read a whole file to RAM and '''
-                            '''get a length of it. Change your code to omit this.'''
+                            'You didn\'t specified a file_size, so the best '
+                            'option for now is read a whole file to RAM and '
+                            'get a length of it. Change your code to omit this.'
                         )
                         rb = file.read()
                         file_size = len(rb)
@@ -2008,8 +2008,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
         # size, and in 'push_file' we will check for actual
         if total_file_size > UploadLimits.PREMIUM:
             raise LimitExceeded(
-                f'''Max allowed filesize in Telegram is {UploadLimits.PREMIUM} '''
-                f'''bytes, your file is {total_file_size} bytes in size.'''
+                f'Max allowed filesize in Telegram is {UploadLimits.PREMIUM} '
+                f'bytes, your file is {total_file_size} bytes in size.'
             )
         return PreparedFile(
             dlb = self,
@@ -2280,8 +2280,8 @@ class EncryptedLocalBoxDirectory:
         """Will fetch required data from the database."""
 
         logger.debug(
-            '''Init ELBD |  SELECT * FROM PATH_PARTS '''
-           f'''WHERE PART_ID={self._part_id}'''
+            'Init ELBD |  SELECT * FROM PATH_PARTS '
+           f'WHERE PART_ID={self._part_id}'
         )
         folder_row = await self._tgbox_db.PATH_PARTS.select_once((
             'SELECT * FROM PATH_PARTS WHERE PART_ID=?',
@@ -2312,8 +2312,8 @@ class EncryptedLocalBoxDirectory:
 
         while True:
             logger.debug(
-                '''Loading the parent path part | SELECT PARENT_PART_ID '''
-               f'''FROM PATH_PARTS WHERE PART_ID={self.parts[0].part_id}'''
+                'Loading the parent path part | SELECT PARENT_PART_ID '
+               f'FROM PATH_PARTS WHERE PART_ID={self.parts[0].part_id}'
             )
             previous_part = await self._tgbox_db.PATH_PARTS.select_once((
                 'SELECT PARENT_PART_ID FROM PATH_PARTS WHERE PART_ID=?',
@@ -2630,13 +2630,13 @@ class EncryptedLocalBoxFile:
         self._efile_path = None
 
     def __repr__(self) -> str:
-        return (f'{self.__class__.__name__}({self._id}, {repr(self._lb)}, {self._cache_preview})')
+        return f'{self.__class__.__name__}({self._id}, {repr(self._lb)}, {self._cache_preview})'
 
     def __str__(self) -> str:
         file_salt = None if not self._initialized else urlsafe_b64encode(self._file_salt.salt).decode()
         return (
-            f'''{self.__class__.__name__}({self._id}, {repr(self._lb)}, {self._cache_preview}) # '''
-            f'''{self._initialized=}, {file_salt=}'''
+            f'{self.__class__.__name__}({self._id}, {repr(self._lb)}, {self._cache_preview}) # '
+            f'{self._initialized=}, {file_salt=}'
         )
     def __hash__(self) -> int:
         return hash((self._id, 22))
@@ -3053,9 +3053,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         else:
             if elbf._efile_path: # v1.3+ but no MainKey
                 logger.warning(
-                   f'''We can\'t decrypt real file path of ID{self._id} because '''
-                    '''MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '''
-                    '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
+                   f'We can\'t decrypt real file path of ID{self._id} because '
+                    'MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '
+                    'with MainKey to fix this. Setting to DEF_NO_FOLDER...'
                 )
                 self._file_path = self._defaults.DEF_NO_FOLDER
 
@@ -3157,9 +3157,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 self._original_file_path = self._file_path
             else:
                 logger.warning(
-                   f'''We can\'t decrypt real file path of ID{self._id} because '''
-                    '''MainKey is not present. Try to decrypt EncryptedLocalBoxFile '''
-                    '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
+                   f'We can\'t decrypt real file path of ID{self._id} because '
+                    'MainKey is not present. Try to decrypt EncryptedLocalBoxFile '
+                    'with MainKey to fix this. Setting to DEF_NO_FOLDER...'
                 )
                 self._file_path = self._defaults.DEF_NO_FOLDER
 
@@ -3394,15 +3394,15 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 ))
             else:
                 logger.warning(
-                   f'''We can not restore the original PPATH_HEAD of the ID{self._id} '''
-                    '''because it wasn\'t decrypted with the DecryptedLocalBox.'''
+                   f'We can not restore the original PPATH_HEAD of the ID{self._id} '
+                    'because it wasn\'t decrypted with the DecryptedLocalBox.'
                 )
         # =============================================== #
 
         logger.debug(
-            '''Updating metadata | UPDATE FILES SET '''
-           f'''UPDATED_METADATA={_updated_metadata} '''
-           f'''WHERE ID={self._id}'''
+            'Updating metadata | UPDATE FILES SET '
+           f'UPDATED_METADATA={_updated_metadata} '
+           f'WHERE ID={self._id}'
         )
         await self._lb._tgbox_db.FILES.execute((
             'UPDATE FILES SET UPDATED_METADATA=? WHERE ID=?',
@@ -3430,10 +3430,10 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                         self._file_path = make_general_path(self._file_path)
                     else:
                         logger.warning(
-                            '''Updated metadata contains efile_path, however, '''
-                            '''DecryptedLocalBoxFile that you trying to update '''
-                            '''doesn\'t have a MainKey and wasn\'t decrypted with '''
-                            '''the DecryptedLocalBox, so we will ignore new path.''')
+                            'Updated metadata contains efile_path, however, '
+                            'DecryptedLocalBoxFile that you trying to update '
+                            'doesn\'t have a MainKey and wasn\'t decrypted with '
+                            'the DecryptedLocalBox, so we will ignore new path.')
                 else:
                     # str attributes
                     if k in ('mime', 'file_name'):

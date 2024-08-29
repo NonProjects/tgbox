@@ -115,5 +115,5 @@ for x__dict__, x__all__ in __dict_to_update:
         # We update only things that presented in both
         # modules (sync & x) AND in x__all__
         if k in x__dict__ and k in x__all__:
-            logger.debug('__init__.%s was updated!' % k)
+            logger.debug(f'__init__.{k} was updated!')
             root__dict__[k] = x__dict__[k]

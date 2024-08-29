@@ -27,7 +27,7 @@ except ImportError:
     from re import search as re_search
 
 from platform import system as platform_system
-from pathlib import PureWindowsPath, PurePosixPath, Path
+from pathlib import PureWindowsPath, Path
 
 from .errors import (
     ConcatError,
@@ -381,13 +381,13 @@ class OpenPretender:
 
     def __repr__(self):
         return (
-            f'''<class {self.__class__.__name__}({self._flo}, {repr(self._aes_state)}, '''
-            f'''{self._current_size})>'''
+            f'<class {self.__class__.__name__}({self._flo}, {repr(self._aes_state)}, '
+            f'{self._current_size})>'
         )
     def __str__(self):
         return (
-            f'''<class {self.__class__.__name__}({self._flo}, {repr(self._aes_state)}, '''
-            f'''{self._current_size})> # {self._position=}, {len(self._buffered_bytes)=}'''
+            f'<class {self.__class__.__name__}({self._flo}, {repr(self._aes_state)}, '
+            f'{self._current_size})> # {self._position=}, {len(self._buffered_bytes)=}'
         )
     def concat_metadata(self, metadata: bytes) -> None:
         """Concates metadata to the file as (metadata + file)."""
@@ -595,9 +595,9 @@ def guess_path_type(path: Union[str, Path]) -> str:
     """
     path = path if isinstance(path, str) else str(path)
 
-    # If path has Letter drive (i.e C:) then it's
-    # definitely a Windows-like path
-    if (win_path := PureWindowsPath(path)).drive:
+    # If path has Letter drive (i.e C:) then
+    # it's definitely a Windows-like path
+    if PureWindowsPath(path).drive:
         return 'windows'
 
     # If user specified 'path' is the same as converted

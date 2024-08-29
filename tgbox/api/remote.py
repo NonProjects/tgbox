@@ -187,8 +187,8 @@ async def get_remotebox(
 
     if dlb:
         logger.info(
-            f'''Getting RemoteBox ID{dlb._box_channel_id} '''
-            f'''with the {dlb._tgbox_db._db_path} LocalBox'''
+            f'Getting RemoteBox ID{dlb._box_channel_id} '
+            f'with the {dlb._tgbox_db._db_path} LocalBox'
         )
     else:
         logger.info(f'Getting RemoteBox ({entity}) with TelegramClient')
@@ -197,8 +197,8 @@ async def get_remotebox(
         channel_entity = await account.get_entity(entity)
     except AuthKeyUnregisteredError:
         raise SessionUnregistered(
-            '''Session was disconnected. Change it with '''
-            '''DecryptedLocalBox.replace_session method.'''
+            'Session was disconnected. Change it with '
+            'DecryptedLocalBox.replace_session method.'
         ) from None
     except ValueError:
         # ValueError: Could not find the input entity for PeerChannel
@@ -315,8 +315,8 @@ class EncryptedRemoteBox:
     def __str__(self) -> str:
         box_salt = None if not self._box_salt else urlsafe_b64encode(self._box_salt.salt).decode()
         return (
-            f'''<class {self.__class__.__name__}({self._box_channel}, {self._tc}, {repr(self._defaults)})> '''
-            f'''# {self._box_name=}, {box_salt=}'''
+            f'<class {self.__class__.__name__}({self._box_channel}, {self._tc}, {repr(self._defaults)})> '
+            f'# {self._box_name=}, {box_salt=}'
         )
     def __hash__(self) -> int:
         # Without 22 hash of int wil be equal to object's
@@ -725,8 +725,8 @@ class EncryptedRemoteBox:
 
             if not decrypt:
                 logger.debug(
-                    '''Decryption is disabled, will try to '''
-                    '''yield EncryptedRemoteBoxFile''')
+                    'Decryption is disabled, will try to '
+                    'yield EncryptedRemoteBoxFile')
 
                 try:
                     return await EncryptedRemoteBoxFile(
@@ -736,14 +736,14 @@ class EncryptedRemoteBox:
 
                 except NotATgboxFile:
                     logger.debug(
-                       f'''Document: {m.file.name[:12]}...(ID{m.id}) '''
-                        '''is not a TGBOX file, skipping.'''
+                       f'Document: {m.file.name[:12]}...(ID{m.id}) '
+                        'is not a TGBOX file, skipping.'
                     )
                     return
 
             logger.debug(
-                '''Decryption is enabled, will try to '''
-                '''yield DecryptedRemoteBoxFile''')
+                'Decryption is enabled, will try to '
+                'yield DecryptedRemoteBoxFile')
             try:
                 erbf = EncryptedRemoteBoxFile(
                     id=None, erb=erb, message_document=m,
@@ -755,14 +755,14 @@ class EncryptedRemoteBox:
 
             except Exception as e: # In case of imported file
                 logger.debug(
-                    '''Failed to decrypt EncryptedRemoteBoxFile '''
-                   f'''(ID{m.id}), it seems that file is imported/'''
-                   f'''non-TGBOX [{e}]'''
+                    'Failed to decrypt EncryptedRemoteBoxFile '
+                   f'(ID{m.id}), it seems that file is imported/'
+                   f'non-TGBOX [{e}]'
                 )
                 if return_imported_as_erbf and not dlb:
                     logger.debug(
-                        '''return_imported_as_erbf is True & DLB '''
-                        '''is not specified, so will return ERBF''')
+                        'return_imported_as_erbf is True & DLB '
+                        'is not specified, so will return ERBF')
                     try:
                         return await EncryptedRemoteBoxFile(
                             id=None, erb=erb, message_document=m,
@@ -771,16 +771,16 @@ class EncryptedRemoteBox:
 
                     except NotATgboxFile:
                         logger.debug(
-                           f'''Document: {m.file.name[:12]}...(ID{m.id}) '''
-                            '''is not a TGBOX file, skipping.'''
+                           f'Document: {m.file.name[:12]}...(ID{m.id}) '
+                            'is not a TGBOX file, skipping.'
                         )
                         return
 
                 elif ignore_errors and not dlb:
                     logger.debug(
-                        '''return_imported_as_erbf is False & DLB '''
-                        '''is not specified, ignore_errors is True '''
-                        '''so we will continue iteration for other.'''
+                        'return_imported_as_erbf is False & DLB '
+                        'is not specified, ignore_errors is True '
+                        'so we will continue iteration for other.'
                     )
                     return
 
@@ -798,9 +798,9 @@ class EncryptedRemoteBox:
                         if return_imported_as_erbf:
                             try:
                                 logger.debug(
-                                   f'''DLB is specified, but FileKey to {m.id} is not '''
-                                    '''present in it. return_imported_as_erbf is True, '''
-                                    '''so we will return ERBF.'''
+                                   f'DLB is specified, but FileKey to {m.id} is not '
+                                    'present in it. return_imported_as_erbf is True, '
+                                    'so we will return ERBF.'
                                 )
                                 return await EncryptedRemoteBoxFile(
                                     id=None, erb=erb, message_document=m,
@@ -809,16 +809,16 @@ class EncryptedRemoteBox:
 
                             except NotATgboxFile:
                                 logger.debug(
-                                   f'''Document: {m.file.name[:12]}...(ID{m.id}) '''
-                                    '''is not a TGBOX file, skipping.'''
+                                   f'Document: {m.file.name[:12]}...(ID{m.id}) '
+                                    'is not a TGBOX file, skipping.'
                                 )
                                 return
 
                         elif ignore_errors:
                             logger.debug(
-                               f'''DLB is specified, but FileKey to ID{m.id} is not '''
-                                '''present in it. return_imported_as_erbf is False, '''
-                                '''so we will skip it and continue iteration.'''
+                               f'DLB is specified, but FileKey to ID{m.id} is not '
+                                'present in it. return_imported_as_erbf is False, '
+                                'so we will skip it and continue iteration.'
                             )
                             return
                         else:
@@ -860,7 +860,7 @@ class EncryptedRemoteBox:
             if not messages_chunk:
                 break
 
-            for drbf in (drbfiles := await gather(*messages_chunk)):
+            for drbf in (await gather(*messages_chunk)):
                 if drbf: yield drbf
 
     async def search_file(
@@ -966,8 +966,8 @@ class EncryptedRemoteBox:
         """
         if message_to_edit:
             logger.info(
-                f'''Updating {message_to_edit.id=} with {pf.file=}'''
-                f'''on RemoteBox ID{pf.dlb._box_channel_id}...''')
+                f'Updating {message_to_edit.id=} with {pf.file=}'
+                f'on RemoteBox ID{pf.dlb._box_channel_id}...')
         else:
             logger.info(f'Pushing {pf.file=} to RemoteBox ID{pf.dlb._box_channel_id}...')
 
@@ -975,13 +975,13 @@ class EncryptedRemoteBox:
 
         if me.premium and pf.filesize > UploadLimits.PREMIUM:
             raise LimitExceeded(
-                f'''Max allowed filesize for you is {UploadLimits.PREMIUM} '''
-                f'''bytes, your file is {pf.filesize} bytes in size.'''
+                f'Max allowed filesize for you is {UploadLimits.PREMIUM} '
+                f'bytes, your file is {pf.filesize} bytes in size.'
             )
         if not me.premium and pf.filesize > UploadLimits.DEFAULT:
             raise LimitExceeded(
-                f'''Max allowed filesize for you is {UploadLimits.DEFAULT} '''
-                f'''bytes, your file is {pf.filesize} bytes in size.'''
+                f'Max allowed filesize for you is {UploadLimits.DEFAULT} '
+                f'bytes, your file is {pf.filesize} bytes in size.'
             )
         # Last 16 bytes of metadata is File IV
         aes_state = AES(pf.filekey, pf.metadata[-16:])
@@ -1026,9 +1026,9 @@ class EncryptedRemoteBox:
                             message_to_edit.message)
                     except Exception as e:
                         logger.info(
-                            '''It seems that file you want to update have '''
-                            '''Updated Metadata, but we can\'t decode. Updates '''
-                            '''to Metadata will be ignored. {e}''')
+                            'It seems that file you want to update have '
+                            'Updated Metadata, but we can\'t decode. Updates '
+                           f'to Metadata will be ignored. {e}')
                     else:
                         # urlsafe_b64decode was successfull, now we need
                         # to get FileKey to decrypt the Metadata updates
@@ -1041,9 +1041,9 @@ class EncryptedRemoteBox:
                             )
                         except ValueError: # Invalid padding byte (AES Error)
                             logger.info(
-                                '''It seems that file you want to update have '''
-                                '''Updated Metadata, but we can\'t decrypt. '''
-                                '''Updates to Metadata will be ignored. {e}''')
+                                'It seems that file you want to update have '
+                                'Updated Metadata, but we can\'t decrypt. '
+                                'Updates to Metadata will be ignored. {e}')
                         else:
                             reenc_updated_metadata = AES(pf.filekey).encrypt(
                                 dec_updated_metadata # Re-encrypt with new FileKey
@@ -1075,13 +1075,13 @@ class EncryptedRemoteBox:
 
             if message_to_edit:
                 raise NotEnoughRights(
-                    '''You don\'t have enough privileges to edit'''
-                   f'''another's files on remote {box_name}.''') from None
+                    'You don\'t have enough privileges to edit'
+                   f'another\'s files on remote {box_name}.') from None
             else:
                 raise NotEnoughRights(
-                    '''You don\'t have enough privileges to upload '''
-                   f'''files to remote {box_name}. Ask for it or '''
-                    '''use this box as read only.'''
+                    'You don\'t have enough privileges to upload '
+                   f'files to remote {box_name}. Ask for it or '
+                    'use this box as read only.'
                 ) from None
 
         pf.set_file_id(file_message.id)
@@ -1154,9 +1154,9 @@ class EncryptedRemoteBox:
         """
         if rbf is None:
             raise RemoteFileNotFound(
-                '''Specified "rbf" is None. Probably the File you're trying '''
-                '''to update was removed from the Remote, but still present '''
-                '''in your Local Box. Try to Sync them firstly.'''
+                'Specified "rbf" is None. Probably the File you\'re trying '
+                'to update was removed from the Remote, but it still '
+                'presented in your Local Box. Try to Sync them firstly.'
             )
         return await self._push_file(pf,
             message_to_edit=rbf._message,
@@ -1211,8 +1211,8 @@ class EncryptedRemoteBox:
         )
         if not rm_result[0].pts_count:
             raise NotEnoughRights(
-                '''You don\'t have enough rights to delete '''
-                '''files from this RemoteBox.'''
+                'You don\'t have enough rights to delete '
+                'files from this RemoteBox.'
             )
         if lb:
             await lb.delete_files(lbf_ids=rbf_ids)
@@ -1253,8 +1253,8 @@ class EncryptedRemoteBox:
         except ChatAdminRequiredError:
             box_name = await self.get_box_name()
             raise NotEnoughRights(
-                '''You don\'t have enough rights to delete '''
-               f'''{box_name} RemoteBox.'''
+                'You don\'t have enough rights to delete '
+               f'{box_name} RemoteBox.'
             ) from None
 
     async def decrypt(
@@ -1510,15 +1510,15 @@ class EncryptedRemoteBoxFile:
 
     def __repr__(self) -> str:
         return (
-            f'''{self.__class__.__name__}({self._id}, {repr(self._rb)}, '''
-            f'''{self._message}, {self._cache_preview}, {repr(self._defaults)})'''
+            f'{self.__class__.__name__}({self._id}, {repr(self._rb)}, '
+            f'{self._message}, {self._cache_preview}, {repr(self._defaults)})'
         )
     def __str__(self) -> str:
         file_salt = None if not self._initialized else urlsafe_b64encode(self._file_salt.salt).decode()
         return (
-            f'''{self.__class__.__name__}({self._id}, {repr(self._rb)}, '''
-            f'''{self._message}, {self._cache_preview}, {repr(self._defaults)}) # '''
-            f'''{self._initialized=}, {file_salt=}, {self._sender=}, {self._imported=}'''
+            f'{self.__class__.__name__}({self._id}, {repr(self._rb)}, '
+            f'{self._message}, {self._cache_preview}, {repr(self._defaults)}) # '
+            f'{self._initialized=}, {file_salt=}, {self._sender=}, {self._imported=}'
         )
     def __hash__(self) -> int:
         if not self.initialized:
@@ -1734,8 +1734,8 @@ class EncryptedRemoteBoxFile:
 
                 if verify_prefix and self._prefix != PREFIX:
                     raise NotATgboxFile(
-                        f'''Invalid prefix! Expected {PREFIX}, '''
-                        f'''got {self._prefix}'''
+                        f'Invalid prefix! Expected {PREFIX}, '
+                        f'got {self._prefix}'
                     )
                 metadata_size = bytes_to_int(
                     base_data[request_amount-3:request_amount]
@@ -1823,8 +1823,8 @@ class EncryptedRemoteBoxFile:
         )
         if not rm_result[0].pts_count:
             raise NotEnoughRights(
-                '''You don\'t have enough rights to delete '''
-                '''file from this RemoteBox.'''
+                'You don\'t have enough rights to delete '
+                'file from this RemoteBox.'
             )
     def get_requestkey(self, mainkey: MainKey) -> RequestKey:
         """
@@ -2012,9 +2012,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 self._file_path = AES(self._mainkey).decrypt(erbf._efile_path)
             except ValueError: # ValueError: invalid padding byte
                 logger.info(
-                   f'''We can\'t decrypt real file path of ID{self._id} because '''
-                    '''MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '''
-                    '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
+                   f'We can\'t decrypt real file path of ID{self._id} because '
+                    'MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '
+                    'with MainKey to fix this. Setting to DEF_NO_FOLDER...'
                 )
                 self._file_path = self._defaults.DEF_NO_FOLDER
                 self._dirkey = None
@@ -2028,9 +2028,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         else:
             if erbf._efile_path: # v1.3+ but no MainKey
                 logger.info(
-                   f'''We can\'t decrypt real file path of ID{self._id} because '''
-                    '''MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '''
-                    '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
+                   f'We can\'t decrypt real file path of ID{self._id} because '
+                    'MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '
+                    'with MainKey to fix this. Setting to DEF_NO_FOLDER...'
                 )
                 self._file_path = self._defaults.DEF_NO_FOLDER
 
@@ -2116,9 +2116,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 self._file_path = make_general_path(self._file_path.decode())
             else:
                 logger.info(
-                   f'''We can\'t decrypt real file path of ID{self._id} because '''
-                    '''MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '''
-                    '''with MainKey to fix this. Setting to DEF_NO_FOLDER...'''
+                   f'We can\'t decrypt real file path of ID{self._id} because '
+                    'MainKey is not presented. Try to decrypt EncryptedRemoteBoxFile '
+                    'with MainKey to fix this. Setting to DEF_NO_FOLDER...'
                 )
                 self._file_path = self._defaults.DEF_NO_FOLDER
 
@@ -2187,13 +2187,13 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
                         elif k == 'efile_path':
                             if self._mainkey:
-                                self._file_path = AES(self._mainkey).decrypt(v)
+                                file_path = AES(self._mainkey).decrypt(v)
                                 self._file_path = make_general_path(file_path.decode())
                             else:
                                 logger.debug(
-                                    '''Updated metadata contains efile_path, but '''
-                                    '''this DecryptedRemoteBoxFile wasn\'t '''
-                                    '''decrypted with MainKey, so we will ignore it'''
+                                    'Updated metadata contains efile_path, but '
+                                    'this DecryptedRemoteBoxFile wasn\'t '
+                                    'decrypted with MainKey, so we will ignore it'
                                 )
                         else:
                             # str attributes
@@ -2208,8 +2208,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
             except Exception:
                 logger.info(
-                    f'''Updates to metadata for ID{self._id} failed. '''
-                    f'''Traceback:\n{format_exc()}'''
+                    f'Updates to metadata for ID{self._id} failed. '
+                    f'Traceback:\n{format_exc()}'
                 )
         self._initialized = True
 
@@ -2596,8 +2596,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                         total = self._size
 
                     logger.debug(
-                        f'''ID{self._id}: Downloading... {total=} '''
-                        f'''from the {self._size=} bytes; {len(buffered)=}'''
+                        f'ID{self._id}: Downloading... {total=} '
+                        f'from the {self._size=} bytes; {len(buffered)=}'
                     )
                     if total == self._size and not buffered:
                         if self._has_hmac_sha256:
@@ -2661,8 +2661,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 if download_error_switch == 0:
                     download_error_switch = 1
                     logger.warning(
-                        '''Fast download FAILED. Trying with SLOW!\n'''
-                       f'''{format_exc()}''')
+                        'Fast download FAILED. Trying with SLOW!\n'
+                       f'{format_exc()}')
                     continue
                 else:
                     logger.error('Both fast and slow download methods failed')
@@ -2836,8 +2836,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             raise InvalidFile('Can\'t edit caption of this Document') from e
         except MessageNotModifiedError as e:
             logger.debug(
-                '''Updates wasn\'t commited to your RemoteBox '''
-               f'''because of MessageNotModifiedError: {e}'''
+                'Updates wasn\'t commited to your RemoteBox '
+               f'because of MessageNotModifiedError: {e}'
             )
 
         # Here is Metadata parts that is impossible to change

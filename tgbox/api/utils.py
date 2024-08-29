@@ -191,9 +191,9 @@ class TelegramClient(TTelegramClient):
                 await self.sign_in(self._phone_number, code)
             except SessionPasswordNeededError:
                 logger.info(
-                    '''Log-in without 2FA password failed. '''
-                   f'''Trying to sign-in with {self._phone_number}, '''
-                   f'''password and {code} code..'''
+                    'Log-in without 2FA password failed. '
+                   f'Trying to sign-in with {self._phone_number}, '
+                   f'password and {code} code..'
                 )
                 await self.sign_in(password=password)
         else:
@@ -248,8 +248,8 @@ class TelegramVirtualFile:
 
     def __repr__(self) -> str:
         return (
-            f'''<class {self.__class__.__name__} @ '''
-            f'''{self.name=}, {self.size=}, {self.mime=}>'''
+            f'<class {self.__class__.__name__} @ '
+            f'{self.name=}, {self.size=}, {self.mime=}>'
         )
     async def get_preview(self, quality: int=1) -> bytes:
         if hasattr(self.document,'sizes')\
@@ -651,8 +651,8 @@ class DefaultsTableWrapper:
     async def init(self) -> 'DefaultsTableWrapper':
         """Fetch the defaults and initialize"""
         logger.debug(
-            '''Initializing DefaultsTableWrapper for '''
-           f'''{self._tgbox_db._db_path} LocalBox'''
+            'Initializing DefaultsTableWrapper for '
+           f'{self._tgbox_db._db_path} LocalBox'
         )
         if self._tgbox_db.closed:
             await self._tgbox_db.init()
