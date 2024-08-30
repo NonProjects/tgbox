@@ -1564,11 +1564,23 @@ class EncryptedRemoteBoxFile:
     @property
     def sender(self) -> Union[str, None]:
         """
-        Returns post author if sign
-        messages is enabled in
-        ``Channel``, ``None`` otherwise
+        Returns post author if "Sign Messages"
+        is enabled in Box ``Channel``, ``None``
+        otherwise.
         """
         return self._sender
+
+    @property
+    def sender_id(self) -> Union[int, None]:
+        """
+        Returns post author ID if "Sign Messages"
+        with "Show author's profiles" is enabled
+        Box ``Channel``, ``None`` otherwise.
+
+        * If Sender is ``Channel``, ID will be negative.
+        * If User, ID will be always positive (> 0).
+        """
+        return self._sender_id
 
     @property
     def imported(self) -> bool:
@@ -1577,6 +1589,17 @@ class EncryptedRemoteBoxFile:
         from other RemoteBox. ``False`` otherwise.
         """
         return self._imported
+
+    @property
+    def imported_from_id(self) -> Union[int, None]:
+        """
+        Returns forward author (the entity Document
+        was forwarded from, i.e User / Channel )ID.
+
+        * If Author is ``Channel``, ID will be negative.
+        * If User, ID will be always positive (> 0).
+        """
+        return self._imported_from_id
 
     @property
     def version_byte(self) -> Union[bytes, None]:
@@ -1701,8 +1724,6 @@ class EncryptedRemoteBoxFile:
             raise NotATgboxFile('Specified message doesn\'t have a document')
 
         self._file_size = self._file.size
-
-        self._sender = self._message.post_author
         self._upload_time = int(self._message.date.timestamp())
 
         if self._message.edit_date:
@@ -1713,10 +1734,27 @@ class EncryptedRemoteBoxFile:
         self._box_channel = self._message.chat
         self._box_channel_id = self._message.peer_id.channel_id
 
+        self._sender = self._message.post_author
+        self._sender_id = None
+
+        self._imported = False
+        self._imported_from_id = None
+
+        if self._message.from_id:
+            sender = self._message.from_id
+            if isinstance(sender, PeerChannel):
+                self._sender_id = -(1000000000000 + sender.channel_id)
+            else:
+                self._sender_id = sender.user_id
+
         if self._message.fwd_from:
             self._imported = True
-        else:
-            self._imported = False
+
+            imported_from = self._message.fwd_from.from_id
+            if isinstance(imported_from, PeerChannel):
+                self._imported_from_id = -(1000000000000 + imported_from.channel_id)
+            else:
+                self._imported_from_id = imported_from.user_id
 
         # ======================================================= #
 
@@ -1958,9 +1996,12 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._message = erbf._message
         self._id = erbf._id
         self._file = erbf._file
-        self._sender = erbf._sender
 
-        self._defaults = erbf._defaults
+        self._sender = erbf._sender
+        self._sender_id = erbf._sender_id
+
+        self._imported = erbf._imported
+        self._imported_from_id = erbf._imported_from_id
 
         if cache_preview is None:
             self._cache_preview = erbf._cache_preview
@@ -1983,7 +2024,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._duration, self._version_byte = None, erbf._version_byte
         self._updated_at_time = erbf._updated_at_time
 
-        self._preview, self._imported = None, erbf._imported
+        self._preview, self._defaults = None, erbf._defaults
         self._prefix, self._file_pos = erbf._prefix, erbf._file_pos
 
         self._file_file_name = erbf._file_file_name
