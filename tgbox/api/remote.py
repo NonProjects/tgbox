@@ -372,6 +372,10 @@ class EncryptedRemoteBox:
             toggle (``bool``):
                 If ``True``, will enable signatures. If
                 ``False``, will disable message signing.
+
+        Will return ``True`` if file signing was
+        enabled or ``False`` if you don't have
+        enough privileges to change it.
         """
         try:
             result = await self._tc(ToggleSignaturesRequest(
@@ -390,9 +394,12 @@ class EncryptedRemoteBox:
         except ChatNotModifiedError:
             logger.debug(f'Nothing is changed, return True: {e}')
             return True # Silently return True, as nothing changed
+        except ChatAdminRequiredError:
+            return False # Not enough rights for this action
 
         self._box_channel = result.chats[0] # Updated Channel
         return bool(result)
+
 
     async def author_files(self, toggle: bool) -> Union[bool, None]:
         """
@@ -406,6 +413,10 @@ class EncryptedRemoteBox:
             toggle (``bool``):
                 If ``True``, will enable authoring. If
                 ``False``, will disable it.
+
+        Will return ``True`` if file authoring was
+        enabled or ``False`` if you don't have
+        enough privileges to change it.
         """
         try:
             result = await self._tc(ToggleSignaturesRequest(
@@ -424,6 +435,8 @@ class EncryptedRemoteBox:
         except ChatNotModifiedError as e:
             logger.debug(f'Nothing is changed, return True: {e}')
             return True # Silently return True, as nothing changed
+        except ChatAdminRequiredError:
+            return False # Not enough rights for this action
 
     async def get_last_file_id(self) -> int:
         """Returns last channel file id. If nothing found returns 0"""
@@ -1146,7 +1159,7 @@ class EncryptedRemoteBox:
             else:
                 raise NotEnoughRights(
                     'You don\'t have enough privileges to upload '
-                   f'files to remote {box_name}. Ask for it or '
+                   f'files to remote {box_name}. Ask for them or '
                     'use this box as read only.'
                 ) from None
 

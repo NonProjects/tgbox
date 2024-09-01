@@ -34,7 +34,7 @@ setup(
 
     install_requires = [
         'aiosqlite==0.20.0',
-        'telethon==1.35.0',
+        'telethon==1.36.0',
         'ecdsa==0.19.0',
         'filetype==1.2.0',
         'pysocks==1.7.1'
