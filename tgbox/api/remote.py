@@ -30,14 +30,16 @@ from telethon.errors import (
     MediaCaptionTooLongError,
     MessageNotModifiedError,
     AuthKeyUnregisteredError,
-    MessageIdInvalidError
+    MessageIdInvalidError,
+    ChatNotModifiedError
 )
 from telethon.tl.functions.channels import (
     CreateChannelRequest, EditPhotoRequest,
-    GetFullChannelRequest, DeleteChannelRequest
+    GetFullChannelRequest, DeleteChannelRequest,
+    ToggleSignaturesRequest
 )
 from telethon.tl.types import (
-    Channel, Message, PeerChannel,
+    Channel, User, Message, PeerChannel,
     InputMessagesFilterDocument
 )
 from ..crypto import (
@@ -358,6 +360,70 @@ class EncryptedRemoteBox:
         class, ``False`` if *Decrypted*
         """
         return self._is_encrypted
+
+    async def sign_files(self, toggle: bool) -> bool:
+        """
+        This function will enable or disable (by
+        ``toggle``) file(/message) sender signature.
+
+        *Same as Box Channel Settings -> "Sign Messages"*
+
+        Arguments:
+            toggle (``bool``):
+                If ``True``, will enable signatures. If
+                ``False``, will disable message signing.
+        """
+        try:
+            result = await self._tc(ToggleSignaturesRequest(
+                channel = self._box_channel,
+                signatures_enabled = bool(toggle)
+            ))
+        except TypeError:
+            # TODO: This except block is here only because
+            # of old Layer that Telethon v1.36.0 use. On
+            # new telethon version (which should include
+            # Layer 186+) we can remove it.
+            result = await self._tc(ToggleSignaturesRequest(
+                channel = self._box_channel,
+                enabled = bool(toggle) # Layer < 186
+            ))
+        except ChatNotModifiedError:
+            logger.debug(f'Nothing is changed, return True: {e}')
+            return True # Silently return True, as nothing changed
+
+        self._box_channel = result.chats[0] # Updated Channel
+        return bool(result)
+
+    async def author_files(self, toggle: bool) -> Union[bool, None]:
+        """
+        This function will enable or disable (by
+        ``toggle``) file(/message) authoring.
+
+        *Same as Box Channel Settings -> "Sign Messages"
+        -> "Show author's profiles"*
+
+        Arguments:
+            toggle (``bool``):
+                If ``True``, will enable authoring. If
+                ``False``, will disable it.
+        """
+        try:
+            result = await self._tc(ToggleSignaturesRequest(
+                channel = self._box_channel,
+                signatures_enabled = bool(toggle),
+                profiles_enabled = bool(toggle)
+            ))
+            self._box_channel = result.chats[0] # Updated Channel
+            return bool(result)
+        except TypeError:
+            # TODO: This except block is here only because
+            # of old Layer that Telethon v1.36.0 use. On
+            # new telethon version (which should include
+            # Layer 186+) we can remove it.
+            return None
+        except ChatNotModifiedError as e:
+            logger.debug(f'Nothing is changed, return True: {e}')
+            return True # Silently return True, as nothing changed
 
     async def get_last_file_id(self) -> int:
         """Returns last channel file id. If nothing found returns 0"""
@@ -1470,8 +1536,13 @@ class EncryptedRemoteBoxFile:
             self._message = None
             self._id = id
 
-        self._file = None
         self._sender = None
+        self._sender_id = None
+        self._sender_entity = None
+
+        self._imported = None
+        self._imported_from_id = None
+        self._imported_from_entity = None
 
         self._upload_time = None
         self._updated_at_time = None
@@ -1480,6 +1551,7 @@ class EncryptedRemoteBoxFile:
         self._file_size = None
         self._file_file_name = None
 
+        self._file = None
         self._metadata = None
         self._file_iv = None
 
@@ -1491,9 +1563,7 @@ class EncryptedRemoteBoxFile:
         self._secret_metadata = None
         self._efile_path = None
         self._minor_version = None
-
         self._file_pos = None
-        self._imported = None
 
         if defaults is None:
             logger.debug('ERBF: Custom defaults is not present')
@@ -1574,13 +1644,25 @@ class EncryptedRemoteBoxFile:
     def sender_id(self) -> Union[int, None]:
         """
         Returns post author ID if "Sign Messages"
-        with "Show author's profiles" is enabled
-        Box ``Channel``, ``None`` otherwise.
+        with "Show author's profiles" was enabled
+        in Box ``Channel``, ``None`` otherwise.
 
         * If Sender is ``Channel``, ID will be negative.
         * If User, ID will be always positive (> 0).
         """
         return self._sender_id
+
+    @property
+    def sender_entity(self) -> Union[Channel, User, None]:
+        """
+        Returns post author entity if "Sign Messages"
+        with "Show author's profiles" was enabled
+        in Box ``Channel``, ``None`` otherwise.
+
+        * If Author is Channel, ``Channel`` object will be returned.
+        * If Author is User, ``User`` object will be returned.
+        """
+        return self._sender_entity
 
     @property
     def imported(self) -> bool:
@@ -1594,12 +1676,23 @@ class EncryptedRemoteBoxFile:
     def imported_from_id(self) -> Union[int, None]:
         """
         Returns forward author (the entity Document
-        was forwarded from, i.e User / Channel )ID.
+        was forwarded from, i.e User / Channel) ID.
 
         * If Author is ``Channel``, ID will be negative.
         * If User, ID will be always positive (> 0).
         """
         return self._imported_from_id
+
+    @property
+    def imported_from_entity(self) -> Union[Channel, User, None]:
+        """
+        Returns forward author entity (the one Document
+        was forwarded from, i.e User / Channel).
+
+        * If Author is Channel, ``Channel`` object will be returned.
+        * If Author is User, ``User`` object will be returned.
+        """
+        return self._imported_from_entity
 
     @property
     def version_byte(self) -> Union[bytes, None]:
@@ -1735,10 +1828,7 @@ class EncryptedRemoteBoxFile:
         self._box_channel_id = self._message.peer_id.channel_id
 
         self._sender = self._message.post_author
-        self._sender_id = None
-
         self._imported = False
-        self._imported_from_id = None
 
         if self._message.from_id:
             sender = self._message.from_id
@@ -1746,6 +1836,9 @@ class EncryptedRemoteBoxFile:
                 self._sender_id = -(1000000000000 + sender.channel_id)
             else:
                 self._sender_id = sender.user_id
+
+            self._sender_entity = await self._rb._tc.get_entity(
+                self._sender_id)
 
         if self._message.fwd_from:
             self._imported = True
@@ -1755,6 +1848,9 @@ class EncryptedRemoteBoxFile:
                 self._imported_from_id = -(1000000000000 + imported_from.channel_id)
             else:
                 self._imported_from_id = imported_from.user_id
+
+            self._imported_from_entity = await self._rb._tc.get_entity(
+                self._imported_from_id)
 
         # ======================================================= #
 
@@ -1999,9 +2095,11 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         self._sender = erbf._sender
         self._sender_id = erbf._sender_id
+        self._sender_entity = erbf._sender_entity
 
         self._imported = erbf._imported
         self._imported_from_id = erbf._imported_from_id
+        self._imported_from_entity = erbf._imported_from_entity
 
         if cache_preview is None:
             self._cache_preview = erbf._cache_preview
