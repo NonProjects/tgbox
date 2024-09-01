@@ -387,10 +387,16 @@ class EncryptedRemoteBox:
             # of old Layer that Telethon v1.36.0 use. On
             # new telethon version (which should include
             # Layer 186+) we can remove it.
-            result = await self._tc(ToggleSignaturesRequest(
-                channel = self._box_channel,
-                enabled = bool(toggle) # Layer < 186
-            ))
+            try:
+                # Yep. ugly as hell. Let's hope that Telethon will
+                # make a release with new Layer soon.
+                result = await self._tc(ToggleSignaturesRequest(
+                    channel = self._box_channel,
+                    enabled = bool(toggle) # Layer < 186
+                ))
+            except ChatAdminRequiredError:
+                return False # Not enough rights for this action
+
         except ChatNotModifiedError:
             logger.debug(f'Nothing is changed, return True: {e}')
             return True # Silently return True, as nothing changed
@@ -399,7 +405,6 @@ class EncryptedRemoteBox:
 
         self._box_channel = result.chats[0] # Updated Channel
         return bool(result)
-
 
     async def author_files(self, toggle: bool) -> Union[bool, None]:
         """
