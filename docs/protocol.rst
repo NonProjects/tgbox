@@ -397,7 +397,7 @@ Although the *Telegram messenger* doesn't allow us to update a *parts* of alread
 Updating Metadata
 ^^^^^^^^^^^^^^^^^
 
-You can update some *Metadata attributes* of the *Box File* **after** it was uploaded. For example, you can change a *File name* of *File path* (last will change *Directory* too, like "move to folder" operation) with :meth:`~tgbox.api.remote.DecryptedRemoteBoxFile.update_metadata` on *RemoteBox File* and then :meth:`~tgbox.api.local.DecryptedLocalBoxFile.refresh_metadata` on a *LocalBox File* with the same *ID*. Please note that we **can not** partially update already uploaded to Telegram *File*, so your updated *Metadata attributes* will be stored in **encrypted** and encoded **form** in the *File caption*, which have it's own limits (~2KB/*~4KB Premium*).
+You can update some *Metadata attributes* of the *Box File* **after** it was uploaded. For example, you can change a *File name* of *File path* (last will change *Directory* too, like "move to folder" operation) with :meth:`~tgbox.api.remote.DecryptedLocalBoxFile.update_metadata` on *LocalBox File* with corresponding :class:`~tgbox.api.remote.DecryptedRemoteBoxFile` as ``drbf`` argument. Please note that we **can not** partially update already uploaded to Telegram *File*, so your updated *Metadata attributes* will be stored in **encrypted** and encoded **form** in the *File caption*, which have it's own limits (~2KB/*~4KB Premium*).
 
 Re-uploading File
 ^^^^^^^^^^^^^^^^^

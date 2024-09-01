@@ -1237,7 +1237,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         lbf_um = AES(dlbf._filekey).encrypt(PackedAttributes.pack(**lbf_um))
         logger.debug(f'Refreshing Metadata of LocalBox file ID{dlbf.id}')
-        await dlbf.refresh_metadata(_updated_metadata=lbf_um)
+        await dlbf._refresh_metadata(_updated_metadata=lbf_um)
 
     async def _fast_sync(
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
@@ -3320,22 +3320,51 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             """This function was inherited from ``EncryptedLocalBoxFile`` """
             """and cannot be used on ``DecryptedLocalBoxFile``."""
         )
+    async def _update_file_path(self,
+            file_path: Optional[Path] = None,
+            dlb: Optional[DecryptedLocalBox] = None):
+        """
+        This internal method will check ``file_path`` for
+        uniqueness and update it if all is OK.
 
-    def set_download_path(self, path: Path):
-        """Will set download path to specified."""
-        self._download_path = path
+        If ``file_path`` is ``None`` will restore
+        original file path.
+        """
+        dlb = dlb or self._lb
+        file_path = file_path or self._original_file_path
 
-    async def refresh_metadata(
+        fingerprint = make_file_fingerprint(
+            file_path = file_path / self._file_name,
+            mainkey = dlb._mainkey)
+        try:
+            await dlb._check_fingerprint(fingerprint)
+        except FingerprintExists as e:
+            f = str(file_path / self._file_name)
+            raise FingerprintExists(
+               f'File with the same path and name ("{f}") is already presented '
+                'in your Box. Can not restore original directory.') from e
+
+        self._file_path = file_path
+        self._directory = await dlb._make_local_path(file_path)
+
+        await dlb._tgbox_db.FILES.execute((
+            'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
+            (self._directory.part_id, self._id)
+        ))
+        await dlb._tgbox_db.FILES.execute((
+            'UPDATE FILES SET FINGERPRINT=? WHERE ID=?',
+            (fingerprint, self._id)
+        ))
+
+    async def _refresh_metadata(
             self, drb: Optional['tgbox.api.remote.DecryptedRemoteBox'] = None,
             drbf: Optional['tgbox.api.remote.DecryptedRemoteBoxFile'] = None,
             _updated_metadata: Optional[Union[str, bytes]] = None
         ):
         """
         This method will refresh local UPDATED_METADATA from
-        the remote box file. You should call it after
-        every ``DecryptedRemoteBoxFile.update_metadata``
-        await, or specify ``DecryptedLocalBox`` when
-        awaiting ``update_metadata`` as ``dlb`` kwarg.
+        the remote box file. You should call it after every
+        ``DecryptedRemoteBoxFile.update_metadata`` call.
 
         Arguments:
             drb (``DecryptedRemoteBox``, optional):
@@ -3425,9 +3454,28 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
                 elif k == 'efile_path':
                     if isinstance(self._lb, DecryptedLocalBox) or self._mainkey:
-                        mainkey = self._mainkey if self._mainkey else self._lb._mainkey
-                        self._file_path = AES(mainkey).decrypt(v).decode()
-                        self._file_path = make_general_path(self._file_path)
+                        mainkey = self._mainkey or self._lb._mainkey
+
+                        file_path = AES(mainkey).decrypt(v).decode()
+                        file_path = make_general_path(file_path)
+
+                        if isinstance(self._lb, DecryptedLocalBox):
+                            try:
+                                await self._update_file_path(file_path, self._lb)
+                            except FingerprintExists:
+                                logger.debug(
+                                   f'Directory of file ID{self._id} was not modified '
+                                    'due to the same Fingerprint. Most probably '
+                                    'file path wasn\'t updated, so this should not'
+                                    'be a problem.')
+                        else:
+                            self._file_path = file_path
+
+                            logger.warning(
+                                'self._lb in this DecryptedLocalBoxFile is not '
+                                'DecryptedLocalBox, thus, we can NOT update '
+                                'LocalBox. Changes to self._file_path will be '
+                                'NOT permanent. Check your code.')
                     else:
                         logger.warning(
                             'Updated metadata contains efile_path, however, '
@@ -3443,6 +3491,11 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             else:
                 self._residual_metadata[k] = v
 
+
+    def set_download_path(self, path: Path):
+        """Will set download path to specified."""
+        self._download_path = path
+
     async def update_metadata(
             self, changes: Dict[str, Union[bytes, None]],
             dlb: Optional['DecryptedLocalBox'] = None,
@@ -3451,15 +3504,13 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         ):
         """This method will "update" file metadata attributes
 
-        In most cases you will want to use the same method on
-        the ``DecryptedRemoteBoxFile`` and then refresh
-        metadata of the ``DecryptedLocalBoxFile`` via the
-        ``refresh_metadata()`` method. This way you will
-        update metadata of the Remote **and** Local file.
-
-        However, you may want to update file metadata in
-        the **LocalBox only**, and left the RemoteBox
-        **untouched**. For such case use this method only.
+        In most cases you will want to update metadata in
+        your Box as whole: in Remote & Local. You can
+        specify here ``drbf`` (or at least ``drb``) and
+        we will do it automatically. However, you may want
+        to update file metadata in the **LocalBox only**,
+        and left the RemoteBox **untouched**. For such
+        case do not specify ``drb`` or ``drbf``.
 
         Arguments:
             changes (``Dict[str, Union[bytes, None]]``):
@@ -3505,7 +3556,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         .. code-block:: python
 
                 ... # Most code is omited, see help(tgbox.api)
-                dlbf = await dlb.get_file(dlb.get_last_file_id())
+                lfid = await dlb.get_last_file_id()
+                dlbf = await dlb.get_file(lfid)
                 await dlbf.update_metadata({'file_name': b'new.txt'})
 
                 print(dlbf.file_name) # new.txt
@@ -3517,13 +3569,16 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             - Not a *default* metadata (default is file_name, mime, etc)
               will be placed to the ``residual_metadata`` property dict.
 
-            - LocalBox doesn't have any limit on the CAttrs size, but in
-              RemoteBox there is a file caption (and so updated metadata)
-              limit: 1KB and 2KB for a Premium Telegram users. Don't
-              specify ``drb`` if you want to update LocalBox only.
+            - LocalBox doesn't have any limit on the CAttrs size except
+              ``METADATA_MAX``, but in RemoteBox there is a file caption
+              (and so updated metadata) limit: 1KB and 2KB for a Premium
+              Telegram users. Don't specify ``drb`` if you want to update
+              LocalBox only.
 
-            - You can replace file's path by specifying a
-              `file_path`` key with appropriate path (str/bytes).
+            - You can replace file's path by specifying a ``file_path``
+              key with appropriate path (str/bytes). ``file_path=''``
+              will restore original file path. This is valid for all
+              changed attributes.
         """
         if 'file_path' in changes and not dlb\
             and not isinstance(self._lb, DecryptedLocalBox):
@@ -3552,26 +3607,18 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             new_file_path = new_file_path.decode()
 
         if new_file_path:
-            self._directory = await dlb._make_local_path(Path(new_file_path))
-
-            await dlb._tgbox_db.FILES.execute((
-                'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
-                (self._directory.part_id, self._id)
-            ))
             efile_path = AES(dlb._mainkey).encrypt(new_file_path.encode())
             current_changes['efile_path'] = efile_path
+            # We don't need to await self._update_file_path here
+            # because we later will use self.refresh_metadata,
+            # where ._update_file_path will be called.
 
         elif new_file_path is not None:
-            # User requested us to remove updated file
-            # path from the LocalBox, so we need to
-            # restore the original PPATH_HEAD
-            self._file_path = self._original_file_path
-            self._directory = await dlb._make_local_path(self._original_file_path)
-
-            await dlb._tgbox_db.FILES.execute((
-                'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
-                (self._directory.part_id, self._id)
-            ))
+            # Here we DO need to update it, because updates
+            # will NOT have the 'efile_path' key, thus,
+            # ._update_file_path method will be NOT called
+            # in the self.refresh_metadata down the code.
+            await self._update_file_path(None, dlb)
 
         # This will update already existed CAttrs in Updated Metadata
         # with new from the "changes" dict. If any key of CAttrs will
@@ -3624,13 +3671,10 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         else:
             updates_encoded = ''
 
-        await self.refresh_metadata(_updated_metadata=updates_encoded)
+        await self._refresh_metadata(_updated_metadata=updates_encoded)
 
-        if drb:
-            drbf = await drb.get_file(self._id)
-
-        if drbf:
-            await drbf.update_metadata(changes, dlb=dlb)
+        if drb:  drbf = await drb.get_file(self._id)
+        if drbf: await drbf.update_metadata(changes)
 
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """

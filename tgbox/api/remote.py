@@ -2827,11 +2827,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         return outfile
 
-    async def update_metadata(
-            self, changes: Dict[str, Union[bytes, None]],
-            dlb: Optional['DecryptedLocalBox'] = None,
-            dlbf: Optional['DecryptedLocalBoxFile'] = None
-        ):
+    async def update_metadata(self, changes: Dict[str, Union[bytes, None]]):
         """This method will "update" file metadata attributes
 
         Metadata located inside the file, so we can't
@@ -2839,6 +2835,12 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         can and we will use its *caption* to place
         packed by PackedAttributes, encrypted and
         encoded with ``urlsafe_b64encode`` changes.
+
+        This method will update metadata only in the
+        RemoteBox. If you want to update metadata in
+        whole Box (Remote & Local), then use the same
+        method on the ``DecryptedLocalBoxFile`` and
+        specify this ``DecryptedRemoteBoxFile`` as ``drb``.
 
         Arguments:
             changes (``Dict[str, Union[bytes, None]]``):
@@ -2853,55 +2855,36 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 ``tgbox.tools.int_to_bytes`` function for
                 'duration' field.
 
-            dlb (``DecryptedLocalBox``, optional):
-                ``DecryptedLocalBox`` associated with
-                this ``DecryptedRemoteBox``. Will auto
-                refresh your updates. If not specified,
-                then you will need to do it by yourself.
-
-                If you have ``DecryptedLocalBoxFile``,
-                pass it as ``dlbf`` instead.
-
-            dlbf (``DecryptedLocalBoxFile``, optional):
-                ``DecryptedLocalBox`` associated with
-                this ``DecryptedRemoteBox``. Will auto
-                refresh your updates. If not specified,
-                then you will need to do it by yourself.
-
         E.g: This code will replace ``file_name`` metadata
         attribute of the ``DecryptedRemoteBoxFile``
 
         .. code-block:: python
 
                 ... # Most code is omited, see help(tgbox.api)
-                drbf = await drb.get_file(dlb.get_last_file_id())
+                lfid = await drb.get_last_file_id()
+                drbf = await drb.get_file(lfid)
                 await drbf.update_metadata({'file_name': b'new.txt'})
 
                 print(drbf.file_name) # new.txt
 
         .. note::
-            - Your LocalBox will NOT know about this update,
-              so you should specify here ``dlb`` (is better way)
-              or await the ``refresh_metadata`` method on the
-              ``DecryptedLocalBoxFile`` with the same ID.
+            - Your LocalBox will NOT know about this update. If
+              you want to update Remote & Local use same method
+              on the ``DecryptedLocalBoxFile`` with ``drb``.
 
             - Not a *default* metadata (default is file_name, mime, etc)
               will be placed to the ``residual_metadata`` property dict.
 
+            - You can replace file's path by specifying a ``file_path``
+              key with appropriate path (str/bytes). ``file_path=''``
+              will restore original file path. This is valid for all
+              changed attributes.
+
             - There is a file caption (and so updated metadata)
               limit: 1KB and 2KB for a Premium Telegram users.
-
-            - You can replace file's path by specifying a ``file_path``
-              key with appropriate path (str/bytes). Also, you
-              **will need** to specify a ``DecryptedLocalBox``
-              as ``dlb`` so we can create a new *LocalBoxDirectory*
-              from your path. Without it you will get a ``ValueError``
         """
         if 'efile_path' in changes:
             raise ValueError('The "changes" should not contain efile_path')
-
-        if 'file_path' in changes and not dlb:
-            raise ValueError('You can\'t change file_path without specifying dlb!')
 
         current_changes = changes.copy()
 
@@ -2918,13 +2901,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             new_file_path = new_file_path.decode()
 
         if new_file_path:
-            directory = await dlb._make_local_path(Path(new_file_path))
-
-            await dlb._tgbox_db.FILES.execute((
-                'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
-                (directory.part_id, self._id)
-            ))
-            efile_path = AES(dlb._mainkey).encrypt(new_file_path.encode())
+            efile_path = AES(self._mainkey).encrypt(new_file_path.encode())
             current_changes['efile_path'] = efile_path
 
         # If new_file_path is empty string then it's should be
@@ -3023,12 +3000,6 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 # Check for keys that we should ignore
                 if k not in ('_BFP',):
                     self._residual_metadata[k] = v
-
-        if dlb:
-            dlbf = await dlb.get_file(self._id)
-
-        if dlbf:
-            await dlbf.refresh_metadata(_updated_metadata=updates_encoded)
 
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """

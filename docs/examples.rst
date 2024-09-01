@@ -1103,23 +1103,23 @@ Changing file metadata
 
     ... # some code was omitted
 
-    # Get a last DecryptedRemoteBoxFile from RemoteBox
-    last_drbf = await drb.get_file(await drb.get_last_file_id())
+    # Get a last DecryptedLocalBoxFile from LocalBox
+    last_dlbf = await dlb.get_file(await dlb.get_last_file_id())
     #
-    # To change metadata you will need to specify DecryptedLocalBox
+    # To change metadata you will need to specify DecryptedRemoteBox
     #
     # You can also change cattrs, mime and any other
     # metadata fields, not only file path and name.
     #
-    await last_drbf.update_metadata(
+    await last_dlbf.update_metadata(
         changes = {
             'file_name': b'some_nice_filename',
             'file_path':  'some/nice/filepath'
         },
-        dlb = dlb # DecryptedLocalBox
+        drb = drb # DecryptedRemoteBox
     )
-    print(last_drbf.file_name) # some_nice_filename
-    print(last_drbf.file_path) # some/nice/filepath
+    print(last_dlbf.file_name) # some_nice_filename
+    print(last_dlbf.file_path) # some/nice/filepath
 
 .. note::
    You should be able to replace any metadata attribute
