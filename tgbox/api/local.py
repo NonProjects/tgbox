@@ -3614,6 +3614,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             # where ._update_file_path will be called.
 
         elif new_file_path is not None:
+            # User requested us to remove updated file
+            # path, so we need to eject if from updates
+            updates.pop('efile_path', None)
             # Here we DO need to update it, because updates
             # will NOT have the 'efile_path' key, thus,
             # ._update_file_path method will be NOT called
