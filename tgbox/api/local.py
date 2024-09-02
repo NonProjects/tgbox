@@ -3428,16 +3428,6 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 )
         # =============================================== #
 
-        logger.debug(
-            'Updating metadata | UPDATE FILES SET '
-           f'UPDATED_METADATA={_updated_metadata} '
-           f'WHERE ID={self._id}'
-        )
-        await self._lb._tgbox_db.FILES.execute((
-            'UPDATE FILES SET UPDATED_METADATA=? WHERE ID=?',
-            (_updated_metadata, self._id)
-        ))
-
         # Here is Metadata parts that is impossible to change
         restricted_metadata = ('file_size',)
 
@@ -3459,22 +3449,27 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                         file_path = AES(mainkey).decrypt(v).decode()
                         file_path = make_general_path(file_path)
 
+                        # We need to set it here early because it will
+                        # be used in the self._update_file_path ->
+                        # self._check_fingerprint function.
+                        if 'file_name' in updates:
+                            self._file_name = updates['file_name'].decode()
+
                         if isinstance(self._lb, DecryptedLocalBox):
                             try:
                                 await self._update_file_path(file_path, self._lb)
                             except FingerprintExists as e:
                                 if 'file_name' in updates:
+                                    f = file_path / self._file_name
                                     # If 'file_name' in Updates and Fingerprint
                                     # is already exists in a LocalBox it means
                                     # that user tries to create a duplicate file
                                     # (same path and name). We raise exception
                                     # to prevent this.
-                                    f = file_path / updates['file_name'].decode()
                                     raise FingerprintExists(
-                                       f'File with the same path and name ("{f}") '
+                                      f'File with the same path and name ("{f}") '
                                        'is already presented in your Box. Can not '
                                        'change directory or file name.') from e
-
 
                                 logger.debug(
                                    f'Directory of file ID{self._id} was not modified '
@@ -3504,6 +3499,15 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             else:
                 self._residual_metadata[k] = v
 
+        logger.debug(
+            'Updating metadata | UPDATE FILES SET '
+           f'UPDATED_METADATA={_updated_metadata} '
+           f'WHERE ID={self._id}'
+        )
+        await self._lb._tgbox_db.FILES.execute((
+            'UPDATE FILES SET UPDATED_METADATA=? WHERE ID=?',
+            (_updated_metadata, self._id)
+        ))
 
     def set_download_path(self, path: Path):
         """Will set download path to specified."""
