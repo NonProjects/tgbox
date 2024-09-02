@@ -3462,7 +3462,20 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                         if isinstance(self._lb, DecryptedLocalBox):
                             try:
                                 await self._update_file_path(file_path, self._lb)
-                            except FingerprintExists:
+                            except FingerprintExists as e:
+                                if 'file_name' in updates:
+                                    # If 'file_name' in Updates and Fingerprint
+                                    # is already exists in a LocalBox it means
+                                    # that user tries to create a duplicate file
+                                    # (same path and name). We raise exception
+                                    # to prevent this.
+                                    f = file_path / updates['file_name'].decode()
+                                    raise FingerprintExists(
+                                       f'File with the same path and name ("{f}") '
+                                       'is already presented in your Box. Can not '
+                                       'change directory or file name.') from e
+
+
                                 logger.debug(
                                    f'Directory of file ID{self._id} was not modified '
                                     'due to the same Fingerprint. Most probably '
