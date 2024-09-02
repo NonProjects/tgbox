@@ -3439,6 +3439,26 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 if k == 'cattrs':
                     self._cattrs.update(PackedAttributes.unpack(v))
 
+                if k == 'file_name':
+                    # We need separate check for the case where
+                    # Updated Metadata doesn't have efile_path,
+                    # but file_name only. Yes, if both present
+                    # we will set self._file_name two times,
+                    # but is it matter? I don't think so xD
+                    self._file_name = updates['file_name'].decode()
+
+                    fingerprint = make_file_fingerprint(
+                        file_path = self._file_path / self._file_name,
+                        mainkey = self._lb._mainkey)
+                    try:
+                        await self._lb._check_fingerprint(fingerprint)
+                    except FingerprintExists as e:
+                        f = str(self._file_path / self._file_name)
+                        raise FingerprintExists(
+                           f'File with the same path and name ("{f}") '
+                            'is already presented in your Box. Can not '
+                            'change file name.') from e
+
                 elif k == 'duration':
                     setattr(self, f'_{k}', bytes_to_int(v))
 
@@ -3492,7 +3512,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                             'the DecryptedLocalBox, so we will ignore new path.')
                 else:
                     # str attributes
-                    if k in ('mime', 'file_name'):
+                    if k in ('mime',):
                         setattr(self, f'_{k}', v.decode())
                     else:
                         setattr(self, f'_{k}', v)
