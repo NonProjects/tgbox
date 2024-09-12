@@ -115,7 +115,7 @@ valid and if it is, we construct the *Box file Metadata*, which consist of the n
 
 - **file_salt** *(bytes: required, public)* -- *FileSalt is used for FileKey creation*
 - **box_salt** *(bytes: required, public)* -- *BoxSalt is used for MainKey creation*
-- **file_fingerprint** *(bytes: v1.1+, public)* -- *A SHA256 of the File's path plus MainKey*
+- **file_fingerprint** *(bytes: v1.1+, public)* -- *A SHA256 of the File's path (with name) plus MainKey*
 - **efile_path** *(bytes: v1.3+, public)* -- *Encrypted (by MainKey) File's path*
 - **minor_version** *(int: v1.3+, public)* -- *The minor version of the TGBOX protocol*
 

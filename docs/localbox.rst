@@ -46,7 +46,7 @@ INT              BLOB        BLOB       BLOB|NULL BLOB        BLOB     BLOB|NULL
     - ``ID`` is a Telegram message ID. **Must** be unique as any SQLite *PrimaryKey*
     - ``PPATH_HEAD`` is a path PartID of the last part (folder). See a ":ref:`How does we store file paths`"
     - ``FILEKEY`` will be not ``NULL`` only when you import *RemoteBox File* from other's :doc:`remotebox`. In this case it will be encrypted by :class:`~tgbox.keys.MainKey`
-    - ``FINGERPRINT`` is a *SHA256* over *File path* plus *Mainkey* (:func:`~tgbox.tools.make_file_fingerprint`), not a hash of file. We use it to check if some file was already uploaded to *RemoteBox*.
+    - ``FINGERPRINT`` is, in short, a *SHA256* over *File path* with *file name* plus *Mainkey* (:func:`~tgbox.tools.make_file_fingerprint`), not a hash of file. We use it to check if some file was already uploaded to *RemoteBox*.
     - We take ``METADATA`` plus *File IV* from the *RemoteBox File* and place it to the *LocalBox* without changing anything
     - ``UPDATED_METADATA`` is a user changes of ``METADATA``, encrypted and packed with the *PackedAttributes* algorithm (see :doc:`protocol`)
 
