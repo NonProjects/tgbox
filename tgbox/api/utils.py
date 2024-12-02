@@ -2,27 +2,19 @@
 
 import logging
 
-from typing import (
-    BinaryIO, Optional,
-    Union, AsyncGenerator
-)
-from os import PathLike
+from pathlib import Path
+from functools import wraps
 from dataclasses import dataclass
+from base64 import urlsafe_b64encode
 
+from asyncio import get_event_loop_policy, get_running_loop
+from typing import BinaryIO, Optional, Union, AsyncGenerator
+from inspect import iscoroutinefunction, isasyncgenfunction, isasyncgen
 try:
     # Try to use Third-party Regex if installed
     from regex import search as re_search
 except ImportError:
     from re import search as re_search
-
-from base64 import urlsafe_b64encode
-
-from asyncio import get_event_loop_policy, get_running_loop
-
-from inspect import (
-    iscoroutinefunction, isasyncgenfunction, isasyncgen
-)
-from functools import wraps
 
 from telethon.tl.custom.file import File
 from telethon.sessions import StringSession
@@ -33,7 +25,6 @@ from telethon.tl.types.auth import SentCode
 from telethon import TelegramClient as TTelegramClient
 from telethon.errors import SessionPasswordNeededError
 from telethon.tl.functions.auth import ResendCodeRequest
-
 
 from ..defaults import VERSION
 from ..fastelethon import download_file
@@ -285,7 +276,7 @@ class PreparedFile:
     file: BinaryIO
     filekey: 'tgbox.keys.FileKey'
     filesize: int
-    filepath: PathLike
+    filepath: Path
     filesalt: 'tgbox.crypto.FileSalt'
     hmackey: 'tgbox.keys.HMACKey'
     fingerprint: bytes
@@ -659,6 +650,10 @@ class DefaultsTableWrapper:
 
         defaults = await self._tgbox_db.DEFAULTS.select_once()
         for default, value in zip(TABLES['DEFAULTS'], defaults):
+            # Some defaults must be Path objects to work correctly
+            if default[0] in ('DEF_UNK_FOLDER', 'DEF_NO_FOLDER', 'DOWNLOAD_PATH'):
+                value = Path(value)
+
             setattr(self, default[0], value)
 
         self._initialized = True
@@ -718,9 +713,9 @@ class DefaultsTableWrapper:
 class RemoteBoxDefaults:
     METADATA_MAX: int
     FILE_PATH_MAX: int
-    DEF_UNK_FOLDER: Union[str, PathLike]
-    DEF_NO_FOLDER: Union[str, PathLike]
-    DOWNLOAD_PATH: Union[str, PathLike]
+    DEF_UNK_FOLDER: Path
+    DEF_NO_FOLDER: Path
+    DOWNLOAD_PATH: Path
 
 
 def _syncify_wrap_func(t, method_name):
