@@ -45,8 +45,8 @@ setup(
     ],
     extras_require = {
         'fast': [
-            'cryptography<44.0.0',
-            'cryptg==0.4.0'
+            'cryptography<45.0.0',
+            'cryptg==0.5.0.post0'
         ],
         'doc': [
             'sphinx-book-theme==1.1.3',
