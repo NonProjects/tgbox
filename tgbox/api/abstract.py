@@ -46,9 +46,9 @@ async def make_box(
     Makes Box object. See ``help(tgbox.api.abstract.Box)``
 
     Arguments:
-        erb (``RemoteBox``):
-            ``EncryptedRemoteBox``. You will
-            recieve it after ``make_remotebox``.
+        tc (``TelegramClient``):
+            Account to make private Telegram channel.
+            You must be signed in via ``log_in()``.
 
         basekey (``BaseKey``):
             ``BaseKey`` that will be used
@@ -58,9 +58,24 @@ async def make_box(
             Filename of your LocalBox database. If not
             specified, will be used ``RemoteBox`` name.
 
+        rb_prefix (``str``, optional):
+            Prefix of your RemoteBox.
+            ``defaults.REMOTEBOX_PREFIX`` by default.
+
+        box_image (``PathLike``, optional):
+            ``PathLike`` to image that will be used as
+            ``Channel`` photo of your ``RemoteBox``.
+
+            Can be setted to ``None`` if you don't
+            want to set ``Channel`` photo.
+
         box_path (``PathLike``, ``str``, optional):
             Path in which we will make a database
             file. Current Working Dir if not specified.
+
+        box_salt (``BoxSalt``, optional):
+            Random 32 bytes. Will be used in ``MainKey``
+            creation. Default is ``BoxSalt.generate()``.
 
         lazy_files (``bool``, optional):
             If ``True``, files returned by this ``Box`` will **not**
