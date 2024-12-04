@@ -177,6 +177,20 @@ class SearchFilter:
         * **verbyte**   *bytes*: File version byte
         * **mime**      *str*: File mime type
 
+        * **sender** *integer/str*: File sender name or ID:
+            Only works on RemoteBox files and only on
+            RemoteBox that enabled Sign Messages (&
+            Show Author Profiles, optionally for IDs),
+            otherwise will never return files.
+
+            This filter can be Sender name or Sender ID,
+            e.g sender='black sabbath' or sender=36265675;
+            if 'sender' is string but .isnumeric(), Generator
+            will also convert it to int and check against
+            ID (if available), essentially, sender=36265675
+            and sender='36265675' both valid, but latter
+            will also check '36265675' in name.
+
         * **minor_version** *integer*: File minor version
 
         * **min_id** *integer*: File ID should be > min_id
@@ -208,6 +222,7 @@ class SearchFilter:
             'min_time':  _TypeList((int,float)),
             'max_time':  _TypeList((int,float)),
             'mime':      _TypeList(str),
+            'sender':    _TypeList((str,int)),
             'imported':  _TypeList(bool),
             're':        _TypeList(bool),
             'minor_version': _TypeList(int),

@@ -415,10 +415,8 @@ async def search_generator(
         else:
             file_path = ''
 
-        # We will use it as flags, the first
-        # is for 'include', the second is for
-        # 'exclude'. Both should be True to
-        # match SearchFilter filters.
+        # We will use it as flags, the first is for 'include', the second is
+        # for 'exclude'. Both should be True to match SearchFilter filters.
         yield_result = [True, True]
 
         for indx, filter in enumerate((sf.in_filters, sf.ex_filters)):
@@ -430,6 +428,42 @@ async def search_generator(
 
                 elif bool(file.imported) == bool(filter['imported']):
                     if indx == 1: # 1 is Exclude
+                        yield_result[indx] = False
+                        break
+
+            for sender in filter['sender']:
+                # If sender is int, then it we check only against
+                # the 'sender_id', if str, we check against the
+                # 'sender', and if sender isnumeric(), we convert
+                # to int and also check against 'sender_id'
+
+                # sender and sender_id is presented only in RemoteBox
+                # files and only in Box channels with Sign Messages
+                # -> Show Author Profiles enabled. If file doesn't
+                # have sender, then always skip a file.
+
+                file_sender_id, _check = getattr(file, 'sender_id', None), False
+
+                if isinstance(sender, int):
+                    if sender == file_sender:
+                        _check = True
+
+                if isinstance(sender, str):
+                    file_sender = getattr(file, 'sender') or ''
+
+                    if in_func(sender, file_sender):
+                        _check = True
+                    else:
+                        if sender.isnumeric() and int(sender) == file_sender_id:
+                            _check = True
+
+                if _check:
+                    if indx == 1:
+                        yield_result[indx] = False
+                    break
+            else:
+                if filter['sender']:
+                    if indx == 0:
                         yield_result[indx] = False
                         break
 
