@@ -361,7 +361,7 @@ class OpenPretender:
             self, flo: BinaryIO,
             aes_state: 'tgbox.crypto.AESwState',
             hmac_state: 'hashlib.HMAC',
-            file_size: Optional[int] = None,
+            file_size: int
         ):
         """
         Arguments:
@@ -374,9 +374,8 @@ class OpenPretender:
             hmac_state (``hmac.HMAC``):
                 ``HMAC`` initialized with ``HMACKey``
 
-            file_size (``int``, optional):
-                File size of ``flo``. If not specified,
-                we will try to seek.
+            file_size (``int``):
+                File size of ``flo``.
         """
         self._aes_state = aes_state
         self._hmac_state = hmac_state
@@ -411,6 +410,22 @@ class OpenPretender:
         else:
             self._buffered_bytes += metadata
             self._concated_metadata_size = len(metadata)
+
+    def get_expected_size(self):
+        """
+        Returns expected actual Telegram document size after
+        upload. We use it in ``push_file()``
+        """
+        if not self._concated_metadata_size:
+            raise Exception('You need to concat metadata firstly')
+        # self._file_size already include size of Metadata, but
+        # we need to calculate size of encrypted File *with*
+        # padding, so firstly we are required to subtract
+        # self._concated_metadata_size from self._file_size
+        # for correct calculation. 32 here is HMAC blob
+        expected = self._file_size - self._concated_metadata_size
+        expected = (expected + (16 - expected % 16)) + 32
+        return expected + self._concated_metadata_size
 
     async def read(self, size: int=-1) -> bytes:
         """
