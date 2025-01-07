@@ -1061,7 +1061,7 @@ class EncryptedRemoteBox:
             ifile = await upload_file(
                 self._tc, oe,
                 file_name=urlsafe_b64encode(pf.filesalt.salt).decode(),
-                part_size_kb=512, file_size=pf.filesize,
+                part_size_kb=512, file_size=oe.get_expected_size(),
                 progress_callback=progress_callback
             )
         except Exception as e:
@@ -1074,7 +1074,7 @@ class EncryptedRemoteBox:
 
             ifile = await self._tc.upload_file(
                 oe, file_name=urlsafe_b64encode(pf.filesalt.salt).decode(),
-                part_size_kb=512, file_size=pf.filesize,
+                part_size_kb=512, file_size=oe.get_expected_size(),
                 progress_callback=progress_callback)
         try:
             if message_to_edit:
