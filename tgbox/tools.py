@@ -667,6 +667,8 @@ def make_safe_file_path(path: Union[str, Path]) -> Path:
             return Path(str(path).replace('\\','@\\',1))
 
     elif path_type == 'windows':
+        if len(path.parts) < 2:
+            return path
         # C:\Users\user -> C\Users\User
         drive_letter = path.parts[0][0]
         return Path(drive_letter, *path.parts[1:])
