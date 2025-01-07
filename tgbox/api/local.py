@@ -13,6 +13,7 @@ from pathlib import Path
 from os import PathLike
 from io import BytesIO
 from time import time
+from traceback import format_exc
 
 from inspect import isasyncgen
 from asyncio import iscoroutinefunction, gather
@@ -2085,6 +2086,22 @@ class DecryptedLocalBox(EncryptedLocalBox):
         )
         pf.set_file_id(drbf._id)
         pf.set_upload_time(drbf._upload_time)
+
+        updated_metadata = None
+        if drbf._message.message:
+            try:
+                caption_metadata = urlsafe_b64decode(drbf._message.message)
+                _ = AES(drbf._filekey).decrypt(caption_metadata)
+                _ = PackedAttributes.unpack(_)
+                updated_metadata = caption_metadata
+            except Exception as e:
+                logger.info(
+                    f'Updates to metadata for ID{drbf._id} failed. '
+                    f'Traceback:\n{format_exc()}'
+                )
+
+        if updated_metadata:
+            pf.set_updated_enc_metadata(caption_metadata)
 
         dlbf = await self._make_local_file(pf)
 
