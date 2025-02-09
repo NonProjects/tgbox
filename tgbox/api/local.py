@@ -36,10 +36,6 @@ from ..keys import (
     ShareKey, ImportKey, FileKey,
     BaseKey, DirectoryKey, HMACKey
 )
-from ..defaults import (
-    PREFIX, VERBYTE, DEF_TGBOX_NAME,
-    UploadLimits, MINOR_VERSION
-)
 from ..errors import (
     LimitExceeded, DurationImpossible, NotEnoughRights,
     IncorrectKey, FingerprintExists, NotInitializedError,
@@ -53,6 +49,8 @@ from ..tools import (
     get_media_duration, prbg, make_media_preview,
     make_general_path, make_file_fingerprint
 )
+from .. import defaults
+
 from .utils import (
     DirectoryRoot, search_generator, PreparedFile,
     TelegramVirtualFile, TelegramClient,
@@ -133,7 +131,7 @@ async def make_localbox(
 
 async def get_localbox(
         basekey: Optional[BaseKey] = None,
-        tgbox_db_path: Optional[Union[PathLike, str]] = DEF_TGBOX_NAME,
+        tgbox_db_path: Optional[Union[PathLike, str]] = None,
         ) -> Union['EncryptedLocalBox', 'DecryptedLocalBox']:
     """
     Returns LocalBox.
@@ -147,6 +145,8 @@ async def get_localbox(
             ``PathLike`` to your TgboxDB (LocalBox). Default
             is ``defaults.DEF_TGBOX_NAME``.
     """
+    tgbox_db_path = tgbox_db_path or defaults.DEF_TGBOX_NAME
+
     if not isinstance(tgbox_db_path, PathLike):
         tgbox_db_path = Path(tgbox_db_path)
 
@@ -345,24 +345,24 @@ class EncryptedLocalBox:
     """
     def __init__(
             self, tgbox_db: TgboxDB,
-            defaults: Optional[Union[DefaultsTableWrapper,
+            defaults_: Optional[Union[DefaultsTableWrapper,
                 RemoteBoxDefaults]] = None):
         """
         Arguments:
             tgbox_db (``TgboxDB``):
                 Initialized Tgbox Database.
 
-            defaults (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
+            defaults_ (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
                 Class with a default values/constants we will use.
         """
         self._tgbox_db = tgbox_db
 
-        if defaults is None:
-            logger.debug('Custom defaults is not present')
+        if defaults_ is None:
+            logger.debug('Custom defaults is not presented')
             self._defaults = DefaultsTableWrapper(self._tgbox_db)
         else:
             logger.debug('Found custom defaults, will try to use it')
-            self._defaults = defaults
+            self._defaults = defaults_
 
         self._api_id = None
         self._api_hash = None
@@ -1025,8 +1025,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 logger.debug('Found EncryptedMainkey, decrypting...')
                 try:
                     mainkey = AES(key).decrypt(elb._mainkey.key)
-                except ValueError: # invalid padding byte
-                    raise AESError('Can\'t decrypt eMainKey. Incorrect Key?')
+                except ValueError as e: # invalid padding byte
+                    raise AESError('Can\'t decrypt eMainKey. Incorrect Key?') from e
                 self._mainkey = MainKey(mainkey)
             else:
                 self._mainkey = make_mainkey(key, self._elb._box_salt)
@@ -1035,8 +1035,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 # Session information by people who also have mainkey
                 # of the same box. So there is decryption with basekey.
                 self._session = AES(key).decrypt(elb._session).decode()
-            except (UnicodeDecodeError, ValueError):
-                raise AESError ('Can\'t decrypt Session. Invalid Basekey?')
+            except (UnicodeDecodeError, ValueError) as e:
+                raise AESError('Can\'t decrypt Session. Invalid Basekey?') from e
 
         elif isinstance(key, MainKey):
             self._mainkey = key
@@ -1144,7 +1144,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         if pf.imported:
             logger.info(f'Adding imported PreparedFile ID{pf.file_id} to LocalBox')
 
-            packed_metadata_pos = len(PREFIX) + len(VERBYTE) + 3
+            packed_metadata_pos = len(defaults.PREFIX) + len(defaults.VERBYTE) + 3
             unpacked_metadata = pf.metadata[packed_metadata_pos:-16] # -16 is IV
             file_box_salt = PackedAttributes.unpack(unpacked_metadata)['box_salt']
 
@@ -1934,7 +1934,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         efile_path = AES(self._mainkey).encrypt(file_path_no_name)
 
         cattrs = PackedAttributes.pack(**cattrs) if cattrs else b''
-        minor_version = int_to_bytes(MINOR_VERSION)
+        minor_version = int_to_bytes(defaults.MINOR_VERSION)
 
         secret_metadata = PackedAttributes.pack(
             preview = preview,
@@ -1998,7 +1998,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             )
         metadata_bytesize = int_to_bytes(len(metadata),3)
 
-        constructed_metadata =  PREFIX + VERBYTE
+        constructed_metadata =  defaults.PREFIX + defaults.VERBYTE
         constructed_metadata += metadata_bytesize
         constructed_metadata += metadata + file_iv.iv
 
@@ -2007,9 +2007,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
         # we can't access TelegramClient from 'prepare_file',
         # so here we check only against the maximum allowed
         # size, and in 'push_file' we will check for actual
-        if total_file_size > UploadLimits.PREMIUM:
+        if total_file_size > defaults.UploadLimits.PREMIUM:
             raise LimitExceeded(
-                f'Max allowed filesize in Telegram is {UploadLimits.PREMIUM} '
+                f'Max allowed filesize in Telegram is {defaults.UploadLimits.PREMIUM} '
                 f'bytes, your file is {total_file_size} bytes in size.'
             )
         return PreparedFile(
@@ -2094,7 +2094,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 _ = AES(drbf._filekey).decrypt(caption_metadata)
                 _ = PackedAttributes.unpack(_)
                 updated_metadata = caption_metadata
-            except Exception as e:
+            except Exception:
                 logger.info(
                     f'Updates to metadata for ID{drbf._id} failed. '
                     f'Traceback:\n{format_exc()}'
@@ -2644,7 +2644,7 @@ class EncryptedLocalBoxFile:
         self._file_salt, self._version_byte = None, None
         self._file_iv, self._box_salt = None, None
         self._secret_metadata, self._minor_version = None, None
-        self._efile_path = None
+        self._preview, self._efile_path = None, None
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({self._id}, {repr(self._lb)}, {self._cache_preview})'
@@ -2820,11 +2820,11 @@ class EncryptedLocalBoxFile:
 
         self._imported = bool(self._efilekey)
 
-        self._prefix = metadata[:len(PREFIX)]
+        self._prefix = metadata[:len(defaults.PREFIX)]
         self._version_byte = metadata[
-            len(PREFIX) : len(VERBYTE) + len(PREFIX)
+            len(defaults.PREFIX) : len(defaults.VERBYTE) + len(defaults.PREFIX)
         ]
-        pattr_offset = len(PREFIX) + len(VERBYTE) + 3
+        pattr_offset = len(defaults.PREFIX) + len(defaults.VERBYTE) + 3
 
         unpacked_metadata = PackedAttributes.unpack(
             metadata[pattr_offset:-16]

@@ -26,9 +26,9 @@ from telethon import TelegramClient as TTelegramClient
 from telethon.errors import SessionPasswordNeededError
 from telethon.tl.functions.auth import ResendCodeRequest
 
-from ..defaults import VERSION
 from ..fastelethon import download_file
 from ..tools import anext, SearchFilter, _TypeList
+from .. import defaults
 
 from .db import TABLES, TgboxDB
 
@@ -79,7 +79,7 @@ class TelegramClient(TTelegramClient):
 
         asyncio_run(main())
     """
-    __version__ = VERSION
+    __version__ = defaults.VERSION
 
     def __init__(
             self, api_id: int, api_hash: str,
@@ -285,10 +285,11 @@ class PreparedFile:
 
     def set_file_id(self, id: int):
         """You should set ID after pushing to remote"""
-        self.file_id = id
+        self.file_id = id # pylint: disable=attribute-defined-outside-init
 
     def set_upload_time(self, upload_time: int):
         """You should set time after pushing to remote"""
+        # pylint: disable=attribute-defined-outside-init
         self.upload_time = upload_time
 
     def set_updated_enc_metadata(self, ue_metadata: bytes):
@@ -300,6 +301,7 @@ class PreparedFile:
 
         This is for internal usage, you can ignore it.
         """
+        # pylint: disable=attribute-defined-outside-init
         self.updated_enc_metadata = ue_metadata
 
 class DirectoryRoot:
@@ -682,8 +684,8 @@ class DefaultsTableWrapper:
         if self._tgbox_db.closed:
             await self._tgbox_db.init()
 
-        defaults = await self._tgbox_db.DEFAULTS.select_once()
-        for default, value in zip(TABLES['DEFAULTS'], defaults):
+        defaults_ = await self._tgbox_db.DEFAULTS.select_once()
+        for default, value in zip(TABLES['DEFAULTS'], defaults_):
             # Some defaults must be Path objects to work correctly
             if default[0] in ('DEF_UNK_FOLDER', 'DEF_NO_FOLDER', 'DOWNLOAD_PATH'):
                 value = Path(value)

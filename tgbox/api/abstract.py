@@ -21,12 +21,10 @@ from .remote import (
 from .utils import (
     syncify, TelegramClient, TelegramVirtualFile
 )
-from ..defaults import (
-    DEF_TGBOX_NAME, REMOTEBOX_PREFIX, BOX_IMAGE_PATH
-)
 from ..errors import NotInitializedError, InvalidFile
 from ..keys import BaseKey
 from ..crypto import BoxSalt
+from .. import defaults
 
 __all__ = ['make_box', 'get_box', 'Box', 'BoxFile']
 
@@ -36,9 +34,9 @@ async def make_box(
         tc: TelegramClient,
         basekey: BaseKey,
 
-        box_name: Optional[str] = DEF_TGBOX_NAME,
-        rb_prefix: Optional[str] = REMOTEBOX_PREFIX,
-        box_image: Optional[Union[PathLike, str]] = BOX_IMAGE_PATH,
+        box_name: Optional[str] = None,
+        rb_prefix: Optional[str] = None,
+        box_image: Optional[Union[PathLike, str]] = None,
         box_path: Optional[Union[PathLike, str]] = None,
         box_salt: Optional[BoxSalt] = None,
         lazy_files: Optional[bool] = False) -> 'Box':
@@ -56,7 +54,7 @@ async def make_box(
 
         box_name (``str``, optional):
             Filename of your LocalBox database. If not
-            specified, will be used ``RemoteBox`` name.
+            specified, will be used ``defaults.DEF_TGBOX_NAME``
 
         rb_prefix (``str``, optional):
             Prefix of your RemoteBox.
@@ -66,8 +64,10 @@ async def make_box(
             ``PathLike`` to image that will be used as
             ``Channel`` photo of your ``RemoteBox``.
 
-            Can be setted to ``None`` if you don't
-            want to set ``Channel`` photo.
+            Can be setted to ``''`` (empty string)
+            if you don't want to set ``Channel`` photo.
+
+            Default is ``defaults.BOX_IMAGE_PATH``
 
         box_path (``PathLike``, ``str``, optional):
             Path in which we will make a database
@@ -86,6 +86,12 @@ async def make_box(
             You can "lazy" files via ``make_files_lazy()`` and "unlazy"
             via ``make_files_unlazy()`` method respectively (on ``Box``).
     """
+    box_name = box_name or defaults.DEF_TGBOX_NAME
+    rb_prefix = rb_prefix or defaults.REMOTEBOX_PREFIX
+
+    if not box_image:
+        box_image = defaults.BOX_IMAGE_PATH if box_image is None else None
+
     erb = await make_remotebox(
         tc=tc, box_name=box_name, rb_prefix=rb_prefix,
         box_image=box_image, box_salt=box_salt
@@ -98,7 +104,7 @@ async def make_box(
     return Box(dlb=dlb, drb=drb, lazy_files=lazy_files)
 
 async def get_box(basekey: BaseKey,
-        tgbox_db_path: Optional[Union[PathLike, str]] = DEF_TGBOX_NAME,
+        tgbox_db_path: Optional[Union[PathLike, str]] = None,
         proxy: Optional[Union[tuple, list, dict]] = None,
         lazy_files: Optional[bool] = False) -> 'Box':
     """
@@ -128,6 +134,8 @@ async def get_box(basekey: BaseKey,
             You can "lazy" files via ``make_files_lazy()`` and "unlazy"
             via ``make_files_unlazy()`` method respectively (on ``Box``).
     """
+    tgbox_db_path = tgbox_db_path or defaults.DEF_TGBOX_NAME
+
     dlb = await get_localbox(basekey=basekey, tgbox_db_path=tgbox_db_path)
     drb = await get_remotebox(dlb=dlb, proxy=proxy)
     return Box(dlb=dlb, drb=drb, lazy_files=lazy_files)

@@ -11,12 +11,10 @@ from pathlib import Path
 
 import aiosqlite
 
-from ..defaults import (
-    Limits, DOWNLOAD_PATH,
-    DEF_NO_FOLDER, DEF_UNK_FOLDER,
-)
 from ..errors import PathIsDirectory
 from ..tools import anext
+from .. import defaults
+
 
 __all__ = ['SqlTableWrapper', 'TgboxDB', 'TABLES']
 
@@ -48,12 +46,12 @@ TABLES = {
         ('PARENT_PART_ID', 'BLOB'),
     ),
     'DEFAULTS': (                            # Default value
-        ('METADATA_MAX', 'INTEGER NOT NULL', int(Limits.METADATA_MAX)),
-        ('FILE_PATH_MAX', 'INTEGER NOT NULL', int(Limits.FILE_PATH_MAX)),
+        ('METADATA_MAX', 'INTEGER NOT NULL', int(defaults.Limits.METADATA_MAX)),
+        ('FILE_PATH_MAX', 'INTEGER NOT NULL', int(defaults.Limits.FILE_PATH_MAX)),
 
-        ('DOWNLOAD_PATH', 'TEXT NOT NULL', str(DOWNLOAD_PATH)),
-        ('DEF_NO_FOLDER', 'TEXT NOT NULL', str(DEF_NO_FOLDER)),
-        ('DEF_UNK_FOLDER', 'TEXT NOT NULL', str(DEF_UNK_FOLDER))
+        ('DOWNLOAD_PATH', 'TEXT NOT NULL', str(defaults.DOWNLOAD_PATH)),
+        ('DEF_NO_FOLDER', 'TEXT NOT NULL', str(defaults.DEF_NO_FOLDER)),
+        ('DEF_UNK_FOLDER', 'TEXT NOT NULL', str(defaults.DEF_UNK_FOLDER))
     )
 }
 class SqlTableWrapper:
