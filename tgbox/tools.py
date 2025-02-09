@@ -34,7 +34,7 @@ from .errors import (
     PreviewImpossible,
     DurationImpossible
 )
-from .defaults import FFMPEG
+from . import defaults
 
 __all__ = [
     'prbg', 'anext',
@@ -89,20 +89,19 @@ class _TypeList:
         for type_ in self.type:
             if isinstance(value, type_):
                 return value
-        else:
-            for type_ in self.type:
-                try:
-                    if isinstance(b'', type_):
-                        # bytes(str) doesn't work
-                        return type_(value,'utf-8')
-                    else:
-                        return type_(value)
-                except:
-                    pass
-            else:
-                raise TypeError(
-                    f'Invalid type! Expected {self.type}, got {type(value)}'
-                )
+
+        for type_ in self.type:
+            try:
+                if isinstance(b'', type_):
+                    # bytes(str) doesn't work
+                    return type_(value,'utf-8')
+                else:
+                    return type_(value)
+            except:
+                pass
+
+        raise TypeError(f'Invalid type! Expected {self.type}, got {type(value)}')
+
     def append(self, value):
         self.list.append(self.__check_type(value))
 
@@ -745,7 +744,7 @@ async def anext(aiterator, default=...):
 async def get_media_duration(file_path: str) -> int:
     """Returns video/audio duration with ffmpeg in seconds."""
     func = partial(subprocess_run,
-        args=[FFMPEG, '-i', file_path],
+        args=[defaults.FFMPEG, '-i', file_path],
         stdout=None, stderr=PIPE
     )
     try:
@@ -755,7 +754,7 @@ async def get_media_duration(file_path: str) -> int:
         d = duration.decode().split('.')[0].split(': ')[1].split(':')
         return int(d[0]) * 60**2 + int(d[1]) * 60 + int(d[2])
     except Exception as e:
-        raise DurationImpossible(f'Can\'t get media duration: {e}')
+        raise DurationImpossible(f'Can\'t get media duration: {e}') from e
 
 async def make_media_preview(file_path: PathLike, x: int=128, y: int=-1) -> BinaryIO:
     """
@@ -764,8 +763,9 @@ async def make_media_preview(file_path: PathLike, x: int=128, y: int=-1) -> Bina
     """
     sp_func = partial(subprocess_run,
         args=[
-            FFMPEG, '-i', file_path, '-frames:v', '1', '-filter:v', f'scale={x}:{y}',
-            '-an', '-loglevel', 'quiet', '-q:v', '2', '-f', 'mjpeg', 'pipe:1'
+            defaults.FFMPEG, '-i', file_path, '-frames:v', '1', '-filter:v',
+            f'scale={x}:{y}', '-an', '-loglevel', 'quiet', '-q:v', '2', '-f',
+            'mjpeg', 'pipe:1'
         ],
         capture_output = True
     )
@@ -775,4 +775,4 @@ async def make_media_preview(file_path: PathLike, x: int=128, y: int=-1) -> Bina
         assert sp_result.stdout, 'Preview bytes is empty'
         return BytesIO(sp_result.stdout)
     except Exception as e:
-        raise PreviewImpossible(f'Can\'t make thumbnail: {e}')
+        raise PreviewImpossible(f'Can\'t make thumbnail: {e}') from e

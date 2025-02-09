@@ -52,12 +52,8 @@ from ..keys import (
     make_requestkey, RequestKey, DirectoryKey, make_dirkey,
     make_hmackey
 )
-from ..defaults import (
-    VERBYTE, BOX_IMAGE_PATH, DEF_TGBOX_NAME,
-    Limits, PREFIX, DEF_UNK_FOLDER, UploadLimits,
-    REMOTEBOX_PREFIX, DEF_NO_FOLDER, DOWNLOAD_PATH
-)
 from ..fastelethon import upload_file, download_file
+from .. import defaults
 
 from ..errors import (
     NotInitializedError, RemoteBoxInaccessible,
@@ -87,9 +83,9 @@ logger = logging.getLogger(__name__)
 
 async def make_remotebox(
         tc: TelegramClient,
-        box_name: Optional[str] = DEF_TGBOX_NAME,
-        rb_prefix: Optional[str] = REMOTEBOX_PREFIX,
-        box_image: Optional[Union[PathLike, str]] = BOX_IMAGE_PATH,
+        box_name: Optional[str] = None,
+        rb_prefix: Optional[str] = None,
+        box_image: Optional[Union[PathLike, str]] = None,
         box_salt: Optional[BoxSalt] = None) -> 'EncryptedRemoteBox':
     """
     Function used for making ``RemoteBox``.
@@ -121,7 +117,11 @@ async def make_remotebox(
     if box_salt and len(box_salt) != 32:
         raise ValueError('BoxSalt bytelength != 32')
 
-    box_salt = (box_salt if box_salt else BoxSalt.generate()).salt
+    box_name = box_name or defaults.DEF_TGBOX_NAME
+    rb_prefix = rb_prefix or defaults.REMOTEBOX_PREFIX
+    box_image = box_image or defaults.BOX_IMAGE_PATH
+
+    box_salt = (box_salt or BoxSalt.generate()).salt
     box_salt = urlsafe_b64encode(box_salt).decode()
 
     channel_name = rb_prefix + box_name
@@ -265,7 +265,7 @@ class EncryptedRemoteBox:
     def __init__(self,
             box_channel: Channel,
             tc: TelegramClient,
-            defaults: Optional[Union[RemoteBoxDefaults,
+            defaults_: Optional[Union[RemoteBoxDefaults,
                 DefaultsTableWrapper]] = None):
         """
         Arguments:
@@ -279,7 +279,7 @@ class EncryptedRemoteBox:
             tc (``TelegramClient``):
                 Telegram account that have ``box_channel``.
 
-            defaults (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
+            defaults_ (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
                 Class with a default values/constants we will use.
         """
         self._tc = tc
@@ -294,21 +294,21 @@ class EncryptedRemoteBox:
         self._description = None
         # Similar to box_salt, await get_box_name.
         self._box_name = None
-
+        # True if class is Encrypted*, False if Decrypted*
         self._is_encrypted = True
 
-        if defaults:
+        if defaults_:
             logger.debug('ERB: Found custom defaults, will try to use it')
-            self._defaults = defaults
+            self._defaults = defaults_
         else:
             logger.debug('ERB: Custom defaults is not present')
 
             self._defaults = RemoteBoxDefaults(
-                METADATA_MAX = Limits.METADATA_MAX,
-                FILE_PATH_MAX = Limits.FILE_PATH_MAX,
-                DEF_UNK_FOLDER = DEF_UNK_FOLDER,
-                DEF_NO_FOLDER = DEF_NO_FOLDER,
-                DOWNLOAD_PATH = DOWNLOAD_PATH
+                METADATA_MAX = defaults.Limits.METADATA_MAX,
+                FILE_PATH_MAX = defaults.Limits.FILE_PATH_MAX,
+                DEF_UNK_FOLDER = defaults.DEF_UNK_FOLDER,
+                DEF_NO_FOLDER = defaults.DEF_NO_FOLDER,
+                DOWNLOAD_PATH = defaults.DOWNLOAD_PATH
             )
 
     def __repr__(self) -> str:
@@ -796,7 +796,7 @@ class EncryptedRemoteBox:
                     return await EncryptedRemoteBoxFile(
                         id=None, erb=erb, message_document=m,
                         cache_preview=cache_preview,
-                        defaults=self._defaults).init()
+                        defaults_=self._defaults).init()
 
                 except NotATgboxFile:
                     logger.debug(
@@ -812,7 +812,7 @@ class EncryptedRemoteBox:
                 erbf = EncryptedRemoteBoxFile(
                     id=None, erb=erb, message_document=m,
                     cache_preview=cache_preview,
-                    defaults=self._defaults
+                    defaults_=self._defaults
                 )
                 return await erbf.decrypt(key=key, drb=drb,
                     erase_encrypted_metadata=erase_encrypted_metadata)
@@ -831,7 +831,7 @@ class EncryptedRemoteBox:
                         return await EncryptedRemoteBoxFile(
                             id=None, erb=erb, message_document=m,
                             cache_preview=cache_preview,
-                            defaults=self._defaults).init()
+                            defaults_=self._defaults).init()
 
                     except NotATgboxFile:
                         logger.debug(
@@ -869,7 +869,7 @@ class EncryptedRemoteBox:
                                 return await EncryptedRemoteBoxFile(
                                     id=None, erb=erb, message_document=m,
                                     cache_preview=cache_preview,
-                                    defaults=self._defaults).init()
+                                    defaults_=self._defaults).init()
 
                             except NotATgboxFile:
                                 logger.debug(
@@ -896,7 +896,7 @@ class EncryptedRemoteBox:
                         erbf = EncryptedRemoteBoxFile(
                             id=None, erb=erb, message_document=m,
                             cache_preview=cache_preview,
-                            defaults=self._defaults
+                            defaults_=self._defaults
                         )
                         return await erbf.decrypt(
                             key=dlb_file._filekey, drb=drb,
@@ -1037,14 +1037,14 @@ class EncryptedRemoteBox:
 
         me = await self._tc.get_me()
 
-        if me.premium and pf.filesize > UploadLimits.PREMIUM:
+        if me.premium and pf.filesize > defaults.UploadLimits.PREMIUM:
             raise LimitExceeded(
-                f'Max allowed filesize for you is {UploadLimits.PREMIUM} '
+                f'Max allowed filesize for you is {defaults.UploadLimits.PREMIUM} '
                 f'bytes, your file is {pf.filesize} bytes in size.'
             )
-        if not me.premium and pf.filesize > UploadLimits.DEFAULT:
+        if not me.premium and pf.filesize > defaults.UploadLimits.DEFAULT:
             raise LimitExceeded(
-                f'Max allowed filesize for you is {UploadLimits.DEFAULT} '
+                f'Max allowed filesize for you is {defaults.UploadLimits.DEFAULT} '
                 f'bytes, your file is {pf.filesize} bytes in size.'
             )
         # Last 16 bytes of metadata is File IV
@@ -1158,7 +1158,7 @@ class EncryptedRemoteBox:
 
         erbf = await EncryptedRemoteBoxFile(
             id=None, erb=erb, message_document=file_message,
-            defaults=self._defaults).init()
+            defaults_=self._defaults).init()
 
         return await erbf.decrypt(key=pf.dlb._mainkey, drb=drb)
 
@@ -1497,7 +1497,7 @@ class EncryptedRemoteBoxFile:
             self, id: int, erb: EncryptedRemoteBox,
             message_document: Optional[Message] = None,
             cache_preview: bool=True,
-            defaults: Optional[Union[DefaultsTableWrapper,
+            defaults_: Optional[Union[DefaultsTableWrapper,
                 RemoteBoxDefaults]] = None):
         """
         Arguments:
@@ -1518,7 +1518,7 @@ class EncryptedRemoteBoxFile:
             cache_preview (``bool``, optional):
                 Cache preview in class or not.
 
-            defaults (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
+            defaults_ (``DefaultsTableWrapper``, ``RemoteBoxDefaults``):
                 Class with a default values/constants we will use.
         """
         self._initialized = False
@@ -1563,18 +1563,18 @@ class EncryptedRemoteBoxFile:
         self._minor_version = None
         self._file_pos = None
 
-        if defaults is None:
-            logger.debug('ERBF: Custom defaults is not present')
+        if defaults_ is None:
+            logger.debug('ERBF: Custom defaults is not presented')
 
             self._defaults = RemoteBoxDefaults(
-                METADATA_MAX = Limits.METADATA_MAX,
-                FILE_PATH_MAX = Limits.FILE_PATH_MAX,
-                DEF_UNK_FOLDER = DEF_UNK_FOLDER,
-                DEF_NO_FOLDER = DEF_NO_FOLDER,
-                DOWNLOAD_PATH = DOWNLOAD_PATH)
+                METADATA_MAX = defaults.Limits.METADATA_MAX,
+                FILE_PATH_MAX = defaults.Limits.FILE_PATH_MAX,
+                DEF_UNK_FOLDER = defaults.DEF_UNK_FOLDER,
+                DEF_NO_FOLDER = defaults.DEF_NO_FOLDER,
+                DOWNLOAD_PATH = defaults.DOWNLOAD_PATH)
         else:
             logger.debug('ERBF: Found custom defaults, will try to use it')
-            self._defaults = defaults
+            self._defaults = defaults_
 
     def __repr__(self) -> str:
         return (
@@ -1853,7 +1853,7 @@ class EncryptedRemoteBoxFile:
         # ======================================================= #
 
         # 3 is amount of bytes to which we pack metadata length
-        request_amount = len(PREFIX) + len(VERBYTE) + 3
+        request_amount = len(defaults.PREFIX) + len(defaults.VERBYTE) + 3
 
         logger.debug(f'base_data request_amount is {request_amount} bytes')
 
@@ -1861,12 +1861,13 @@ class EncryptedRemoteBoxFile:
             self._message.document, request_size=pad_request_size(request_amount)):
                 base_data = base_data[:request_amount]
 
-                self._prefix = bytes(base_data[:len(PREFIX)])
-                self._version_byte = bytes(base_data[len(PREFIX):len(PREFIX)+1])
-
-                if verify_prefix and self._prefix != PREFIX:
+                self._prefix = bytes(base_data[:len(defaults.PREFIX)])
+                self._version_byte = bytes(
+                    base_data[len(defaults.PREFIX):len(defaults.PREFIX)+1]
+                )
+                if verify_prefix and self._prefix != defaults.PREFIX:
                     raise NotATgboxFile(
-                        f'Invalid prefix! Expected {PREFIX}, '
+                        f'Invalid prefix! Expected {defaults.PREFIX}, '
                         f'got {self._prefix}'
                     )
                 metadata_size = bytes_to_int(
@@ -2222,8 +2223,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 secret_metadata = AES(self._filekey).decrypt(
                     self._erbf._secret_metadata
                 )
-            except ValueError:
-                raise AESError('Metadata wasn\'t decrypted correctly. Incorrect key?')
+            except ValueError as e:
+                raise AESError('Metadata wasn\'t decrypted correctly. Incorrect key?') from e
 
             secret_metadata = PackedAttributes.unpack(secret_metadata)
 
@@ -2778,6 +2779,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                             progress_callback(self._size, self._size)
 
                 if not omit_hmac_check and self._has_hmac_sha256:
+                    # pylint: disable=used-before-assignment
                     if not hmac_compare_digest(file_hmac, hmac_state.digest()):
                         raise InvalidFile(
                            f'File ID={self._id} was modified!!!! Calculated '

@@ -13,7 +13,7 @@ from base64 import (
     urlsafe_b64decode
 )
 from .errors import IncorrectKey
-from .defaults import Scrypt, WORDS_PATH, READTHEDOCS
+from . import defaults
 
 from .crypto import (
     AESwState as AES, FAST_ENCRYPTION,
@@ -35,7 +35,7 @@ except ImportError: # No Scrypt installed
             s = cryptography_Scrypt(salt=salt, length=dklen, n=n, r=r, p=p)
             return s.derive(password)
     else:
-        if not READTHEDOCS: # ReadTheDocs does not have Scrypt in hashlib
+        if not defaults.READTHEDOCS: # ReadTheDocs does not have Scrypt in hashlib
             raise RuntimeError('Could not find Scrypt. Install tgbox[fast]')
 
 if FAST_ENCRYPTION: # Is faster and more secure
@@ -112,7 +112,7 @@ class Phrase:
         """
         sysrnd = SystemRandom(urandom(32))
 
-        with open(WORDS_PATH,'rb') as words_file:
+        with open(defaults.WORDS_PATH,'rb') as words_file:
             words_list = words_file.readlines()
 
             phrase = [
@@ -232,8 +232,8 @@ class Key:
             }
             ekey_type = ekey_types[encoded_key[0]]
             return ekey_type(urlsafe_b64decode(encoded_key[1:]))
-        except:
-            raise IncorrectKey(IncorrectKey.__doc__)
+        except Exception as e:
+            raise IncorrectKey(IncorrectKey.__doc__) from e
 
     def encode(self) -> str:
         """Encode raw key with ``urlsafe_b64encode`` and add prefix."""
@@ -356,11 +356,11 @@ class HMACKey(Key):
 def make_basekey(
         phrase: Union[bytes, Phrase],
         *,
-        salt: Union[bytes, int] = Scrypt.SALT,
-        n: Optional[int] = Scrypt.N,
-        r: Optional[int] = Scrypt.R,
-        p: Optional[int] = Scrypt.P,
-        dklen: Optional[int] = Scrypt.DKLEN) -> BaseKey:
+        salt: Union[bytes, int] = defaults.Scrypt.SALT,
+        n: Optional[int] = defaults.Scrypt.N,
+        r: Optional[int] = defaults.Scrypt.R,
+        p: Optional[int] = defaults.Scrypt.P,
+        dklen: Optional[int] = defaults.Scrypt.DKLEN) -> BaseKey:
     """
     Function to create ``BaseKey``.
     Uses the ``sha256(scrypt(...))``.
