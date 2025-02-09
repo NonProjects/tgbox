@@ -204,7 +204,7 @@ async def get_remotebox(
         ) from None
     except ValueError:
         # ValueError: Could not find the input entity for PeerChannel
-        raise RemoteBoxInaccessible(RemoteBoxInaccessible.__doc__) from None
+        raise RemoteBoxInaccessible() from None
 
     if not dlb:
         logger.debug('DLB is NOT specified, return EncryptedRemoteBox')
@@ -2945,9 +2945,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         try:
             await self._rb._tc.edit_message(self._message, updates_encoded)
         except MediaCaptionTooLongError:
-            raise NoPlaceLeftForMetadata(NoPlaceLeftForMetadata.__doc__) from None
+            raise NoPlaceLeftForMetadata() from None
         except ChatAdminRequiredError:
-            raise NotEnoughRights(NotEnoughRights.__doc__) from None
+            raise NotEnoughRights() from None
         except MessageIdInvalidError as e:
             raise InvalidFile('Can\'t edit caption of this Document') from e
         except MessageNotModifiedError as e:

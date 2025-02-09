@@ -233,7 +233,7 @@ class Key:
             ekey_type = ekey_types[encoded_key[0]]
             return ekey_type(urlsafe_b64decode(encoded_key[1:]))
         except Exception as e:
-            raise IncorrectKey(IncorrectKey.__doc__) from e
+            raise IncorrectKey() from e
 
     def encode(self) -> str:
         """Encode raw key with ``urlsafe_b64encode`` and add prefix."""
