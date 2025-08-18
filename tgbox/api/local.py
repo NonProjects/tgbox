@@ -521,7 +521,7 @@ class EncryptedLocalBox:
 
                 # Amount of parts that point to current ppath_head
                 pparts_pointed = await self._tgbox_db.PATH_PARTS.execute((
-                    'SELECT * FROM PATH_PARTS WHERE PARENT_PART_ID=?',
+                    'SELECT PART_ID FROM PATH_PARTS WHERE PARENT_PART_ID=?',
                     (ppath_head,)
                 ))
                 if (await pparts_pointed.fetchone()):
@@ -2301,7 +2301,8 @@ class EncryptedLocalBoxDirectory:
            f'WHERE PART_ID={self._part_id}'
         )
         folder_row = await self._tgbox_db.PATH_PARTS.select_once((
-            'SELECT * FROM PATH_PARTS WHERE PART_ID=?',
+            'SELECT ENC_PART, PART_ID, PARENT_PART_ID '
+            'FROM PATH_PARTS WHERE PART_ID=?',
             (self._part_id,)
         ))
         self._part = folder_row[0]
@@ -2406,7 +2407,8 @@ class EncryptedLocalBoxDirectory:
 
         if not ignore_dirs:
             folders = await self._tgbox_db.PATH_PARTS.execute((
-                'SELECT * FROM PATH_PARTS WHERE PARENT_PART_ID IS ?',
+                'SELECT ENC_PART, PART_ID, PARENT_PART_ID '
+                'FROM PATH_PARTS WHERE PARENT_PART_ID IS ?',
                 (part_id,)
             ))
             while True:
@@ -2431,13 +2433,11 @@ class EncryptedLocalBoxDirectory:
 
         if not ignore_files:
             files = await self._tgbox_db.FILES.execute((
-                'SELECT * FROM FILES WHERE PPATH_HEAD IS ?',
+                'SELECT ID FROM FILES WHERE PPATH_HEAD IS ?',
                 (part_id,)
             ))
-            while True:
-                logger.debug('Trying to fetch new portion of local files (100)...')
-                pending = await files.fetchmany(100)
-                if not pending: break # No more files
+            while (pending := await files.fetchmany(100)):
+                logger.debug('We fetched a new portion of local files (100)...')
 
                 pending = [
                     self._lb.get_file(file_row[0],
@@ -2802,16 +2802,20 @@ class EncryptedLocalBoxFile:
 
         logger.debug(f'Init ELBF | SELECT * FROM FILES WHERE ID={self._id}')
 
+        query = (
+            'SELECT ID, UPLOAD_TIME, PPATH_HEAD, FILEKEY, '
+            'FINGERPRINT, METADATA, UPDATED_METADATA FROM FILES WHERE ID=?'
+        )
         file_row = list(await self._lb._tgbox_db.FILES.select_once(
-            sql_tuple = ('SELECT * FROM FILES WHERE ID=?', (self._id,))
+            sql_tuple = (query, (self._id,))
         ))
-        self._updated_metadata = file_row.pop()
-        metadata = file_row.pop()
-        self._fingerprint = file_row.pop()
-        self._efilekey = file_row.pop()
-        self._ppath_head = file_row.pop()
-        self._upload_time = file_row.pop()
-        self._id = file_row.pop()
+        self._id = file_row[0]
+        self._upload_time = file_row[1]
+        self._ppath_head = file_row[2]
+        self._efilekey = file_row[3]
+        self._fingerprint = file_row[4]
+        metadata = file_row[5]
+        self._updated_metadata = file_row[6]
 
         self._directory = EncryptedLocalBoxDirectory(
             self._lb, self._ppath_head

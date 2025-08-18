@@ -684,7 +684,14 @@ class DefaultsTableWrapper:
         if self._tgbox_db.closed:
             await self._tgbox_db.init()
 
-        defaults_ = await self._tgbox_db.DEFAULTS.select_once()
+        columns = (i[0] for i in TABLES['DEFAULTS'])
+        columns = ','.join(columns).rstrip(',')
+
+        cursor = await self._tgbox_db.DEFAULTS.execute(
+           (f'SELECT {columns} FROM DEFAULTS',)
+        )
+        defaults_ = await cursor.fetchone()
+
         for default, value in zip(TABLES['DEFAULTS'], defaults_):
             # Some defaults must be Path objects to work correctly
             if default[0] in ('DEF_UNK_FOLDER', 'DEF_NO_FOLDER', 'DOWNLOAD_PATH'):

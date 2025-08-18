@@ -43,15 +43,20 @@ TABLES = {
     'PATH_PARTS': (
         ('ENC_PART', 'BLOB NOT NULL'),
         ('PART_ID', 'BLOB NOT NULL PRIMARY KEY'),
-        ('PARENT_PART_ID', 'BLOB'),
+        ('PARENT_PART_ID', 'BLOB')
     ),
+    # If you add any values to DEFAULTS, then update the
+    # tgbox.utils.RemoteBoxDefaults, as well as all
+    # RemoteBoxDefaults() in remote.py, because they
+    # are not automatic
     'DEFAULTS': (                            # Default value
         ('METADATA_MAX', 'INTEGER NOT NULL', int(defaults.Limits.METADATA_MAX)),
         ('FILE_PATH_MAX', 'INTEGER NOT NULL', int(defaults.Limits.FILE_PATH_MAX)),
 
         ('DOWNLOAD_PATH', 'TEXT NOT NULL', str(defaults.DOWNLOAD_PATH)),
         ('DEF_NO_FOLDER', 'TEXT NOT NULL', str(defaults.DEF_NO_FOLDER)),
-        ('DEF_UNK_FOLDER', 'TEXT NOT NULL', str(defaults.DEF_UNK_FOLDER))
+        ('DEF_UNK_FOLDER', 'TEXT NOT NULL', str(defaults.DEF_UNK_FOLDER)),
+        ('FAST_SYNC_ENABLED', 'INTEGER NOT NULL', int(defaults.FAST_SYNC_ENABLED))
     )
 }
 class SqlTableWrapper:
@@ -161,7 +166,9 @@ class TgboxDB:
         self._name = self._db_path.name
 
     def __str__(self) -> str:
-        return f'{self.__class__.__name__}("{str(self._db_path)}") # {self._initialized=}'
+        return (
+           f'{self.__class__.__name__}("{str(self._db_path)}") '
+            '# {self._initialized=}')
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}("{str(self._db_path)}")'
@@ -222,44 +229,78 @@ class TgboxDB:
                     )
             except aiosqlite.OperationalError: # Table exists
                 # The code below will update TgboxDB schema if it's outdated
-                table_columns = await self._aiosql_db.execute(
+                table_columns_ = await self._aiosql_db.execute(
                     f'PRAGMA table_info({table})'
                 )
-                table_columns = set((i[1] for i in await table_columns.fetchall()))
-                required_columns = set((i[0] for i in data))
+                old_table_columns = set()
+                for i in await table_columns_.fetchall():
+                    column = (
+                        i[1],
+                        i[2] + (' NOT NULL' if i[3] else '')\
+                             + (' PRIMARY KEY' if i[5] else '')
+                    )
+                    old_table_columns.add(column)
 
-                if table_columns != required_columns:
-                    logger.info(f'TgboxDB {self._db_path} seems outdated. Updating...')
-                    table_columns &= required_columns
+                required_columns = set((i[0:2] for i in data))
 
-                    logger.debug(f'CREATE TABLE "updated!{table}" ({columns})')
+                if old_table_columns == required_columns:
+                    continue # Schemas are about same
 
+                logger.info(f'TgboxDB {self._db_path} seems outdated. Updating...')
+
+                table_columns = [i[:2] for i in data]
+                old_table_columns_str = ', '.join(
+                    i[0] for i in table_columns
+                    if i in old_table_columns
+                )
+                new_table_columns = table_columns[len(old_table_columns):]
+
+                old_rows = await self._aiosql_db.execute(
+                   f'SELECT {old_table_columns_str} from {table}')
+
+                columns_schema = [' '.join(i) for i in table_columns]
+                columns_schema = ','.join(columns_schema).rstrip(',')
+
+                logger.debug(f'CREATE TABLE "updated!{table}" ({columns})')
+
+                await self._aiosql_db.execute(
+                    'CREATE TABLE IF NOT EXISTS '
+                   f'"updated!{table}" ({columns_schema})'
+                )
+                new_values = []
+                for column in new_table_columns:
+                    for default_data in data:
+                        if default_data[0] == column[0]:
+                            if len(default_data) > 2:
+                                new_values.append(default_data[2])
+                            else:
+                                new_values.append(None)
+
+                q = ('?,'*len(table_columns)).rstrip(',')
+
+                columns_insert = (i[0] for i in table_columns)
+                columns_insert = ','.join(columns_insert).rstrip(',')
+
+                while (fetch := await old_rows.fetchone()):
                     await self._aiosql_db.execute(
-                        f'CREATE TABLE "updated!{table}" ({columns})'
+                       f'INSERT INTO "updated!{table}" '
+                       f'({columns_insert}) VALUES ({q})',
+                        (*fetch, *new_values)
                     )
-                    table_columns_str = ', '.join(table_columns)
+                logger.debug(f'DROP TABLE {table}')
+                await self._aiosql_db.execute(f'DROP TABLE {table}')
 
-                    logger.debug(
-                        f"""INSERT INTO "updated!{table}" ({table_columns_str}) """
-                        f"""SELECT {table_columns_str} FROM {table}"""
-                    )
-                    await self._aiosql_db.execute(
-                        f"""INSERT INTO "updated!{table}" ({table_columns_str}) """
-                        f"""SELECT {table_columns_str} FROM {table}"""
-                    )
-                    logger.debug(f'DROP TABLE {table}')
-                    await self._aiosql_db.execute(f'DROP TABLE {table}')
+                logger.debug(f'ALTER TABLE "updated!{table}" RENAME TO {table}')
+                await self._aiosql_db.execute(
+                    f'ALTER TABLE "updated!{table}" RENAME TO {table}'
+                )
 
-                    logger.debug(f'ALTER TABLE "updated!{table}" RENAME TO {table}')
-                    await self._aiosql_db.execute(
-                        f'ALTER TABLE "updated!{table}" RENAME TO {table}'
-                    )
         logger.info('TgboxDB._aiosql_conn.commit()')
         await self._aiosql_db.commit()
         self._aiosql_db_is_closed = False
 
         tables = await self._aiosql_db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
+            'SELECT name FROM sqlite_master WHERE type="table"'
         )
         for table in (await tables.fetchall()):
             setattr(self, table[0], SqlTableWrapper(self._aiosql_db, table[0]))

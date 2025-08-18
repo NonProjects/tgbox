@@ -278,8 +278,8 @@ class PackedAttributes:
         Will make bytestring from your kwargs.
         Any kwarg **always** must be ``bytes``.
 
-        ``make(x=5)`` will not work;
-        ``make(x=b'\x05')`` is correct.
+        ``pack(x=5)`` will not work;
+        ``pack(x=b'\x05')`` is correct.
 
         We shuffle all key/value before packing, so
         you can specify ``random_seed``. Otherwise,
