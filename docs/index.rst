@@ -1,9 +1,5 @@
 TGBOX: encrypted cloud storage based on `Telegram <https://telegram.org>`__
 ===========================================================================
-.. epigraph::
-
-        | ❕ This repository contains a set of classes and functions used to manage TGBOX.
-        |       Try the `tgbox-cli <https://github.com/NotStatilko/tgbox-cli>`__  if you're interested in working implementation!
 
 .. code-block:: python
 
@@ -32,10 +28,8 @@ TGBOX: encrypted cloud storage based on `Telegram <https://telegram.org>`__
 
         box.done() # Work is done. Close all connections!
 
-.. epigraph::
 
-        | ❔ This code block heavily utilize the magic ``tgbox.api.sync`` module and high-level functions
-        |       from the ``tgbox.api.abstract`` module for showcase. For actual *Async* code, see `Examples <https://tgbox.readthedocs.io/en/latest/examples.html>`__.
+❔ This code block heavily utilize the magic ``tgbox.api.sync`` module and high-level functions from the ``tgbox.api.abstract`` module for showcase. For actual *Async* code, see `Examples <https://tgbox.readthedocs.io/en/latest/examples.html>`__.
 
 Motivation
 ----------
