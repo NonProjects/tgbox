@@ -50,7 +50,7 @@ This **unofficial, and not affiliated with Telegram** library targets to be a Pr
 Abstract
 --------
 
-In the scope of this project we name *"encrypted cloud storage"* as **Box** and the API to it as ``tgbox``. The *Box* consists of two parts: the **RemoteBox** (place where we store you encrypted files) and the **LocalBox** (place where we store cache information). They define a basic primitives. You can **share** your *Box* and separate *Files* with other users absolutely **secure** (even through insecure communication canals — `e2e <https://en.wikipedia.org/wiki/End-to-end_encryption>`__) — only You and *Requester* will have decryption key. You can create an **unlimited** amount of *Box* objects, Upload & Download speed is **faster** than in official Telegram clients and maximum filesize is around **2GB** for Regular users and around **4GB** for Premium ones.
+In the scope of this project we name *"encrypted cloud storage"* as **Box** and the API to it as ``tgbox``. The *Box* consists of two parts: the **RemoteBox** (place where we store your *encrypted files*) and the **LocalBox** (place where we store *cache information*). They define a basic primitives. You can **share** your *Box* and separate *Files* with other users absolutely **secure** (even through insecure communication canals — `e2e <https://en.wikipedia.org/wiki/End-to-end_encryption>`__) — only You and *Requester* will have decryption key. You can create an **unlimited** amount of *Box* objects, Upload & Download speed is **faster** than in official Telegram clients and maximum file size is around **2GB** for Regular users and around **4GB** for Premium ones.
 
 Documentation
 -------------
