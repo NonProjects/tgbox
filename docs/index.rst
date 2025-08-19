@@ -1,20 +1,56 @@
-TGBOX: encrypted cloud storage based on Telegram
-================================================
+TGBOX: encrypted cloud storage based on `Telegram <https://telegram.org>`__
+===========================================================================
+.. epigraph::
+
+        | ❕ This repository contains a set of classes and functions used to manage TGBOX.
+        |       Try the `tgbox-cli <https://github.com/NotStatilko/tgbox-cli>`__  if you're interested in working implementation!
+
+.. code-block:: python
+
+        import tgbox, tgbox.api.sync
+
+        # This two will not work. Get your own at https://my.telegram.org
+        API_ID, API_HASH = 1234567, '00000000000000000000000000000000'
+
+        tc = tgbox.api.TelegramClient(api_id=API_ID, api_hash=API_HASH)
+        tc.start() # This method will prompt you for Phone, Code & Password
+
+        print(phrase := tgbox.keys.Phrase.generate()) # Your secret Box Phrase
+        basekey = tgbox.keys.make_basekey(phrase) # Will Require 1GB of RAM
+        box = tgbox.api.make_box(tc, basekey) # Will make Encrypted File Storage
+
+        # Will upload selected file to the RemoteBox, cache information
+        # in LocalBox and return the tgbox.api.abstract.BoxFile object
+        abbf = box.push(input('File to upload (path): '))
+
+        # Retrieving some info from the BoxFile
+        print('File size:', abbf.size, 'bytes')
+        print('File name:', abbf.file_name)
+
+        downloaded = abbf.download() # Downloading your file from Remote.
+        print(downloaded) # Will print path to downloaded file object
+
+        box.done() # Work is done. Close all connections!
+
+.. epigraph::
+
+        | ❔ This code block heavily utilize the magic ``tgbox.api.sync`` module and high-level functions
+        |       from the ``tgbox.api.abstract`` module for showcase. For actual *Async* code, see `Examples <https://tgbox.readthedocs.io/en/latest/examples.html>`__.
 
 Motivation
 ----------
 
-The Telegram is beautiful app. Not only by mean of features and Client API, but it's also good in cryptography and secure messaging. In the last years, core and client devs of Telegram mostly work for "social-network features", i.e video chats and message reactions which is OK, but there also can be plenty of "crypto-related" things.
+Although **Telegram** started as security-oriented Messenger, in recent years developers shifted its focus from privacy enhancements to social-network features & cryptocurrency integration. You may like or dislike that, but fact is obvious — Telegram can expand on its privacy-focused roots and add some more cool things — like *Encrypted Cloud Storage*. While core developers are busy with their "`gifts <https://telegram.org/blog/wear-gifts-blockchain-and-more>`__", we may make something on our own by utilizing `Telegram Client API <https://core.telegram.org>`__, and here is my vision on it.
 
 Target
 ------
 
-This *[unofficial]* library targets to be a PoC of **encrypted file storage** inside the Telegram, but can be used as standalone API.
+This **unofficial, and not affiliated with Telegram** library targets to be a Proof of *Concept* of the *Encrypted Cloud Storage* inside the Telegram Messenger. You **can not** use it directly inside your Telegram App (like Desktop or Android client). It's a standalone Python library for developers and alike.
 
 Abstract
 --------
 
-We name *"encrypted cloud storage"* as **Box** and the API to it as **Tgbox**. There is **two** of boxes: the **RemoteBox** and the **LocalBox**. They define a basic primitives. You can share your Box and separate Files with other people absolutely secure - only You and someone you want will have decryption key, even through insecure communication canals (`e2e <https://en.wikipedia.org/wiki/End-to-end_encryption>`_). You can make unlimited amount of Boxes, Upload & Download speed is **faster** than in official Telegram clients and maximum filesize is around **2GB** and around **4GB** for Premium users.
+In the scope of this project we name *"encrypted cloud storage"* as **Box** and the API to it as ``tgbox``. The *Box* consists of two parts: the **RemoteBox** (place where we store your *encrypted files*) and the **LocalBox** (place where we store *cache information*). They define a basic primitives. You can **share** your *Box* and separate *Files* with other users absolutely **secure** (even through insecure communication canals — `e2e <https://en.wikipedia.org/wiki/End-to-end_encryption>`__) — only You and *Requester* will have decryption key. You can create an **unlimited** amount of *Box* objects, Upload & Download speed is **faster** than in official Telegram clients and maximum file size is around **2GB** for Regular users and around **4GB** for Premium ones.
 
 
 .. toctree::
