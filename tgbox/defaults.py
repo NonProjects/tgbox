@@ -88,6 +88,17 @@ REMOTEBOX_PREFIX: str=f'{DEF_TGBOX_NAME}[{VERBYTE.hex()}]: '
 DEF_NO_FOLDER:  Path=Path('NO_FOLDER')
 DEF_UNK_FOLDER: Path=Path('UNKNOWN_FOLDER')
 
+# Fast Sync can be used only when multiple Users share the
+# same Box and all of them have access to the Admin Log. For
+# Fast Sync, we add and remove caption for each uploaded
+# file. Although unlikely on low/mid upload magnitudes,
+# on big file amounts this can potentially cause trottle
+# or even 429 Error. As mostly Users utilize Box without
+# sharing, I guess it's a sane to make Fast Sync optional;
+# however, you can enable it back at any time with the
+# DecryptedLocalBox.defaults.change('FAST_SYNC_ENABLED', 1)
+FAST_SYNC_ENABLED: bool=False
+
 PREFIX: bytes=b'\x00TGBOX'
 
 ABSPATH: Path = Path(_MEIPASS) if _MEIPASS is not None \

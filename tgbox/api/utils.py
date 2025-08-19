@@ -754,11 +754,16 @@ class DefaultsTableWrapper:
 
 @dataclass
 class RemoteBoxDefaults:
+    """
+    If DefaultsTableWrapper was not passed into
+    the ``*RemoteBox``, this object will be used
+    """
     METADATA_MAX: int
     FILE_PATH_MAX: int
+    DOWNLOAD_PATH: Path
     DEF_UNK_FOLDER: Path
     DEF_NO_FOLDER: Path
-    DOWNLOAD_PATH: Path
+    FAST_SYNC_ENABLED: int
 
 
 def _syncify_wrap_func(t, method_name):

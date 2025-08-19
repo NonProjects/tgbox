@@ -301,15 +301,15 @@ class EncryptedRemoteBox:
             logger.debug('ERB: Found custom defaults, will try to use it')
             self._defaults = defaults_
         else:
-            logger.debug('ERB: Custom defaults is not present')
+            logger.debug('ERB: Custom defaults is not presented')
 
             self._defaults = RemoteBoxDefaults(
                 METADATA_MAX = defaults.Limits.METADATA_MAX,
                 FILE_PATH_MAX = defaults.Limits.FILE_PATH_MAX,
                 DEF_UNK_FOLDER = defaults.DEF_UNK_FOLDER,
                 DEF_NO_FOLDER = defaults.DEF_NO_FOLDER,
-                DOWNLOAD_PATH = defaults.DOWNLOAD_PATH
-            )
+                DOWNLOAD_PATH = defaults.DOWNLOAD_PATH,
+                FAST_SYNC_ENABLED = defaults.FAST_SYNC_ENABLED)
 
     def __repr__(self) -> str:
         return f'<class {self.__class__.__name__}({self._box_channel}, {self._tc}, {repr(self._defaults)})>'
@@ -1122,18 +1122,24 @@ class EncryptedRemoteBox:
                 file_message = await message_to_edit.edit(file=ifile,
                     text=reenc_encoded_updated_metadata)
             else:
+                if self._defaults.FAST_SYNC_ENABLED:
+                    caption = '<This caption must be removed>'
+                else:
+                    caption = None
+
                 file_message = await self._tc.send_file(
                     self._box_channel, file=ifile,
                     silent=False, force_document=True,
-                    caption = '<This caption must be removed>'
+                    caption=caption
                 )
-                # We will set and remove caption only for
-                # "Recent Actions" admin log. We can make
-                # a quick synchronization with its help.
-                await self._tc.edit_message(
-                    entity = self._box_channel,
-                    message = file_message, text = ''
-                )
+                if self._defaults.FAST_SYNC_ENABLED:
+                    # We will set and remove caption only for
+                    # "Recent Actions" admin log. We can make
+                    # a quick synchronization with its help.
+                    await self._tc.edit_message(
+                        entity = self._box_channel,
+                        message = file_message, text = ''
+                    )
         except ChatAdminRequiredError:
             box_name = await self.get_box_name()
 
@@ -1571,7 +1577,8 @@ class EncryptedRemoteBoxFile:
                 FILE_PATH_MAX = defaults.Limits.FILE_PATH_MAX,
                 DEF_UNK_FOLDER = defaults.DEF_UNK_FOLDER,
                 DEF_NO_FOLDER = defaults.DEF_NO_FOLDER,
-                DOWNLOAD_PATH = defaults.DOWNLOAD_PATH)
+                DOWNLOAD_PATH = defaults.DOWNLOAD_PATH,
+                FAST_SYNC_ENABLED = defaults.FAST_SYNC_ENABLED)
         else:
             logger.debug('ERBF: Found custom defaults, will try to use it')
             self._defaults = defaults_

@@ -41,7 +41,7 @@ from ..errors import (
     IncorrectKey, FingerprintExists, NotInitializedError,
     AlreadyImported, RemoteFileNotFound, InUseException,
     AESError, PreviewImpossible, RemoteBoxInaccessible,
-    InvalidFile
+    InvalidFile, FastSyncDisabled
 )
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter,
@@ -1263,6 +1263,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 * ``fast_progress_callback(22, 'imported')`` OR
                 * ``fast_progress_callback(22, 'metadata updated')``
         """
+        if not self._defaults.FAST_SYNC_ENABLED:
+            raise FastSyncDisabled
+
         drb_box_name = await drb.get_box_name()
         logger.info(f'Fast syncing {self._tgbox_db.db_path} with {drb_box_name}...')
 
