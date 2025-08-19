@@ -1,17 +1,32 @@
+from os import getenv
 from setuptools import setup
 from ast import literal_eval
-from sys import version_info
+from sys import version_info, platform
 
 
 CURRENT_PYTHON = version_info[:2]
-REQUIRED_PYTHON = (3, 8)
-
-if CURRENT_PYTHON < REQUIRED_PYTHON:
-    raise RuntimeError('The "tgbox" library require Python v3.8+')
-
+REQUIRED_PYTHON = (3, 9)
 
 with open('tgbox/version.py', encoding='utf-8') as f:
     version = literal_eval(f.read().split('=',1)[1].strip())
+
+if CURRENT_PYTHON < REQUIRED_PYTHON:
+    raise RuntimeError(f'"tgbox" {version} lib require Python v3.9+')
+
+# Used in setup(extras_require=...)
+extras_require_fast = [
+    'cryptography<46.0.0',
+    'cryptg==0.5.1'
+]
+if platform == 'linux' and not getenv('TGBOX_NO_UVLOOP'):
+    # On Linux we can use Uvloop, which is
+    # significantly faster than default
+    # Asyncio Event Loop. You can build
+    # tgbox without it if you want to
+    # (for some reason), just set the
+    # TGBOX_NO_UVLOOP=1 in your Env
+    uvloop = 'uvloop==0.21.0'
+    extras_require_fast.append(uvloop)
 
 setup(
     name             = 'tgbox',
@@ -33,8 +48,8 @@ setup(
     include_package_data = True,
 
     install_requires = [
-        'aiosqlite==0.20.0',
-        'telethon==1.38.1',
+        'aiosqlite==0.21.0',
+        'telethon==1.40.0',
         'ecdsa==0.19.0',
         'filetype==1.2.0',
         'pysocks==1.7.1'
@@ -44,14 +59,11 @@ setup(
         'API', 'Asyncio', 'Non-official'
     ],
     extras_require = {
-        'fast': [
-            'cryptography<45.0.0',
-            'cryptg==0.5.0.post0'
-        ],
         'doc': [
-            'sphinx-book-theme==1.1.3',
+            'sphinx-book-theme==1.1.4',
             'sphinx-togglebutton==0.3.2'
-        ]
+        ],
+        'fast': extras_require_fast
     },
     classifiers = [
         'Development Status :: 4 - Beta',

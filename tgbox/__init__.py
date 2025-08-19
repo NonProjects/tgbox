@@ -39,8 +39,14 @@ def log_excepthook(exc_type, exc_value, exc_traceback):
 
 sys.excepthook = log_excepthook
 
-from asyncio import get_event_loop
 from typing import Coroutine
+from asyncio import get_event_loop, set_event_loop_policy
+try:
+    from uvloop import EventLoopPolicy
+    set_event_loop_policy(EventLoopPolicy())
+    logger.debug('Uvloop is installed and available. We will use it!')
+except (ImportError, ModuleNotFoundError):
+    logger.debug('Uvloop is not installed or not supported')
 
 from . import api
 from . import defaults

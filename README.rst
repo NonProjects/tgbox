@@ -75,6 +75,7 @@ Third party & thanks to
 - `Filetype <https://github.com/h2non/filetype.py>`__ (`MIT <https://github.com/h2non/filetype.py/blob/master/LICENSE>`__)
 - `Cryptg <https://github.com/cher-nov/cryptg>`__ (`LICENSE <https://github.com/cher-nov/cryptg/blob/master/LICENSE.txt>`__)
 - `Cryptography <https://github.com/pyca/cryptography>`__ (`LICENSE <https://github.com/pyca/cryptography/blob/main/LICENSE>`__)
+- `Uvloop <https://github.com/MagicStack/uvloop>`__ (`MIT <https://github.com/MagicStack/uvloop/blob/master/LICENSE-MIT>`__)
 
 Resources
 ---------
