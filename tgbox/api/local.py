@@ -805,7 +805,8 @@ class EncryptedLocalBox:
                 to save more RAM if ``True``. You can call
                 ``.init()`` method on it to load it again.
         """
-        assert fetch_count > 0, 'fetch_count must be > 0'
+        if fetch_count <= 0:
+            raise ValueError('fetch_count must be > 0')
 
         if ids:
             ids = str(tuple(ids)) if len(ids) > 1 else f'({ids[0]})'
@@ -1123,8 +1124,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 If ``True``, will change local file with
                 the information from ``pf``.
         """
-        assert hasattr(pf,'file_id'), 'Push to RemoteBox firstly'
-        assert hasattr(pf,'upload_time'), 'Push to RemoteBox firstly'
+        if not hasattr(pf,'file_id') or not hasattr(pf,'upload_time'):
+            raise AssertionError('Push to RemoteBox firstly')
         try:
             # Verify that there is no file with the same ID
             await self._tgbox_db.FILES.select_once(
@@ -1732,7 +1733,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 to save more RAM if ``True``. You can call
                 ``.init()`` method on it to load it again.
         """
-        assert fetch_count > 0, 'fetch_count must be > 0'
+        if fetch_count <= 0:
+            raise ValueError('fetch_count must be > 0')
 
         sgen = search_generator(
             sf=sf, lb=self, reverse=reverse,
@@ -2399,7 +2401,8 @@ class EncryptedLocalBoxDirectory:
                 to save more RAM if ``True``. You can call
                 ``.init()`` method on it to load it again.
         """
-        assert not all((ignore_files, ignore_dirs)), 'Specify at least one'
+        if all((ignore_files, ignore_dirs)):
+            raise ValueError('You should use only ignore_files OR ignore_dirs, not both')
 
         if isinstance(ppid, DirectoryRoot) or ppid is DirectoryRoot:
             part_id = None
@@ -3095,7 +3098,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 logger.debug('Trying to treat key as DirectoryKey...')
 
                 filekey = make_filekey(key, self._file_salt)
-                assert len(AES(filekey).decrypt(elbf._upload_time)) < 16
+                if not len(AES(filekey).decrypt(elbf._upload_time)) < 16:
+                    raise AssertionError
                 # ^ ImportKey can be DirectoryKey, so here we're try
                 #   to treat it as dirkey and make FileKey from it,
                 #   then, we try to decrypt some Metadata field to
@@ -3103,7 +3107,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 #   it's definitely a DirectoryKey.
                 #
                 # | Decryption can fail with ValueError (invalid
-                #   padding bytes OR by `assert` statement. The
+                #   padding bytes OR by raise Exception. The
                 #   upload_time after decryption should be less
                 #   than 16 bytes in size (decryption failed)
                 self._filekey = filekey
@@ -3406,7 +3410,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         You should specify at least one argument.
         """
-        assert any((drb, drbf, _updated_metadata is not None)), 'Specify at least one'
+        if not any((drb, drbf, _updated_metadata is not None)):
+            raise ValueError('Specify at least drb OR drbf')
 
         if _updated_metadata is not None:
             pass
@@ -3423,7 +3428,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         if _updated_metadata:
             if isinstance(_updated_metadata, str):
                 _updated_metadata = urlsafe_b64decode(_updated_metadata)
-                assert _updated_metadata, 'empty after decode, invalid!'
+                if not _updated_metadata:
+                    raise ValueError('_updated_metadata is empty after decode')
 
             updates = AES(self._filekey).decrypt(
                 _updated_metadata

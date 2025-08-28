@@ -162,12 +162,13 @@ class _PyaesState:
                 raise ModeInvalid('You should use only decrypt function.')
 
         data = self.__convert_memoryview(data)
-        assert not len(data) % 16; total = b''
+        if len(data) % 16:
+            raise ValueError('data length must be divisible by 16')
 
+        total = b''
         for _ in range(len(data) // 16):
             total += self._aes_state.encrypt(data[:16])
             data = data[16:]
-
         return total
 
     def decrypt(self, data: Union[bytes, memoryview]) -> bytes:
@@ -179,12 +180,13 @@ class _PyaesState:
                 raise ModeInvalid('You should use only encrypt function.')
 
         data = self.__convert_memoryview(data)
-        assert not len(data) % 16; total = b''
+        if len(data) % 16:
+            raise ValueError('data length must be divisible by 16')
 
+        total = b''
         for _ in range(len(data) // 16):
             total += self._aes_state.decrypt(data[:16])
             data = data[16:]
-
         return total
 
 class AESwState:

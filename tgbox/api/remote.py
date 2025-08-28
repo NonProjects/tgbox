@@ -1055,7 +1055,8 @@ class EncryptedRemoteBox:
         oe = OpenPretender(pf.file, aes_state, hmac_state, pf.filesize)
         oe.concat_metadata(pf.metadata)
         try:
-            assert not use_slow_upload, 'use_slow_upload enabled'
+            if use_slow_upload:
+                raise AssertionError # force switch to slow upload
 
             # Here we will use fast upload function
             ifile = await upload_file(
@@ -1069,7 +1070,7 @@ class EncryptedRemoteBox:
             # probably because of fast "upload_file(...)" from
             # the custom fastelethon module. We will try to
             # use the slow upload from the Telethon library
-            if not isinstance(e, AssertionError): # We assert if use_slow_upload
+            if not isinstance(e, AssertionError): # We raise it if use_slow_upload
                 logger.warning(f'Fast upload FAILED, trying with SLOW!\n{format_exc()}')
 
             ifile = await self._tc.upload_file(
@@ -2190,14 +2191,14 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         elif isinstance(key, ImportKey):
             try:
                 logger.debug('Trying to treat key as DirectoryKey...')
-
                 filekey = make_filekey(key, self._file_salt)
 
                 secret_metadata = AES(filekey).decrypt(
                     self._erbf._secret_metadata
                 )
                 secret_metadata = PackedAttributes.unpack(secret_metadata)
-                assert secret_metadata # Shouldn't be empty dict.
+                if not secret_metadata:
+                    raise AssertionError # Shouldn't be an empty dict.
                 # ^ ImportKey can be DirectoryKey, so here we're try
                 #   to treat it as dirkey and make FileKey from it,
                 #   then, we try to decrypt secret Metadata field to
@@ -2205,7 +2206,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 #   it's definitely a DirectoryKey.
                 #
                 # | Decryption can fail with ValueError (invalid
-                #   padding bytes OR by `assert` statement.
+                #   padding bytes OR by raise error check.
                 self._filekey = filekey
                 self._dirkey = DirectoryKey(key)
             except (ValueError, AssertionError):
@@ -2219,7 +2220,6 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             else:
                 logger.debug('Making FileKey from the MainKey and FileSalt (< v1.3)')
                 self._filekey = make_filekey(self._mainkey, self._file_salt)
-
         else:
             raise ValueError('You need to specify FileKey | MainKey | DecryptedLocalBox')
 
@@ -2662,7 +2662,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             # but Telegram give only 512KiB blocks, so we need to download it
             if not stream_iv and decrypt:
                 if offset:
-                    assert not offset % 524288, 'offset must be divisible by 524288'
+                    if offset % 524288:
+                        raise ValueError('offset must be divisible by 524288')
                     iv_offset = self._file_pos + (offset - 524288)
                 else:
                     iv_offset = self._file_pos - 524288

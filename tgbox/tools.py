@@ -329,7 +329,9 @@ class PackedAttributes:
         if not pattr:
             return {}
         try:
-            assert pattr[0] == 0xFF
+            if pattr[0] != 0xFF:
+                raise ValueError('pattr is invalid, should start with 0xFF byte')
+
             pattr_d, pattr = {}, pattr[1:]
 
             while pattr:
@@ -348,7 +350,8 @@ class PackedAttributes:
                 pattr_d[key.decode()] = value
 
             return pattr_d
-        except:
+        except Exception as e:
+            logger.info('Could not parse pattr due to %s: %s', type(e), e)
             return {}
 
 class OpenPretender:
@@ -552,7 +555,8 @@ def pad_request_size(request_size: int, bsize: int=4096) -> int:
             Size of block. Typically we
             don't need to change this.
     """
-    assert request_size <= 1048576, 'Max 1MiB'
+    if request_size > 1048576:
+        raise ValueError('Max request_size is 1048576')
 
     if request_size <= bsize:
         return request_size
@@ -772,7 +776,8 @@ async def make_media_preview(file_path: PathLike, x: int=128, y: int=-1) -> Bina
     loop = get_event_loop()
     try:
         sp_result = await loop.run_in_executor(None, sp_func)
-        assert sp_result.stdout, 'Preview bytes is empty'
+        if not sp_result.stdout:
+            raise Exception('Preview bytes is empty')
         return BytesIO(sp_result.stdout)
     except Exception as e:
         raise PreviewImpossible(f'Can\'t make thumbnail: {e}') from e

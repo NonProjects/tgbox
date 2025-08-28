@@ -283,8 +283,10 @@ class ParallelTransferrer:
             connection_count: Optional[int] = None
             ) -> AsyncGenerator[bytes, None]:
 
-        assert not offset % 4096, 'Offset must be divisible by 4096'
-        assert not offset % 524288, 'Offset must be divisible by 524288'
+        if offset % 4096:
+            raise ValueError('Offset must be divisible by 4096')
+        if offset % 524288:
+            raise ValueError('Offset must be divisible by 524288')
 
         connection_count = connection_count or self._get_connection_count(file_size)
         part_size = (part_size_kb or utils.get_appropriated_part_size(file_size)) * 1024
