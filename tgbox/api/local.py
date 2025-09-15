@@ -1760,18 +1760,20 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 ``file`` data to add to the LocalBox. In most
                 cases it's just opened file. If you want to upload
                 something else, then you need to implement class
-                that have ``read`` & ``name`` methods.
+                that have ``read``, ``name`` and basic ``seek()``
+                methods. (support for ``seek(0,0)`` is enough).
 
-                The method needs to know size of the ``file``, so
-                it will try to ask system what size of file on path
-                ``file.name``. If it's impossible, method will try to
-                seek file to EOF, if file isn't seekable, then we try to
-                get size by ``len()`` (as ``__len__`` dunder). If all fails,
-                method tries to get ``file.read())`` (with load to RAM).
+                The method needs to know size of the ``file``,
+                so it will try to ask system what size of file
+                on  path ``file.name``. If it's impossible, method
+                will try to seek file to EOF, if file isn't seekable,
+                we will try to get size by ``len()`` (as ``__len__``
+                dunder). If all this fails, method will try to get
+                length of ``file.read())`` (with load to RAM!!!).
 
-                Abs file path length must be <= ``self.defaults.FILE_PATH_MAX``;
-                If file has no ``name`` and ``file_path`` is not
-                specified then it will be ``NO_FOLDER/{prbg(6).hex()}``.
+                Absolute file path length must be <= ``self.defaults.FILE_PATH_MAX``;
+                If file has no ``name`` and ``file_path`` is not specified, -- it
+                will be ``NO_FOLDER/{tgbox.tools.prbg(6).hex()}``.
 
             file_size (``int``, optional):
                 Bytelength of ``file``. You can specify
@@ -1804,7 +1806,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             skip_fingerprint_check (``bool``, optional):
                 If ``True``, will skip the File Fingerprint
                 check. Change it only if you want to update
-                some already uploaded file.
+                already pushed to RemoteBox file.
         """
         if isinstance(file, TelegramVirtualFile):
             logger.info('Trying to make a PreparedFile from Telegram file...')
