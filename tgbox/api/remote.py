@@ -1659,18 +1659,6 @@ class EncryptedRemoteBoxFile:
         return self._sender_id
 
     @property
-    def sender_entity(self) -> Union[Channel, User, None]:
-        """
-        Returns post author entity if "Sign Messages"
-        with "Show author's profiles" was enabled
-        in Box ``Channel``, ``None`` otherwise.
-
-        * If Author is Channel, ``Channel`` object will be returned.
-        * If Author is User, ``User`` object will be returned.
-        """
-        return self._sender_entity
-
-    @property
     def imported(self) -> bool:
         """
         Returns ``True`` if file was imported
@@ -1688,17 +1676,6 @@ class EncryptedRemoteBoxFile:
         * If User, ID will be always positive (> 0).
         """
         return self._imported_from_id
-
-    @property
-    def imported_from_entity(self) -> Union[Channel, User, None]:
-        """
-        Returns forward author entity (the one Document
-        was forwarded from, i.e User / Channel).
-
-        * If Author is Channel, ``Channel`` object will be returned.
-        * If Author is User, ``User`` object will be returned.
-        """
-        return self._imported_from_entity
 
     @property
     def version_byte(self) -> Union[bytes, None]:
@@ -1791,6 +1768,43 @@ class EncryptedRemoteBoxFile:
         if not self.initialized:
             raise NotInitializedError('RemoteBoxFile must be initialized.')
 
+    async def get_sender_entity(self) -> Union[Channel, User, None]:
+        """
+        Returns post author entity if "Sign Messages"
+        with "Show author's profiles" was enabled
+        in Box ``Channel``, ``None`` otherwise.
+
+        * If Author is Channel, ``Channel`` object will be returned.
+        * If Author is User, ``User`` object will be returned.
+        """
+        self.__raise_initialized()
+
+        if not self._message.from_id:
+            return None
+
+        if not self._sender_entity:
+            self._sender_entity = await self._rb._tc.get_entity(
+                await self._rb._tc.get_input_entity(self._sender_id))
+        return self._sender_entity
+
+    async def get_imported_from_entity(self) -> Union[Channel, User, None]:
+        """
+        Returns forward author entity (the one Document
+        was forwarded from, i.e User / Channel).
+
+        * If Author is Channel, ``Channel`` object will be returned.
+        * If Author is User, ``User`` object will be returned.
+        """
+        self.__raise_initialized()
+
+        if not self._imported:
+            return None
+
+        if not self._imported_from_entity:
+            self._imported_from_entity = await self._rb._tc.get_entity(
+                await self._rb._tc.get_input_entity(self._imported_from_id))
+        return self._imported_from_entity
+
     async def init(self, verify_prefix: bool=True) -> 'EncryptedRemoteBoxFile':
         """
         This method will download and set raw
@@ -1843,9 +1857,6 @@ class EncryptedRemoteBoxFile:
             else:
                 self._sender_id = sender.user_id
 
-            self._sender_entity = await self._rb._tc.get_entity(
-                self._sender_id)
-
         if self._message.fwd_from:
             self._imported = True
 
@@ -1854,9 +1865,6 @@ class EncryptedRemoteBoxFile:
                 self._imported_from_id = -(1000000000000 + imported_from.channel_id)
             else:
                 self._imported_from_id = imported_from.user_id
-
-            self._imported_from_entity = await self._rb._tc.get_entity(
-                self._imported_from_id)
 
         # ======================================================= #
 
