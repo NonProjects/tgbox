@@ -1265,7 +1265,13 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 * ``fast_progress_callback(22, 'metadata updated')``
         """
         if not self._defaults.FAST_SYNC_ENABLED:
-            raise FastSyncDisabled
+            message = (
+               'Fast sync was disabled. Change FAST_SYNC_ENABLED '
+               'Box default to 1 to enable it with DecryptedLocalBox.defaults.change. '
+               'It\'s only useful if you share your Box with someone, if you don\'t '
+               'need this, use the Deep sync via sync(deep=True).'
+            )
+            raise FastSyncDisabled(message)
 
         drb_box_name = await drb.get_box_name()
         logger.info(f'Fast syncing {self._tgbox_db.db_path} with {drb_box_name}...')

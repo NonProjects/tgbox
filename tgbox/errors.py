@@ -71,11 +71,7 @@ class NoPlaceLeftForMetadata(TgboxException):
     """Your edited metadata overflow Telegram caption limit"""
 
 class FastSyncDisabled(TgboxException):
-    """
-    Fast sync was disabled. Change FAST_SYNC_ENABLED
-    Box default to 1 to enable it. (DecryptedLocalBox.defaults.change);
-    but you can use the Deep Sync.
-    """
+    """Fast sync was disabled in Box defaults"""
 
 # LocalBox Exceptions
 
