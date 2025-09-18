@@ -15,7 +15,7 @@ if CURRENT_PYTHON < REQUIRED_PYTHON:
 
 # Used in setup(extras_require=...)
 extras_require_fast = [
-    'cryptography<46.0.0',
+    'cryptography<47.0.0',
     'cryptg==0.5.1'
 ]
 if platform == 'linux' and not getenv('TGBOX_NO_UVLOOP'):
@@ -71,7 +71,6 @@ setup(
         'Topic :: Security :: Cryptography',
         'Topic :: Software Development :: Libraries',
         'Topic :: Software Development :: Libraries :: Python Modules',
-        'License :: OSI Approved :: GNU General Public License v2 (GPLv2)',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
