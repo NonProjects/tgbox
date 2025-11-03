@@ -18,7 +18,7 @@ __all__ = [
     'keys',
     'tools',
     'version',
-    'sync',
+    'sync'
 ]
 import logging
 
@@ -40,13 +40,17 @@ def log_excepthook(exc_type, exc_value, exc_traceback):
 sys.excepthook = log_excepthook
 
 from typing import Coroutine
-from asyncio import get_event_loop, set_event_loop_policy
+from asyncio import set_event_loop
 try:
-    from uvloop import EventLoopPolicy
-    set_event_loop_policy(EventLoopPolicy())
+    from uvloop import new_event_loop
+    LOOP = new_event_loop()
     logger.debug('Uvloop is installed and available. We will use it!')
 except (ImportError, ModuleNotFoundError):
+    from asyncio import new_event_loop
+    LOOP = new_event_loop()
     logger.debug('Uvloop is not installed or not supported')
+
+set_event_loop(LOOP)
 
 from . import api
 from . import defaults
@@ -64,5 +68,4 @@ def sync(coroutine: Coroutine):
     Will call asynchronous function in
     current asyncio loop and return result.
     """
-    loop = get_event_loop()
-    return loop.run_until_complete(coroutine)
+    return LOOP.run_until_complete(coroutine)
