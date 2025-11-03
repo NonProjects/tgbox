@@ -751,6 +751,7 @@ class DefaultsTableWrapper:
         await self._tgbox_db.DEFAULTS.execute((
             f'UPDATE DEFAULTS SET {key}=?', (value,)
         ))
+        setattr(self, key, value)
 
 @dataclass
 class RemoteBoxDefaults:
