@@ -600,7 +600,15 @@ Taking into account our example in :ref:`Sharing *Box*`, if any of the *Box* use
 Fast Synchronization
 ^^^^^^^^^^^^^^^^^^^^
 
-**Fast Synchronization** is a process in which we check the *Telegram Channel* `Admin Log <https://core.telegram.org/api/recent-actions>`_ for *Box* updates (stored within 48 hours). It's fast, efficient and default for :meth:`~tgbox.api.local.DecryptedLocalBox.sync`. It's available **for Admins only** (Admin with *Zero Rights* will **have** access to *Admin Log*). As number of *Admins* per *Telegram Channel* is limited, some will prefer to use a *Deep Sync*.
+**Fast Synchronization** is a process in which we check the *Telegram Channel* `Admin Log <https://core.telegram.org/api/recent-actions>`_ for *Box* updates (stored within 48 hours). It's fast, efficient and default for :meth:`~tgbox.api.local.DecryptedLocalBox.sync`. It's available **for Admins only** (Admin with *Zero Rights* will **have** access to *Admin Log*). As number of *Admins* per *Telegram Channel* is limited, some will prefer to use the **Deep Synchronization**.
+
+.. versionchanged:: v1.7
+   Starting from version *1.7*, **Fast Sync** must be enabled on Box with ``.defaults.change()`` on :class:`~tgbox.api.local.DecryptedLocalBox`.
+
+   .. code-block:: python
+
+        # Enable Fast Sync on your Box, dlb is DecryptedLocalBox
+        await dlb.defaults.change('FAST_SYNC_ENABLED', 1)
 
 Deep Synchronization
 ^^^^^^^^^^^^^^^^^^^^
@@ -608,7 +616,7 @@ Deep Synchronization
 **Deep Synchronization** is a process in which we iterate over :doc:`remotebox` and **compare each file** with those from :doc:`localbox`. If some *File* is presented in *Remote* but not presented in *Local*, -- it will be imported. If some *File* is presented in *Local* but not presented in *Remote*, then it will be **removed** from *Local*. The *Deep Sync* is pretty fast even with *Box* that have a thousands of *Files*, however, may make a many of unnecessary requests. In contrary to *Fast Sync*, the *Deep Sync* is not limited in 48 hours time span. Moreover, you can set a *Start From ID* parameter if you need to *sync* only most recent *Files*. *Deep Sync* can be enabled by the ``deep=True`` flag in the :meth:`~tgbox.api.local.DecryptedLocalBox.sync` method.
 
 .. note::
-   Both *Sync* methods catch *File* (and *Metadata*) updates, import new *Files* & remove *Files* that no more exist in the *RemoteBox*. You can specify a *Progress Callback* and track a progress of *Sync* process.
+   Both *Sync* methods catch *File* (and *Metadata*) updates, import new *Files* & remove *Files* that no more exist in the *RemoteBox*. You can specify a *Progress Callback* and track progress of *Sync* process.
 
 Versioning
 ----------
