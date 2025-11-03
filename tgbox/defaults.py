@@ -92,7 +92,7 @@ DEF_UNK_FOLDER: Path=Path('UNKNOWN_FOLDER')
 # same Box and all of them have access to the Admin Log. For
 # Fast Sync, we add and remove caption for each uploaded
 # file. Although unlikely on low/mid upload magnitudes,
-# on big file amounts this can potentially cause trottle
+# on big file amounts this can potentially cause throttle
 # or even 429 Error. As mostly Users utilize Box without
 # sharing, I guess it's a sane to make Fast Sync optional;
 # however, you can enable it back at any time with the

@@ -58,7 +58,7 @@ class _TypeList:
     This is small version of ``list()`` that
     checks type on ``.append(...)``.
 
-    You can specify multiply types with
+    You can specify multiple types with
     ``tuple``, e.g: ``_TypeList((int, float))``
 
     * The list will try to change value type if \

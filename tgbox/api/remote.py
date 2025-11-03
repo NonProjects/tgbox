@@ -107,7 +107,7 @@ async def make_remotebox(
             ``PathLike`` to image that will be used as
             ``Channel`` photo of your ``RemoteBox``.
 
-            Can be setted to ``None`` if you don't
+            Can be set to ``None`` if you don't
             want to set ``Channel`` photo.
 
         box_salt (``BoxSalt``, optional):
@@ -321,7 +321,7 @@ class EncryptedRemoteBox:
             f'# {self._box_name=}, {box_salt=}'
         )
     def __hash__(self) -> int:
-        # Without 22 hash of int wil be equal to object's
+        # Without 22 hash of int will be equal to object's
         return hash((self._box_channel_id, 22))
 
     def __eq__(self, other) -> bool:
@@ -1012,7 +1012,7 @@ class EncryptedRemoteBox:
 
         Arguments:
             pf (``PreparedFile``):
-                PreparedFile to upload. You should recieve
+                PreparedFile to upload. You should receive
                 it via ``DecryptedLocalBox.prepare_file``.
 
             progress_callback (``Callable[[int, int], None]``, optional):
@@ -1095,7 +1095,7 @@ class EncryptedRemoteBox:
                             'Updated Metadata, but we can\'t decode. Updates '
                            f'to Metadata will be ignored. {e}')
                     else:
-                        # urlsafe_b64decode was successfull, now we need
+                        # urlsafe_b64decode was successful, now we need
                         # to get FileKey to decrypt the Metadata updates
                         # and then re-encrypt them with a new FileKey
                         dlbf = await pf.dlb.get_file(message_to_edit.id)
@@ -1115,7 +1115,7 @@ class EncryptedRemoteBox:
                             )
                             pf.set_updated_enc_metadata( # Add re-encrypted Metadata
                                 reenc_updated_metadata   # to PreparedFile object so
-                            )                            # we can re-use it in Local
+                            )                            # we can reuse it in Local
                             reenc_encoded_updated_metadata = urlsafe_b64encode(
                                 reenc_updated_metadata # Encode with Urlsafe b64
                             ).decode()
@@ -1178,7 +1178,7 @@ class EncryptedRemoteBox:
 
         Arguments:
             pf (``PreparedFile``):
-                PreparedFile to upload. You should recieve
+                PreparedFile to upload. You should receive
                 it via ``DecryptedLocalBox.prepare_file``.
 
             progress_callback (``Callable[[int, int], None]``, optional):
@@ -1210,7 +1210,7 @@ class EncryptedRemoteBox:
             object will be returned after update.
 
         pf (``PreparedFile``):
-            ``PreparedFile`` to upload. You should recieve
+            ``PreparedFile`` to upload. You should receive
             it via ``DecryptedLocalBox.prepare_file`` (set
             ``skip_fingerprint_check`` to ``True``).
 
@@ -2498,7 +2498,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 we will open in ``ab+`` mode, ``wb`` otherwise.
 
                 If ``outfile`` is your custom object, then you need to
-                implement a ``.write()`` at minumum. If you download
+                implement a ``.write()`` at minimum. If you download
                 from ``offset`` then also ``.read()`` and ``.seek()``
                 or pass ``hmac_state`` as keyword argument instead.
 
@@ -2551,7 +2551,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
                 .. code-block:: python
 
-                    ... # Most code was omited
+                    ... # Most code was omitted
 
                     from hmac import HMAC
 
@@ -2807,7 +2807,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                             'Consider to review it & then purge!'
                         )
 
-                break # Download is successfull so we can exit this loop
+                break # Download is successful so we can exit this loop
 
             except Exception as e:
                 if isinstance(e, InvalidFile):
@@ -2858,7 +2858,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         .. code-block:: python
 
-                ... # Most code is omited, see help(tgbox.api)
+                ... # Most code is omitted, see help(tgbox.api)
                 lfid = await drb.get_last_file_id()
                 drbf = await drb.get_file(lfid)
                 await drbf.update_metadata({'file_name': b'new.txt'})
@@ -2968,7 +2968,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             raise InvalidFile('Can\'t edit caption of this Document') from e
         except MessageNotModifiedError as e:
             logger.debug(
-                'Updates wasn\'t commited to your RemoteBox '
+                'Updates wasn\'t committed to your RemoteBox '
                f'because of MessageNotModifiedError: {e}'
             )
 

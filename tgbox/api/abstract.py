@@ -64,7 +64,7 @@ async def make_box(
             ``PathLike`` to image that will be used as
             ``Channel`` photo of your ``RemoteBox``.
 
-            Can be setted to ``''`` (empty string)
+            Can be set to ``''`` (empty string)
             if you don't want to set ``Channel`` photo.
 
             Default is ``defaults.BOX_IMAGE_PATH``
@@ -381,7 +381,7 @@ class Box(DecryptedLocalBox):
         If ``remote`` is ``True``, will be called the same
         method on the ``DecryptedRemoteBox``, deleting
         files in the Local & Remote Box. Do NOT set this
-        kwarg to ``True`` if you don't want to completly
+        kwarg to ``True`` if you don't want to completely
         destroy and remove selected files from Box.
 
         ``rb`` is auto passed to ``delete_files()`` and
@@ -499,7 +499,7 @@ class Box(DecryptedLocalBox):
         see ``help(DecryptedRemoteBox.delete)``.
 
         If ``remote`` is ``True``, will be called the same
-        method on the ``DecryptedRemoteBox``, completly
+        method on the ``DecryptedRemoteBox``, completely
         deleting **ALL OF YOUR FILES AND BOX INFORMATION!**
 
         Use ``left()`` if you **only want to left**
@@ -790,7 +790,7 @@ class BoxFile(DecryptedLocalBoxFile):
         If ``remote`` is ``True``, will be called the same
         method on the ``DecryptedRemoteBoxFile``, deleting
         file in the Local & Remote Box. Do NOT set this
-        kwarg to ``True`` if you don't want to completly
+        kwarg to ``True`` if you don't want to completely
         destroy and remove from Box your uploaded file.
         """
         self.__raise_initialized()

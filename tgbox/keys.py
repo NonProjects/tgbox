@@ -541,7 +541,7 @@ def make_requestkey(key: Union[MainKey, BaseKey],
             ``MainKey`` to make the output ECDH keys
             unique, so you can specify here any bytes
             value if you understand consequences (you
-            will need to re-use it on ``make_importkey``).
+            will need to reuse it on ``make_importkey``).
     """
     if not any((isinstance(salt, Salt), isinstance(salt, bytes))):
         raise ValueError('`salt` is not Union[Salt, bytes]')

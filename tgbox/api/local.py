@@ -83,7 +83,7 @@ async def make_localbox(
     Arguments:
         erb (``RemoteBox``):
             ``EncryptedRemoteBox``. You will
-            recieve it after ``make_remotebox``.
+            receive it after ``make_remotebox``.
 
         basekey (``BaseKey``):
             ``BaseKey`` that will be used
@@ -885,7 +885,7 @@ class EncryptedLocalBox:
 
         .. note::
             Without ``rb`` this will delete files only from
-            your LocalBox. To completly remove your file
+            your LocalBox. To completely remove your file
             use the same coroutine on *RemoteBox* or
             specify ``(Encrypted|Decrypted)RemoteBox``.
         """
@@ -2932,7 +2932,7 @@ class EncryptedLocalBoxFile:
 
         .. note::
             This will delete file only from your LocalBox.
-            To completly remove your file use same
+            To completely remove your file use same
             function on ``EncryptedRemoteBoxFile``.
         """
         await self._lb.delete_files(self,
@@ -3630,7 +3630,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         .. code-block:: python
 
-                ... # Most code is omited, see help(tgbox.api)
+                ... # Most code is omitted, see help(tgbox.api)
                 lfid = await dlb.get_last_file_id()
                 dlbf = await dlb.get_file(lfid)
                 await dlbf.update_metadata({'file_name': b'new.txt'})

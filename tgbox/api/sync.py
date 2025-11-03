@@ -47,7 +47,7 @@ def sync_agen(async_gen: AsyncGenerator):
 
     .. code-block:: python
 
-        ... # Some code was omited
+        ... # Some code was omitted
 
         async_gen = box.dlb.files(reverse=True)
         for dlbf in tgbox.api.sync.sync_agen(async_gen):

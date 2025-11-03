@@ -100,7 +100,7 @@ class TelegramClient(TTelegramClient):
             phone_number (``str``, optional):
                 Phone number linked to your Telegram
                 account. You may want to specify it
-                to recieve log-in code. You should
+                to receive log-in code. You should
                 specify it if ``session`` is ``None``.
 
             session (``str``, ``StringSession``, optional):
@@ -421,16 +421,16 @@ async def search_generator(
         # for 'exclude'. Both should be True to match SearchFilter filters.
         yield_result = [True, True]
 
-        for indx, filter in enumerate((sf.in_filters, sf.ex_filters)):
+        for index, filter in enumerate((sf.in_filters, sf.ex_filters)):
             if filter['imported']:
                 if bool(file.imported) != bool(filter['imported']):
-                    if indx == 0: # O is Include
-                        yield_result[indx] = False
+                    if index == 0: # O is Include
+                        yield_result[index] = False
                         break
 
                 elif bool(file.imported) == bool(filter['imported']):
-                    if indx == 1: # 1 is Exclude
-                        yield_result[indx] = False
+                    if index == 1: # 1 is Exclude
+                        yield_result[index] = False
                         break
 
             for sender in filter['sender']:
@@ -460,112 +460,112 @@ async def search_generator(
                             _check = True
 
                 if _check:
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                     break
             else:
                 if filter['sender']:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
             for minor_version in filter['minor_version']:
                 if minor_version == file.minor_version:
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                     break
             else:
                 if filter['minor_version']:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
             for mime in filter['mime']:
                 if in_func(mime, file.mime):
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                     break
             else:
                 if filter['mime']:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
             if filter['min_time']:
                 if file.upload_time < filter['min_time'][-1]:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
                 elif file.upload_time >= filter['min_time'][-1]:
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                         break
 
             if filter['max_time']:
                 if file.upload_time > filter['max_time'][-1]:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
                 elif file.upload_time <= filter['max_time'][-1]:
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                         break
 
             if filter['min_size']:
                 if file_size < filter['min_size'][-1]:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
                 elif file_size >= filter['min_size'][-1]:
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                         break
 
             if filter['max_size']:
                 if file_size > filter['max_size'][-1]:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
                 elif file_size <= filter['max_size'][-1]:
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                         break
 
             if filter['min_id']:
                 if file.id < filter['min_id'][-1]:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
                 elif file.id >= filter['min_id'][-1]:
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                         break
 
             if filter['max_id']:
                 if file.id > filter['max_id'][-1]:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
                 elif file.id <= filter['max_id'][-1]:
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                         break
 
             for id in filter['id']:
                 if file.id == id:
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                     break
             else:
                 if filter['id']:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
             if hasattr(file, '_cattrs'):
@@ -573,13 +573,13 @@ async def search_generator(
                     for k,v in cattr.items():
                         if k in file.cattrs:
                             if in_func(v, file.cattrs[k]):
-                                if indx == 1:
-                                    yield_result[indx] = False
+                                if index == 1:
+                                    yield_result[index] = False
                                 break
                     else:
                         if filter['cattrs']:
-                            if indx == 0:
-                                yield_result[indx] = False
+                            if index == 0:
+                                yield_result[index] = False
                                 break
 
             # If it_messages is specified, then we're making search
@@ -593,24 +593,24 @@ async def search_generator(
 
             for filter_file_path in sf_file_path:
                 if in_func(str(filter_file_path), file_path):
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                     break
             else:
                 if sf_file_path:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
             for file_name in filter['file_name']:
                 if in_func(file_name, file.file_name):
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                     break
             else:
                 if filter['file_name']:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
             for file_salt in filter['file_salt']:
@@ -620,24 +620,24 @@ async def search_generator(
                     fsalt = file.file_salt
 
                 if in_func(file_salt, fsalt):
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                     break
             else:
                 if filter['file_salt']:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
             for verbyte in filter['verbyte']:
                 if verbyte == file.verbyte:
-                    if indx == 1:
-                        yield_result[indx] = False
+                    if index == 1:
+                        yield_result[index] = False
                     break
             else:
                 if filter['verbyte']:
-                    if indx == 0:
-                        yield_result[indx] = False
+                    if index == 0:
+                        yield_result[index] = False
                         break
 
         if all(yield_result):
@@ -739,7 +739,7 @@ class DefaultsTableWrapper:
                 dtw.change('METADATA_MAX', 256**3-1)
 
                 # Access DTW from the DecryptedLocalBox
-                ... # Some code was omited here
+                ... # Some code was omitted here
                 # Change the default download path
                 dlb.defaults.change('DOWNLOAD_PATH', 'Downloads')
 

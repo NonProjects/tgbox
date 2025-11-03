@@ -46,7 +46,7 @@ Abstract Box
 
 - The *LocalBox* can be fully restored from the *RemoteBox* if you have a decryption key (but this can take a little of time if you uploaded a big amount of files);
 
-- The *Box* can be shared with multiply users.
+- The *Box* can be shared with multiple users.
 
 Abstract Box file
 -----------------
@@ -60,7 +60,7 @@ Abstract Box file
 
 - The *Box file* splits into two types, — the *Remote* (stored in a *RemoteBox*) and *Local* (metadata of the *Remote* file stored in a *LocalBox*). They have a two states, — the *Encrypted* (when ``FileKey`` is not presented) and *Decrypted*;
 
-- The *Box file* can be shared with multiply users without giving key of the whole *Box*; the Requester will only have an access to requested file, and **nothing** more.
+- The *Box file* can be shared with multiple users without giving key of the whole *Box*; the Requester will only have an access to requested file, and **nothing** more.
 
 Encryption keys hierarchy
 -------------------------
@@ -595,7 +595,7 @@ In more low-level
 Synchronization
 +++++++++++++++
 
-Taking into account our example in :ref:`Sharing *Box*`, if any of the *Box* user will *push* new files to *RemoteBox*, then other *Box* users **should synchronize it**. For example, if *Alice* will grant *Adming privileges* to *Bob* and he will *push* own file to *Remote*, the *LocalBox* of *Alice* **will not** know about this. To update a *LocalBox* with new information, *Alice* will use a :meth:`~tgbox.api.local.DecryptedLocalBox.sync` method of :class:`~tgbox.api.local.DecryptedLocalBox`.
+Taking into account our example in :ref:`Sharing *Box*`, if any of the *Box* user will *push* new files to *RemoteBox*, then other *Box* users **should synchronize it**. For example, if *Alice* will grant *Admin privileges* to *Bob* and he will *push* own file to *Remote*, the *LocalBox* of *Alice* **will not** know about this. To update a *LocalBox* with new information, *Alice* will use a :meth:`~tgbox.api.local.DecryptedLocalBox.sync` method of :class:`~tgbox.api.local.DecryptedLocalBox`.
 
 Fast Synchronization
 ^^^^^^^^^^^^^^^^^^^^
