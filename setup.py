@@ -16,7 +16,7 @@ if CURRENT_PYTHON < REQUIRED_PYTHON:
 # Used in setup(extras_require=...)
 extras_require_fast = [
     'cryptography<47.0.0',
-    'cryptg==0.5.1'
+    'cryptg==0.5.2'
 ]
 if platform == 'linux' and not getenv('TGBOX_NO_UVLOOP'):
     # On Linux we can use Uvloop, which is
@@ -25,7 +25,7 @@ if platform == 'linux' and not getenv('TGBOX_NO_UVLOOP'):
     # tgbox without it if you want to
     # (for some reason), just set the
     # TGBOX_NO_UVLOOP=1 in your Env
-    uvloop = 'uvloop==0.21.0'
+    uvloop = 'uvloop==0.22.1'
     extras_require_fast.append(uvloop)
 
 setup(
@@ -66,15 +66,10 @@ setup(
         'fast': extras_require_fast
     },
     classifiers = [
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'Topic :: Security :: Cryptography',
         'Topic :: Software Development :: Libraries',
-        'Topic :: Software Development :: Libraries :: Python Modules',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
-        'Programming Language :: Python :: 3.10',
-        'Programming Language :: Python :: 3.11',
-        'Programming Language :: Python :: 3.12'
+        'Programming Language :: Python :: 3.9'
     ]
 )
