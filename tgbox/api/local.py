@@ -1177,12 +1177,12 @@ class DecryptedLocalBox(EncryptedLocalBox):
         elbf = EncryptedLocalBoxFile(pf.file_id, self._elb)
         return await elbf.decrypt(dlb=self)
 
-    async def _check_fingerprint(self, fingerprint: bytes):
+    async def _check_fingerprint(self, fingerprint: bytes) -> NoReturn:
         """
-        Will check that file path is unique, and if not
-        then will raise a ``FingerprintExists`` error.
+        Will check that file path is unique, and if not,
+        will raise a ``FingerprintExists`` error.
 
-        This is mostly for internal use.
+        This is mostly for internal usage.
 
         Arguments:
             fingerprint (``bytes``):
@@ -1195,13 +1195,13 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 (fingerprint,)
             ))
         except StopAsyncIteration:
-            pass
-        else:
-            error_msg = (
-                f'{FingerprintExists.__doc__} (ID={id[0]}). If you '
-                 'want to UPDATE file, set skip_fingerprint_check=True'
-            )
-            raise FingerprintExists(error_msg) from None
+            return
+
+        error_msg = (
+            f'{FingerprintExists.__doc__} (ID={id[0]}). If you '
+             'want to UPDATE file, set skip_fingerprint_check=True'
+        )
+        raise FingerprintExists(error_msg) from None
 
     async def _merge_um_then_refresh(self, dlbf, drbf):
         """
@@ -3477,25 +3477,24 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 if k == 'cattrs':
                     self._cattrs.update(PackedAttributes.unpack(v))
 
-                if k == 'file_name':
-                    # We need separate check for the case where
-                    # Updated Metadata doesn't have efile_path,
-                    # but file_name only. Yes, if both present
-                    # we will set self._file_name two times,
-                    # but is it matter? I don't think so xD
+                elif k == 'file_name' and 'efile_path' not in updates:
                     self._file_name = updates['file_name'].decode()
 
-                    fingerprint = make_file_fingerprint(
-                        file_path = self._file_path / self._file_name,
-                        mainkey = self._lb._mainkey)
-                    try:
-                        await self._lb._check_fingerprint(fingerprint)
-                    except FingerprintExists as e:
-                        f = str(self._file_path / self._file_name)
-                        raise FingerprintExists(
-                           f'File with the same path and name ("{f}") '
-                            'is already presented in your Box. Can not '
-                            'change file name.') from e
+                    if isinstance(self._lb, DecryptedLocalBox):
+                        try:
+                            await self._update_file_path(self._file_path, self._lb)
+                        except FingerprintExists as e:
+                            f = self._file_path / self._file_name
+
+                            raise FingerprintExists(
+                              f'File with the same path and name ("{f}") '
+                               'is already presented in your Box. Can not '
+                               'change directory or file name.') from e
+                    else:
+                        logger.warning(
+                            'self._lb in this DecryptedLocalBoxFile is not '
+                            'DecryptedLocalBox, thus, we can NOT update '
+                            'LocalBox file. Check your code.')
 
                 elif k == 'duration':
                     setattr(self, f'_{k}', bytes_to_int(v))
@@ -3517,23 +3516,12 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                             try:
                                 await self._update_file_path(file_path, self._lb)
                             except FingerprintExists as e:
-                                if 'file_name' in updates:
-                                    f = file_path / self._file_name
-                                    # If 'file_name' in Updates and Fingerprint
-                                    # is already exists in a LocalBox it means
-                                    # that user tries to create a duplicate file
-                                    # (same path and name). We raise exception
-                                    # to prevent this.
-                                    raise FingerprintExists(
-                                      f'File with the same path and name ("{f}") '
-                                       'is already presented in your Box. Can not '
-                                       'change directory or file name.') from e
+                                f = file_path / self._file_name
 
-                                logger.debug(
-                                   f'Directory of file ID{self._id} was not modified '
-                                    'due to the same Fingerprint. Most probably '
-                                    'file path wasn\'t updated, so this should not'
-                                    'be a problem.')
+                                raise FingerprintExists(
+                                  f'File with the same path and name ("{f}") '
+                                   'is already presented in your Box. Can not '
+                                   'change directory or file name.') from e
                         else:
                             self._file_path = file_path
 
