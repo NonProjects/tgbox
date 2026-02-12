@@ -2894,7 +2894,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         except (ValueError, TypeError):
             updates = {}
 
-        new_file_path = current_changes.pop('file_path', None)
+        new_file_path = current_changes.pop('file_path', '')
         if isinstance(new_file_path, bytes):
             new_file_path = new_file_path.decode()
 
@@ -2902,10 +2902,10 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             efile_path = AES(self._mainkey).encrypt(new_file_path.encode())
             current_changes['efile_path'] = efile_path
 
-        # If new_file_path is empty string then it's should be
-        # a request to remove updated file_path attribute
+        # If new_file_path is None then we treat it as
+        # request to remove updated file_path attribute
         # from the RemoteBox file and restore default
-        if new_file_path is not None:
+        if new_file_path is None:
             updates.pop('efile_path', None)
 
         # This will update already existed CAttrs in Updated Metadata

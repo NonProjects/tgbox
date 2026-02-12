@@ -3677,7 +3677,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         except (ValueError, TypeError):
             updates = {}
 
-        new_file_path = current_changes.pop('file_path', None)
+        new_file_path = current_changes.pop('file_path', '')
         if isinstance(new_file_path, bytes):
             new_file_path = new_file_path.decode()
 
@@ -3688,7 +3688,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             # because we later will use self.refresh_metadata,
             # where ._update_file_path will be called.
 
-        elif new_file_path is not None:
+        elif new_file_path is None:
             # User requested us to remove updated file
             # path, so we need to eject if from updates
             updates.pop('efile_path', None)
