@@ -36,7 +36,7 @@ TABLES = {
         ('UPLOAD_TIME', 'BLOB NOT NULL'),
         ('PPATH_HEAD', 'BLOB NOT NULL'),
         ('FILEKEY', 'BLOB'),
-        ('FINGERPRINT', 'BLOB UNIQUE'),
+        ('FINGERPRINT', 'BLOB'),
         ('METADATA', 'BLOB NOT NULL'),
         ('UPDATED_METADATA', 'BLOB')
     ),
@@ -234,8 +234,8 @@ class TgboxDB:
                 )
                 old_table_columns = set()
                 for i in await table_columns_.fetchall():
-                    column = (
-                        i[1],
+                    column = ( # Does not currently respect UNIQUE and will constantly
+                        i[1],  # re-generate Table on startup. TODO.
                         i[2] + (' NOT NULL' if i[3] else '')\
                              + (' PRIMARY KEY' if i[5] else '')
                     )
