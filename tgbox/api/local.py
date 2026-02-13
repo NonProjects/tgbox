@@ -1597,7 +1597,12 @@ class DecryptedLocalBox(EncryptedLocalBox):
         # After all files was imported we will update
         # them with Updated Metadata (if any)
         if dlbf_to_update:
-            await gather(*dlbf_to_update)
+            g = await gather(*dlbf_to_update, return_exceptions=True)
+            for r in g:
+                if isinstance(r, Exception):
+                    logger.warning(
+                         'Can\'t update Metadata of Local file '
+                        f'due to the exception!', exc_info=r)
 
     async def sync(
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
