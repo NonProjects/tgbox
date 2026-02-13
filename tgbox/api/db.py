@@ -36,7 +36,7 @@ TABLES = {
         ('UPLOAD_TIME', 'BLOB NOT NULL'),
         ('PPATH_HEAD', 'BLOB NOT NULL'),
         ('FILEKEY', 'BLOB'),
-        ('FINGERPRINT', 'BLOB'),
+        ('FINGERPRINT', 'BLOB UNIQUE'),
         ('METADATA', 'BLOB NOT NULL'),
         ('UPDATED_METADATA', 'BLOB')
     ),
@@ -249,9 +249,11 @@ class TgboxDB:
                 logger.info(f'TgboxDB {self._db_path} seems outdated. Updating...')
 
                 table_columns = [i[:2] for i in data]
+                old_table_columns = set(i[0] for i in old_table_columns)
+
                 old_table_columns_str = ', '.join(
                     i[0] for i in table_columns
-                    if i in old_table_columns
+                    if i[0] in old_table_columns
                 )
                 new_table_columns = table_columns[len(old_table_columns):]
 
