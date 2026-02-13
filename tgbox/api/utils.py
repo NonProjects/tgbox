@@ -7,8 +7,8 @@ from functools import wraps
 from dataclasses import dataclass
 from base64 import urlsafe_b64encode
 
-from asyncio import get_event_loop_policy, get_running_loop
 from typing import BinaryIO, Optional, Union, AsyncGenerator
+from asyncio import get_event_loop_policy, get_running_loop, Lock
 from inspect import iscoroutinefunction, isasyncgenfunction, isasyncgen
 try:
     # Try to use Third-party Regex if installed
@@ -42,6 +42,10 @@ __all__ = [
     'RemoteBoxDefaults'
 ]
 logger = logging.getLogger(__name__)
+
+# We will acquire and release this lock in API
+# where ordering of async execution is crucial
+AsyncLock = Lock()
 
 class TelegramClient(TTelegramClient):
     """

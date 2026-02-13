@@ -52,9 +52,8 @@ from ..tools import (
 from .. import defaults
 
 from .utils import (
-    DirectoryRoot, search_generator, PreparedFile,
-    TelegramVirtualFile, TelegramClient,
-    DefaultsTableWrapper, RemoteBoxDefaults
+    DirectoryRoot, search_generator, PreparedFile, TelegramVirtualFile,
+    TelegramClient, DefaultsTableWrapper, RemoteBoxDefaults, AsyncLock
 )
 from .db import TgboxDB
 
@@ -629,10 +628,11 @@ class EncryptedLocalBox:
         if fingerprint:
             logger.info(f'Trying to fetch ID of file with {fingerprint=}...')
             try:
-                # Get ID of local file by its fingerprint (if exists)
-                id = await self._tgbox_db.FILES.select_once(sql_tuple=
-                    ('SELECT ID FROM FILES WHERE FINGERPRINT=?', (fingerprint,))
-                )
+                async with AsyncLock:
+                    # Get ID of local file by its fingerprint (if exists)
+                    id = await self._tgbox_db.FILES.select_once(sql_tuple=
+                        ('SELECT ID FROM FILES WHERE FINGERPRINT=?', (fingerprint,))
+                    )
                 id = id[0]
             except StopAsyncIteration:
                 return None
@@ -3093,6 +3093,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                     'with MainKey to fix this. Setting to DEF_NO_FOLDER...'
                 )
                 self._file_path = self._defaults.DEF_NO_FOLDER
+                self._original_file_path = self._file_path
 
             self._dirkey = None
 
@@ -3198,6 +3199,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                     'with MainKey to fix this. Setting to DEF_NO_FOLDER...'
                 )
                 self._file_path = self._defaults.DEF_NO_FOLDER
+                self._original_file_path = self._file_path
 
         # Started from the v1.5, Secret Metadata contains a 'has_hmac_sha256'
         # key. If it's presented, then we should check file HMAC on download
@@ -3369,28 +3371,32 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         dlb = dlb or self._lb
         file_path = file_path or self._original_file_path
 
-        fingerprint = make_file_fingerprint(
-            file_path = file_path / self._file_name,
-            mainkey = dlb._mainkey)
-        try:
-            await dlb._check_fingerprint(fingerprint)
-        except FingerprintExists as e:
-            f = str(file_path / self._file_name)
-            raise FingerprintExists(
-               f'File with the same path and name ("{f}") is already presented '
-                'in your Box. Can not restore original directory.') from e
+        async with AsyncLock:
+            # We need to use AsyncLock here because this coroutine can
+            # be gathered with other, and both will issue fingerprint
+            # check BEFORE updating them.
+            fingerprint = make_file_fingerprint(
+                file_path = file_path / self._file_name,
+                mainkey = dlb._mainkey)
+            try:
+                await dlb._check_fingerprint(fingerprint)
+            except FingerprintExists as e:
+                f = str(file_path / self._file_name)
+                raise FingerprintExists(
+                   f'File with the same path and name ("{f}") is already presented '
+                    'in your Box. Can not restore original directory.') from e
 
-        self._file_path = file_path
-        self._directory = await dlb._make_local_path(file_path)
+            self._file_path = file_path
+            self._directory = await dlb._make_local_path(file_path)
 
-        await dlb._tgbox_db.FILES.execute((
-            'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
-            (self._directory.part_id, self._id)
-        ))
-        await dlb._tgbox_db.FILES.execute((
-            'UPDATE FILES SET FINGERPRINT=? WHERE ID=?',
-            (fingerprint, self._id)
-        ))
+            await dlb._tgbox_db.FILES.execute((
+                'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
+                (self._directory.part_id, self._id)
+            ))
+            await dlb._tgbox_db.FILES.execute((
+                'UPDATE FILES SET FINGERPRINT=? WHERE ID=?',
+                (fingerprint, self._id)
+            ))
 
     async def _refresh_metadata(
             self, drb: Optional['tgbox.api.remote.DecryptedRemoteBox'] = None,
