@@ -1477,6 +1477,24 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         dlbf_to_update = []
 
+        async def import_file(drbf: 'DecryptedRemoteBoxFile'):
+            """
+            We use this helper function instead of direct
+            self.import_file() because broken upload may
+            store some file only in RemoteBox, thus, on
+            re-upload it will be pushed again, and on
+            sync, RemoteBox will basically have two
+            identical files, breaking LocalBox. I don't
+            think that we can safely "remove" some file
+            from Remote on same fingerprint. So this will
+            just ignore duplicates on import.
+            """
+            await self._tgbox_db.FILES.execute(sql_tuple=(
+                'DELETE FROM FILES WHERE FINGERPRINT = ?',
+                (drbf.fingerprint,)
+            ))
+            await self.import_file(drbf)
+
         async def import_stack(stack: list):
             logger.debug(f'Importing new stack of files [{len(stack)}]')
             await gather(*stack); stack.clear()
@@ -1485,7 +1503,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             # We will use this coroutine to remove already
             # saved file from Local and import it again
             await self.delete_files(lbf_ids=[drbf.id])
-            await self.import_file(drbf)
+            await import_file(drbf)
 
         async def update_after_import(drbfx, dlb, elbfx):
             # Will update Metadata Updates of LocalBox
@@ -1531,7 +1549,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                     progress_callback(progress, last_drbf.id)
 
             for drbfx in (drbf1, drbf2):
-                # We check here does file with the same ID is
+                # We check here if file with the same ID
                 # exists in LocalBox (already imported) or not
                 if drbfx and not (elbfx := await self._elb.get_file(drbfx.id)):
                     # If not, we check if drbfx is actually an
@@ -1542,7 +1560,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
                         # We import file if it's DecryptedRemoteBoxFile,
                         # EncryptedRemoteBoxFile doesn't have _filekey
                         logger.debug(f'Caching import ID{drbfx.id} from {drb_box_name}')
-                        drbf_to_import.append(self.import_file(drbfx))
+                        drbf_to_import.append(import_file(drbfx))
                     else:
                         logger.debug(
                             'We don\'t have a FileKey to ID'
@@ -3598,6 +3616,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 All values *must* be ``bytes``. Use the
                 ``tgbox.tools.int_to_bytes`` function for
                 'duration' field.
+
+                ``cattrs`` value should be packed with the
+                ``tgbox.tools.PackedAttributes``.
 
             dlb (``DecryptedLocalBox``, optional):
                 If current local file wasn't decrypted with the
