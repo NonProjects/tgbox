@@ -120,9 +120,10 @@ FFMPEG = 'ffmpeg'
 # https://www.ffmpeg.org/download.html#build-windows
 #
 for file in _other.iterdir():
-    if file.name == 'ffmpeg.exe':
+    if file.name.startswith('ffmpeg'):
         logger.info(f'FFMPEG found in {str(_other)}, we will use it')
-        FFMPEG = _other / 'ffmpeg.exe'
+        FFMPEG = _other / file.name
+        break
 
 # By default, PyInstaller will not grab files
 # from 'other' folder. To resolve this error

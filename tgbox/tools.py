@@ -758,6 +758,7 @@ async def get_media_duration(file_path: str) -> int:
         d = duration.decode().split('.')[0].split(': ')[1].split(':')
         return int(d[0]) * 60**2 + int(d[1]) * 60 + int(d[2])
     except Exception as e:
+        logger.info(f'Can\'t get media duration', exc_info=True)
         raise DurationImpossible(f'Can\'t get media duration: {e}') from e
 
 async def make_media_preview(file_path: PathLike, x: int=128, y: int=-1) -> BinaryIO:
@@ -767,9 +768,15 @@ async def make_media_preview(file_path: PathLike, x: int=128, y: int=-1) -> Bina
     """
     sp_func = partial(subprocess_run,
         args=[
-            defaults.FFMPEG, '-i', file_path, '-frames:v', '1', '-filter:v',
-            f'scale={x}:{y}', '-an', '-loglevel', 'quiet', '-q:v', '2', '-f',
-            'mjpeg', 'pipe:1'
+            defaults.FFMPEG, '-i', file_path,
+            '-frames:v', '1',
+            '-vf', f'scale={x}:{y}',
+            '-an',
+            '-c:v', 'mjpeg',
+            '-f', 'mjpeg',
+            '-q:v', '2',
+            '-pix_fmt', 'yuvj420p',
+            'pipe:1'
         ],
         capture_output = True
     )
@@ -777,6 +784,12 @@ async def make_media_preview(file_path: PathLike, x: int=128, y: int=-1) -> Bina
     try:
         sp_result = await loop.run_in_executor(None, sp_func)
         if not sp_result.stdout:
+            logger.info(f'Failed to create preview for "{file_path}"',
+                exc_info=True)
+
+            if sp_result.stderr:
+                logger.debug(f'FFMpeg output: {sp_result.stderr}')
+
             raise Exception('Preview bytes is empty')
         return BytesIO(sp_result.stdout)
     except Exception as e:
