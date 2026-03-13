@@ -123,6 +123,7 @@ valid and if it is, we construct the *Box file Metadata*, which consist of the n
 - **file_name** *(bytes: required, secret)* -- *File's name*
 - **file_size** *(int: required, secret)* -- *Pure file's size, no metadata included*
 - **duration** *(float: optional, FFMPEG required, secret)* -- *File's duration (if video/audio)*
+- **cattrs** *(bytes: optional, secret)* -- *File's custom attributes specified by User*
 - **has_hmac_sha256** *(bytes: v1.5+, required, secret)* -- *Signal that file has HMAC checksum*
 - **preview** *(bytes: optional, FFMPEG required, secret)* -- *File's preview (if file is media)*
 - **mime** *(bytes: required, secret)* -- *File's mime type*
