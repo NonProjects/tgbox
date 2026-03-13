@@ -320,15 +320,16 @@ class EncryptedRemoteBox:
             f'<class {self.__class__.__name__}({self._box_channel}, {self._tc}, {repr(self._defaults)})> '
             f'# {self._box_name=}, {box_salt=}'
         )
+
     def __hash__(self) -> int:
-        # Without 22 hash of int will be equal to object's
-        return hash((self._box_channel_id, 22))
+        return hash((self._box_channel_id, self.__class__.__name__))
 
     def __eq__(self, other) -> bool:
-        return all((
-            isinstance(other, self.__class__),
-            self._box_channel_id == other.box_channel_id
-        ))
+        return (
+            isinstance(other, self.__class__)\
+            and self.__hash__() == hash(other)
+        )
+
     @property
     def defaults(self) -> Union[DefaultsTableWrapper, RemoteBoxDefaults]:
         """
@@ -1589,6 +1590,7 @@ class EncryptedRemoteBoxFile:
             f'{self.__class__.__name__}({self._id}, {repr(self._rb)}, '
             f'{self._message}, {self._cache_preview}, {repr(self._defaults)})'
         )
+
     def __str__(self) -> str:
         file_salt = None if not self._initialized else urlsafe_b64encode(self._file_salt.salt).decode()
         return (
@@ -1596,6 +1598,7 @@ class EncryptedRemoteBoxFile:
             f'{self._message}, {self._cache_preview}, {repr(self._defaults)}) # '
             f'{self._initialized=}, {file_salt=}, {self._sender=}, {self._imported=}'
         )
+
     def __hash__(self) -> int:
         if not self.initialized:
             raise NotInitializedError(
@@ -1604,10 +1607,11 @@ class EncryptedRemoteBoxFile:
         return hash((self._id, self._file_file_name))
 
     def __eq__(self, other) -> bool:
-        return all((
-            isinstance(other, self.__class__),
-            self.__hash__() == hash(other)
-        ))
+        return (
+            isinstance(other, self.__class__)\
+            and self.__hash__() == hash(other)
+        )
+
     @property
     def initialized(self) -> bool:
         """Returns ``True`` if class was initialized."""

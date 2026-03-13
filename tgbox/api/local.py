@@ -387,19 +387,20 @@ class EncryptedLocalBox:
             f'{self.__class__.__name__}({repr(self._tgbox_db)}, {repr(self._defaults)}) '
             f'# {self._initialized=}, {self._box_channel_id=}, {box_salt=}'
         )
+
     def __hash__(self) -> int:
         if not self._initialized:
-            raise NotInitializedError(
-                'Must be initialized before hashing'
-            )
-        # Session will be different in Enc or Dec classes.
-        return hash((self._box_salt, self._session))
+            raise NotInitializedError('Must be initialized before hashing')
+
+        # self._session will be different in Encrypted and Decrypted classes.
+        return hash((self.__class__.__name__, self._box_salt, self._session))
 
     def __eq__(self, other) -> bool:
-        return all((
-            isinstance(other, self.__class__),
-            self.__hash__() == hash(other)
-        ))
+        return (
+            isinstance(other, self.__class__)\
+            and self.__hash__() == hash(other)
+        )
+
     def __raise_initialized(self) -> NoReturn:
         if not self._initialized:
             raise NotInitializedError('Not initialized. Call .init().')
@@ -2248,15 +2249,15 @@ class EncryptedLocalBoxDirectory:
         self._floaded = False
 
     def __hash__(self) -> int:
-        x = tuple(i.part for i in self._parts)
-        # Without 22 hash of tuple will be equal to object's
-        return hash((x, 22))
+        parts = tuple(i.part for i in self._parts)
+        return hash((parts, self.__class__.__name__))
 
     def __eq__(self, other) -> bool:
-        return all((
-            isinstance(other, self.__class__),
-            self.__hash__() == hash(other)
-        ))
+        return (
+            isinstance(other, self.__class__)\
+            and self.__hash__() == hash(other)
+        )
+
     def __str__(self) -> str:
         """Will return path for current loaded parts"""
         if isinstance(self._lb, DecryptedLocalBox):
@@ -2692,14 +2693,16 @@ class EncryptedLocalBoxFile:
             f'{self.__class__.__name__}({self._id}, {repr(self._lb)}, {self._cache_preview}) # '
             f'{self._initialized=}, {file_salt=}'
         )
+
     def __hash__(self) -> int:
-        return hash((self._id, 22))
+        return hash((self._id, self.__class__.__name__))
 
     def __eq__(self, other) -> bool:
-        return all((
-            isinstance(other, self.__class__),
-            self.__hash__() == hash(other)
-        ))
+        return (
+            isinstance(other, self.__class__)\
+            and self.__hash__() == hash(other)
+        )
+
     @property
     def is_encrypted(self) -> bool:
         """
