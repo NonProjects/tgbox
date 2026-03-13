@@ -1,8 +1,8 @@
 """This module stores all keys and key making functions."""
 
-from hmac import HMAC
 from os import urandom
 from random import SystemRandom
+from hmac import compare_digest, HMAC
 
 from typing import (
     AsyncGenerator,
@@ -90,8 +90,7 @@ class Phrase:
         return self._phrase.decode()
 
     def __hash__(self) -> int:
-        # Without 22 hash of bytes will be equal to object's
-        return hash((self._phrase,22))
+        return hash((self._phrase, self.__class__.__name__))
 
     def __eq__(self, other) -> bool:
         return hash(self) == hash(other)
@@ -158,11 +157,11 @@ class Key:
         return hash((self._key, self._key_type))
 
     def __eq__(self, other) -> bool:
-        return all((
-            isinstance(other, self.__class__),
-            self._key == other.key,
-            self._key_type == other.key_type
-        ))
+        return (
+            isinstance(other, self.__class__)\
+            and self._key_type == other.key_type\
+            and compare_digest(self._key, other.key)
+        )
     def __repr__(self) -> str:
         return f'{self._key_types[self._key_type]}({self._key}) # at {hex(id(self))}'
 
