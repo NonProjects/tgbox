@@ -48,9 +48,9 @@ setup(
     include_package_data = True,
 
     install_requires = [
-        'aiosqlite==0.21.0',
-        'telethon==1.41.2',
-        'ecdsa==0.19.0',
+        'aiosqlite==0.22.1',
+        'telethon==1.42.0',
+        'ecdsa==0.19.1',
         'filetype==1.2.0',
         'pysocks==1.7.1'
     ],
@@ -60,13 +60,13 @@ setup(
     ],
     extras_require = {
         'doc': [
-            'sphinx-book-theme==1.1.4',
-            'sphinx-togglebutton==0.3.2'
+            'sphinx-book-theme==1.2.0',
+            'sphinx-togglebutton==0.4.4'
         ],
         'fast': extras_require_fast
     },
     classifiers = [
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'Topic :: Security :: Cryptography',
         'Topic :: Software Development :: Libraries',
