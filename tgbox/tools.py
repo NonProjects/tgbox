@@ -18,8 +18,9 @@ from subprocess import PIPE, run as subprocess_run
 
 from io import BytesIO
 from functools import partial
+from shutil import copyfile
 
-from os import urandom, PathLike
+from os import urandom, PathLike, chmod
 try:
     # Try to use Third-party Regex if installed
     from regex import search as re_search
@@ -49,7 +50,8 @@ __all__ = [
     'make_general_path',
     'guess_path_type',
     'make_safe_file_path',
-    'make_file_fingerprint'
+    'make_file_fingerprint',
+    'install_ffmpeg'
 ]
 logger = logging.getLogger(__name__)
 
@@ -735,6 +737,42 @@ def make_file_fingerprint(mainkey: 'MainKey', file_path: Union[str, Path]) -> by
 
     fingerprint.update(mainkey.key)
     return fingerprint.digest()
+
+def install_ffmpeg(ffmpeg_executable: Union[str, Path]) -> Path:
+    """
+    Use this function to "install" your custom FFmpeg
+    executable within the tgbox Protocol. We will copy
+    your ``ffmpeg_executable`` to the ``tgbox/other``
+    directory. Protocol will **always** use it, even
+    if ``ffmpeg`` is installed on your machine.
+
+    Arguments:
+        ffmpeg_executable (``Union[str, Path]``):
+            Path to ffmpeg executable. Please note that its
+            name **should** start with "ffmpeg". If you're
+            on Windows, ".exe" suffix **must** be present.
+
+            We will **always** lowercase name of your
+            executable when copying to ``tgbox/other``.
+    """
+    if not isinstance(ffmpeg_executable, Path):
+        ffmpeg_executable = Path(ffmpeg_executable)
+
+    if not ffmpeg_executable.exists():
+        raise ValueError(f'File "{ffmpeg_executable}" does not exists')
+
+    if not ffmpeg_executable.is_file():
+        raise ValueError('"ffmpeg_executable" must be file')
+
+    if not ffmpeg_executable.name.lower().startswith('ffmpeg'):
+        raise ValueError(f'"ffmpeg_executable" name should start with "ffmpeg"')
+
+    dst = defaults._other / ffmpeg_executable.name.lower()
+    copyfile(ffmpeg_executable, dst)
+    chmod(dst, 0o755)
+    defaults.FFMPEG = dst
+
+    return dst
 
 async def anext(aiterator, default=...):
     """Analogue to Python 3.10+ anext()"""
