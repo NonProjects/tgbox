@@ -136,3 +136,4 @@ dmypy.json
 *.sql
 *.sqlite
 *test.py
+ffmpeg*
