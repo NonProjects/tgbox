@@ -2662,8 +2662,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         download_offset = self._file_pos + offset
         if offset:
-            download_offset -= 16 # Currently i don't know why but without this
-                # first block decryption works incorrectly if offset specified.
+            download_offset -= 16 # Offset 16 bytes back to get stream IV
 
         # Download offset must be divisible by 4096 & 524288
         download_offset_prepared = int((download_offset // 4096) * 4096)
@@ -2786,7 +2785,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                         file_hmac = buffered[-32:]
                         buffered = buffered[:-32]
 
-                    chunk = aws.decrypt(buffered, unpad=True) if decrypt else chunk
+                    chunk = aws.decrypt(buffered, unpad=True) if decrypt else buffered
                     outfile.write(chunk)
 
                     if not omit_hmac_check and self._has_hmac_sha256:
