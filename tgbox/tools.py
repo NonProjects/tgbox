@@ -349,7 +349,13 @@ class PackedAttributes:
                 else:
                     value = b''
 
-                pattr_d[key.decode()] = value
+                if (key := key.decode()) in pattr_d:
+                    # All keys are unique in dict. If we found
+                    # multiple same ones, - probably something
+                    # went wrong
+                    return {}
+
+                pattr_d[key] = value
 
             return pattr_d
         except Exception as e:
