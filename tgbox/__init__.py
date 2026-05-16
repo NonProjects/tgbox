@@ -7,7 +7,7 @@ __author__ = 'https://github.com/NonProjects'
 __maintainer__ = 'https://github.com/NotStatilko'
 __email__ = 'thenonproton@pm.me'
 
-__copyright__ = 'Copyright 2023, NonProjects'
+__copyright__ = 'Copyright 2026, NonProjects'
 __license__ = 'LGPL-2.1'
 
 __all__ = [
