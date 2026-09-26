@@ -744,6 +744,7 @@ class BoxFile(DecryptedLocalBoxFile):
         """
         self.__raise_initialized()
 
+        # pylint: disable=unreachable
         await self.dlbf.update_metadata(
             *args, **kwargs, drbf=self.drbf
         )
@@ -770,6 +771,7 @@ class BoxFile(DecryptedLocalBoxFile):
         """
         self.__raise_initialized()
 
+        # pylint: disable=unreachable
         drbf = await self.drb.update_file(self.drbf, *args, **kwargs)
         dlbf = await self.dlb.get_file(self.drbf.id)
         return await BoxFile(dlbf=dlbf, drbf=drbf).init()
@@ -780,6 +782,7 @@ class BoxFile(DecryptedLocalBoxFile):
         ``id`` is auto passed to ``file_exists()``.
         """
         self.__raise_initialized()
+        # pylint: disable=unreachable
         return await self.drb.file_exists(*args, **kwargs, id=self.dlbf.id)
 
     async def delete(self, remote: Optional[bool] = False, *args, **kwargs):
@@ -794,6 +797,8 @@ class BoxFile(DecryptedLocalBoxFile):
         destroy and remove from Box your uploaded file.
         """
         self.__raise_initialized()
+
+        # pylint: disable=unreachable
         await self.dlbf.delete(*args, **kwargs)
         if remote:
             await self.drbf.delete(*args, **kwargs)

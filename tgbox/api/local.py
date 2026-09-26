@@ -638,6 +638,7 @@ class EncryptedLocalBox:
                 return None
         try:
             self.__raise_initialized()
+            # pylint: disable=unreachable
             logger.info(f'File by ID{id} was requested from LocalBox')
 
             if decrypt is None and isinstance(self, DecryptedLocalBox):
@@ -920,6 +921,7 @@ class EncryptedLocalBox:
                 this key will be used for *Box* decryption.
         """
         self.__raise_initialized()
+        # pylint: disable=unreachable
         return make_requestkey(basekey, self._box_salt)
 
     async def delete(self) -> None:
@@ -2362,7 +2364,7 @@ class EncryptedLocalBoxDirectory:
         """
         self.__raise_initialized()
 
-        while True:
+        while True: # pylint: disable=unreachable
             logger.debug(
                 'Loading the parent path part | SELECT PARENT_PART_ID '
                f'FROM PATH_PARTS WHERE PART_ID={self.parts[0].part_id}'
@@ -2972,6 +2974,7 @@ class EncryptedLocalBoxFile:
                 ``EncryptedLocalBoxFile`` you need to have
                 your own Box. Take key from it and specify here.
         """
+        # pylint: disable=unreachable
         self.__raise_initialized()
         return make_requestkey(mainkey, self._file_salt)
 

@@ -1782,7 +1782,7 @@ class EncryptedRemoteBoxFile:
         """
         self.__raise_initialized()
 
-        if not self._message.from_id:
+        if not self._message.from_id: # pylint: disable=unreachable
             return None
 
         if not self._sender_entity:
@@ -1800,7 +1800,7 @@ class EncryptedRemoteBoxFile:
         """
         self.__raise_initialized()
 
-        if not self._imported:
+        if not self._imported: # pylint: disable=unreachable
             return None
 
         if not self._imported_from_entity:
@@ -1991,7 +1991,7 @@ class EncryptedRemoteBoxFile:
                 ``DecryptedLocalBox`` and specify it here.
         """
         self.__raise_initialized()
-        return make_requestkey(mainkey, self._file_salt)
+        return make_requestkey(mainkey, self._file_salt) # pylint: disable=unreachable
 
     async def decrypt(
             self, key: Optional[Union[MainKey, FileKey, ImportKey]] = None,
@@ -2598,7 +2598,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 be always skipped if ``decrypt`` is ``False``.
         """
         self.__raise_initialized()
-
+        # pylint: disable=unreachable
         logger.info(f'Downloading DRBF (ID{self._id})...')
 
         if not decrypt:
@@ -3015,7 +3015,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         """
         self.__raise_initialized()
 
-        if reqkey:
+        if reqkey: # pylint: disable=unreachable
             return make_sharekey(self._filekey, self._file_salt, reqkey)
 
         return make_sharekey(self._filekey)
