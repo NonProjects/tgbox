@@ -45,7 +45,7 @@ Issues = "https://github.com/NonProjects/tgbox/issues"
 
 
 [tool.setuptools]
-packages = ["tgbox"]
+packages = ["tgbox", "tgbox.api"]
 
 [tool.setuptools.package-data]
 tgbox = ["tgbox/other"]
