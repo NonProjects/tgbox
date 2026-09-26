@@ -427,12 +427,12 @@ async def search_generator(
 
         for index, filter in enumerate((sf.in_filters, sf.ex_filters)):
             if filter['imported']:
-                if bool(file.imported) != bool(filter['imported']):
+                if bool(file.imported) != bool(filter['imported'][0]):
                     if index == 0: # O is Include
                         yield_result[index] = False
                         break
 
-                elif bool(file.imported) == bool(filter['imported']):
+                elif bool(file.imported) == bool(filter['imported'][0]):
                     if index == 1: # 1 is Exclude
                         yield_result[index] = False
                         break
