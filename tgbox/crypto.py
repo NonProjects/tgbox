@@ -5,6 +5,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from os import urandom
+from hmac import compare_digest
 from typing import Union, Optional
 
 from pyaes.util import (
@@ -58,7 +59,7 @@ class IV:
 
     def __eq__(self, other) -> bool:
         if hasattr(other, 'iv'):
-            return self.iv == other.iv
+            return compare_digest(self.iv, other.iv)
         return False
 
     @classmethod
@@ -95,7 +96,7 @@ class Salt:
 
     def __eq__(self, other) -> bool:
         if hasattr(other, 'salt'):
-            return self.salt == other.salt
+            return compare_digest(self.salt, other.salt)
         return False
 
     @classmethod
