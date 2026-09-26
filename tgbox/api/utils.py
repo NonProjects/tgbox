@@ -451,17 +451,17 @@ async def search_generator(
                 file_sender_id, _check = getattr(file, 'sender_id', None), False
 
                 if isinstance(sender, int):
-                    if sender == file_sender:
+                    if sender == file_sender_id:
                         _check = True
 
-                if isinstance(sender, str):
-                    file_sender = getattr(file, 'sender') or ''
+                elif sender.isnumeric() and int(sender) == file_sender_id:
+                    _check = True
 
-                    if in_func(sender, file_sender):
+                else:
+                    file_sender = getattr(file, 'sender', None)
+
+                    if file_sender and in_func(sender, file_sender):
                         _check = True
-                    else:
-                        if sender.isnumeric() and int(sender) == file_sender_id:
-                            _check = True
 
                 if _check:
                     if index == 1:
