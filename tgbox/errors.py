@@ -45,6 +45,9 @@ class PreviewImpossible(TgboxException):
 class DurationImpossible(TgboxException):
     """Can\'t get media duration"""
 
+class UnpackingError(TgboxException):
+    """Data you\'re trying to unpack is broken"""
+
 # Database Exceptions
 
 class InUseException(TgboxException):

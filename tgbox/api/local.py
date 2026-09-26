@@ -41,7 +41,7 @@ from ..errors import (
     IncorrectKey, FingerprintExists, NotInitializedError,
     AlreadyImported, RemoteFileNotFound, InUseException,
     AESError, PreviewImpossible, RemoteBoxInaccessible,
-    InvalidFile, FastSyncDisabled
+    InvalidFile, FastSyncDisabled, UnpackingError
 )
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter,
@@ -1228,9 +1228,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
             rbf_um = AES(drbf._filekey).decrypt(rbf_um)
             rbf_um = PackedAttributes.unpack(rbf_um)
         except Exception as e:
-            logger.debug(
+            logger.exception(
                 'Can not store Metadata Updates from RemoteBox '
-               f'file ID{dlbf.id} due to {e}'); return
+               f'file ID{dlbf.id}'); return
 
         if dlbf.cattrs:
             # This part will preserve Local CAttrs (if any)
@@ -2144,9 +2144,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 _ = PackedAttributes.unpack(_)
                 updated_metadata = caption_metadata
             except Exception:
-                logger.info(
-                    f'Updates to metadata for ID{drbf._id} failed. '
-                    f'Traceback:\n{format_exc()}'
+                logger.exception(
+                    f'Updates to metadata for ID{drbf._id} failed.'
                 )
 
         if updated_metadata:
@@ -3188,10 +3187,14 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
         secret_metadata = AES(self._filekey).decrypt(
             self._elbf._secret_metadata
         )
-        secret_metadata = PackedAttributes.unpack(secret_metadata)
+        try:
+            secret_metadata = PackedAttributes.unpack(secret_metadata)
 
-        if not secret_metadata: # secret_metadata can't be empty dict
-            raise AESError('Metadata wasn\'t decrypted correctly. Incorrect key?')
+            if not secret_metadata: # secret_metadata can't be empty dict
+                raise UnpackingError
+        except UnpackingError as e:
+            raise AESError(
+                'Metadata wasn\'t decrypted correctly. Incorrect key?') from e
 
         self.__required_metadata = [
             'duration', 'file_size', 'file_name',
@@ -3279,7 +3282,7 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                 )
                 updates = PackedAttributes.unpack(updates)
             except Exception as e:
-                logger.warning(f'Failed to unpack updated metadata {e}. Ignoring..')
+                logger.exception(f'Failed to unpack updated metadata. Ignoring..')
             else:
                 for k,v in tuple(updates.items()):
                     if k in (*self.__required_metadata, 'efile_path'):
@@ -3707,7 +3710,11 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             ))
             updates = AES(self._filekey).decrypt(old_updates[0])
             updates = PackedAttributes.unpack(updates)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, UnpackingError):
+            logger.exception(
+                'Couldn\'t unpack metadata changes for '
+               f'ID{self._id}. We will drop them!'
+            )
             updates = {}
 
         new_file_path = current_changes.pop('file_path', '')

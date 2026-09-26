@@ -56,10 +56,10 @@ from ..fastelethon import upload_file, download_file
 from .. import defaults
 
 from ..errors import (
-    NotInitializedError, RemoteBoxInaccessible,
-    NotEnoughRights, NotATgboxFile, IncorrectKey,
-    LimitExceeded, NotImported, AESError, RemoteFileNotFound,
-    NoPlaceLeftForMetadata, SessionUnregistered, InvalidFile
+    NotInitializedError, RemoteBoxInaccessible, NotEnoughRights,
+    NotATgboxFile, IncorrectKey, LimitExceeded, NotImported, AESError,
+    RemoteFileNotFound, NoPlaceLeftForMetadata, SessionUnregistered,
+    InvalidFile, UnpackingError
 )
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter, OpenPretender,
@@ -2208,7 +2208,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 )
                 secret_metadata = PackedAttributes.unpack(secret_metadata)
                 if not secret_metadata:
-                    raise AssertionError # Shouldn't be an empty dict.
+                    raise ValueError # Shouldn't be an empty dict.
                 # ^ ImportKey can be DirectoryKey, so here we're try
                 #   to treat it as dirkey and make FileKey from it,
                 #   then, we try to decrypt secret Metadata field to
@@ -2219,7 +2219,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                 #   padding bytes OR by raise error check.
                 self._filekey = filekey
                 self._dirkey = DirectoryKey(key)
-            except (ValueError, AssertionError):
+            except (ValueError, UnpackingError):
                 logger.debug('ImportKey is not DirectoryKey, so treating as FileKey')
                 self._filekey = FileKey(key.key)
 
@@ -2241,12 +2241,14 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     self._erbf._secret_metadata
                 )
             except ValueError as e:
-                raise AESError('Metadata wasn\'t decrypted correctly. Incorrect key?') from e
+                raise AESError(
+                    'Metadata wasn\'t decrypted correctly. Incorrect key?') from e
 
-            secret_metadata = PackedAttributes.unpack(secret_metadata)
-
-        if not secret_metadata: # secret_metadata can't be empty dict
-            raise AESError('Metadata wasn\'t decrypted correctly. Incorrect key?')
+            try:
+                secret_metadata = PackedAttributes.unpack(secret_metadata)
+            except UnpackingError as e:
+                raise AESError(
+                    'Metadata wasn\'t decrypted correctly. Incorrect key?') from e
 
         if self._cache_preview:
             logger.debug('cache_preview is True, DRBF preview will be saved.')
@@ -2258,7 +2260,12 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
         self._duration = bytes_to_int(secret_metadata['duration'])
         self._size = bytes_to_int(secret_metadata['file_size'])
         self._file_name = secret_metadata['file_name'].decode()
-        self._cattrs = PackedAttributes.unpack(secret_metadata['cattrs'])
+        try:
+            self._cattrs = PackedAttributes.unpack(secret_metadata['cattrs'])
+        except UnpackingError as e:
+            raise UnpackingError(
+                f'CAttrs in secret metadata of file ID{self._id} is invalid!') from e
+
         self._mime = secret_metadata['mime'].decode()
 
         if self._file_path is None:
@@ -2362,10 +2369,8 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     del edited_metadata[k]
 
             except Exception:
-                logger.info(
-                    f'Updates to metadata for ID{self._id} failed. '
-                    f'Traceback:\n{format_exc()}'
-                )
+                logger.exception(f'Updates to metadata for ID{self._id} failed.')
+
         self._initialized = True
 
         if self._erase_encrypted_metadata:
@@ -2892,7 +2897,11 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
             message_caption = urlsafe_b64decode(self._message.message)
             updates = AES(self._filekey).decrypt(message_caption)
             updates = PackedAttributes.unpack(updates)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, UnpackingError):
+            logger.exception(
+                'Couldn\'t unpack metadata changes for '
+               f'ID{self._id}. We will drop them!'
+            )
             updates = {}
 
         new_file_path = current_changes.pop('file_path', '')

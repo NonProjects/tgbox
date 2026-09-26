@@ -32,7 +32,8 @@ from pathlib import PureWindowsPath, Path
 from .errors import (
     ConcatError,
     PreviewImpossible,
-    DurationImpossible
+    DurationImpossible,
+    UnpackingError
 )
 from . import defaults
 
@@ -331,19 +332,17 @@ class PackedAttributes:
     @staticmethod
     def unpack(pattr: bytes) -> Dict[str, bytes]:
         """
-        Will parse PackedAttributes.pack
-        bytestring and convert it to the
-        python dictionary.
+        Will parse PackedAttributes.pack bytestring and convert
+        it to the python dictionary.
 
-        Every PackedAttributes bytestring
-        must contain ``0xFF`` as first byte.
-        If not, or if error, will return ``{}``.
+        Every PackedAttributes bytestring must contain ``0xFF``
+        as first byte.
         """
         if not pattr:
             return {}
         try:
             if pattr[0] != 0xFF:
-                raise ValueError('pattr is invalid, should start with 0xFF byte')
+                raise UnpackingError('pattr is invalid, should start with 0xFF byte')
 
             pattr_d, pattr = {}, pattr[1:]
 
@@ -364,14 +363,15 @@ class PackedAttributes:
                     # All keys are unique in dict. If we found
                     # multiple same ones, - probably something
                     # went wrong
-                    return {}
+                    raise UnpackingError(
+                        'Your string contains multiple keys with the same names'
+                    )
 
                 pattr_d[key] = value
 
             return pattr_d
-        except Exception as e:
-            logger.info('Could not parse pattr due to %s: %s', type(e), e)
-            return {}
+        except Exception:
+            raise UnpackingError()
 
 class OpenPretender:
     """
