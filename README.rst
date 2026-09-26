@@ -15,7 +15,7 @@ TGBOX: encrypted cloud storage based on `Telegram <https://telegram.org>`__
         tc = tgbox.api.TelegramClient(api_id=API_ID, api_hash=API_HASH)
         tc.start() # This method will prompt you for Phone, Code & Password
 
-        print(phrase := tgbox.keys.Phrase.generate()) # Your secret Box Phrase
+        phrase = 'My very secret Box phrase!!!' # Your secret Box Phrase
         basekey = tgbox.keys.make_basekey(phrase) # Will Require 1GB of RAM
         box = tgbox.api.make_box(tc, basekey) # Will make Encrypted File Storage
 

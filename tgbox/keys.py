@@ -1,7 +1,5 @@
 """This module stores all keys and key making functions."""
 
-from os import urandom
-from random import SystemRandom
 from hmac import compare_digest, HMAC
 
 from typing import (
@@ -48,8 +46,6 @@ else:
     from ecdsa.keys import SigningKey, VerifyingKey
 
 __all__ = [
-    'Phrase',
-
     'Key',
     'BaseKey',
     'MainKey',
@@ -70,55 +66,6 @@ __all__ = [
     'make_dirkey',
     'make_hmackey'
 ]
-
-class Phrase:
-    """This class represents passphrase"""
-    def __init__(self, phrase: Union[bytes, str]):
-        if isinstance(phrase, str):
-            self._phrase = phrase.encode()
-
-        elif isinstance(phrase, bytes):
-            self._phrase = phrase
-        else:
-            raise TypeError('phrase must be Union[bytes, str]')
-
-    def __repr__(self) -> str:
-        class_name = self.__class__.__name__
-        return f'{class_name}({repr(self._phrase)}) # at {hex(id(self))}'
-
-    def __str__(self) -> str:
-        return self._phrase.decode()
-
-    def __hash__(self) -> int:
-        return hash((self._phrase, self.__class__.__name__))
-
-    def __eq__(self, other) -> bool:
-        return hash(self) == hash(other)
-
-    @property
-    def phrase(self) -> bytes:
-        """Returns current raw phrase"""
-        return self._phrase
-
-    @classmethod
-    def generate(cls, words_count: int=6) -> 'Phrase':
-        """
-        Generates passphrase
-
-        Arguments:
-            words_count (``int``, optional):
-                Words count in ``Phrase``.
-        """
-        sysrnd = SystemRandom(urandom(32))
-
-        with open(defaults.WORDS_PATH,'rb') as words_file:
-            words_list = words_file.readlines()
-
-            phrase = [
-                sysrnd.choice(words_list).strip()
-                for _ in range(words_count)
-            ]
-            return cls(b' '.join(phrase))
 
 class Key:
     """Metaclass that represents all keys."""
@@ -353,7 +300,7 @@ class HMACKey(Key):
         super().__init__(key, 9)
 
 def make_basekey(
-        phrase: Union[bytes, Phrase],
+        phrase: Union[str, bytes],
         *,
         salt: Union[bytes, int] = defaults.Scrypt.SALT,
         n: Optional[int] = defaults.Scrypt.N,
@@ -361,16 +308,14 @@ def make_basekey(
         p: Optional[int] = defaults.Scrypt.P,
         dklen: Optional[int] = defaults.Scrypt.DKLEN) -> BaseKey:
     """
-    Function to create ``BaseKey``.
-    Uses the ``sha256(scrypt(...))``.
+    Function to create ``BaseKey``. Uses the ``sha256(scrypt(...))``.
 
     .. warning::
         RAM consumption is calculated by ``128 * r * (n + p + 2)``.
 
     Arguments:
-        phrase (``bytes``, ``Phrase``):
-            Passphrase from which
-            ``BaseKey`` will be created.
+        phrase (``str,`` ``bytes``):
+            Passphrase that will be used to derive``BaseKey``.
 
         salt (``bytes``, ``int``, optional):
             Scrypt Salt.
@@ -387,7 +332,11 @@ def make_basekey(
         dklen (``int``, optional):
             Scrypt dklen.
     """
-    phrase = phrase.phrase if isinstance(phrase, Phrase) else phrase
+    if not isinstance(phrase, (str, bytes)):
+        raise ValueError('phrase must be type str or bytes')
+
+    if isinstance(phrase, str):
+        phrase = phrase.encode()
 
     if isinstance(salt, int):
         bit_length = ((salt.bit_length() + 8) // 8)
@@ -396,6 +345,7 @@ def make_basekey(
         salt = int.to_bytes(salt, length, 'big')
 
     maxmem = 128 * r * (n + p + 2)
+
     scrypt_key = scrypt(
         phrase, n=n, r=r, dklen=dklen,
         p=p, salt=salt, maxmem=maxmem

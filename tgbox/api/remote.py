@@ -1365,10 +1365,9 @@ class DecryptedRemoteBox(EncryptedRemoteBox):
 
         from asyncio import run as asyncio_run
         from tgbox.api import get_localbox, get_remotebox
-        from tgbox.keys import make_basekey, Phrase
+        from tgbox.keys import make_basekey
 
-        phrase = Phrase(b'example phrase here')
-        basekey = make_basekey(phrase)
+        basekey = make_basekey('secret phrase here')
 
         async def main():
             dlb = await dlb.get_localbox(basekey)
@@ -2034,10 +2033,9 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
         from asyncio import run as asyncio_run
         from tgbox.api import get_localbox, get_remotebox
-        from tgbox.keys import Phrase, make_basekey
+        from tgbox.keys import make_basekey
 
-        phrase = Phrase(b'example phrase here')
-        basekey = make_basekey(phrase)
+        basekey = make_basekey('secret phrase here')
 
         async def main():
             dlb = await get_localbox(basekey)

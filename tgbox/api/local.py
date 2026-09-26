@@ -330,10 +330,9 @@ class EncryptedLocalBox:
 
         from asyncio import run as asyncio_run
         from tgbox.api import get_localbox
-        from tgbox.keys import make_basekey, Phrase
+        from tgbox.keys import make_basekey
 
-        phrase = Phrase(b'example phrase here')
-        basekey = make_basekey(phrase)
+        basekey = make_basekey('secret phrase here')
 
         async def main():
             dlb = await get_localbox(basekey)
@@ -979,10 +978,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
 
         from asyncio import run as asyncio_run
         from tgbox.api import get_localbox, DecryptedLocalBoxFile
-        from tgbox.keys import make_basekey, Phrase
+        from tgbox.keys import make_basekey
 
-        phrase = Phrase(b'example phrase here')
-        basekey = make_basekey(phrase)
+        basekey = make_basekey('secret phrase here')
 
         async def main():
             dlb = await get_localbox(basekey)
@@ -2205,10 +2203,9 @@ class EncryptedLocalBoxDirectory:
 
         from asyncio import run as asyncio_run
         from tgbox.api import get_localbox
-        from tgbox.keys import make_basekey, Phrase
+        from tgbox.keys import make_basekey
 
-        phrase = Phrase(b'example phrase here')
-        basekey = make_basekey(phrase)
+        basekey = make_basekey('secret phrase here')
 
         async def main():
             dlb = await get_localbox(basekey)
@@ -2633,10 +2630,9 @@ class EncryptedLocalBoxFile:
 
         from asyncio import run as asyncio_run
         from tgbox.api import get_localbox
-        from tgbox.keys import make_basekey, Phrase
+        from tgbox.keys import make_basekey
 
-        phrase = Phrase(b'example phrase here')
-        basekey = make_basekey(phrase)
+        basekey = make_basekey('secret phrase here')
 
         async def main():
             dlb = await get_localbox(basekey)
@@ -2991,10 +2987,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
 
         from asyncio import run as asyncio_run
         from tgbox.api import get_localbox
-        from tgbox.keys import make_basekey, Phrase
+        from tgbox.keys import make_basekey
 
-        phrase = Phrase(b'example phrase here')
-        basekey = make_basekey(phrase)
+        basekey = make_basekey('secret phrase here')
 
         async def main():
             dlb = await get_localbox(basekey)
