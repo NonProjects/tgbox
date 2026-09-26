@@ -18,9 +18,8 @@ from subprocess import PIPE, run as subprocess_run
 
 from io import BytesIO
 from functools import partial
-from shutil import copyfile
 
-from os import urandom, PathLike, chmod
+from os import urandom, PathLike
 try:
     # Try to use Third-party Regex if installed
     from regex import search as re_search
