@@ -611,7 +611,12 @@ def ppart_id_generator(path: Path, mainkey: 'MainKey') -> Generator[tuple, None,
         parent_part_id = part_id.digest()
 
 def prbg(size: int) -> bytes:
-    """Will generate ``size`` pseudo-random bytes."""
+    """
+    Will generate ``size`` pseudo-random bytes.
+
+    DO NOT USE FOR ANY SECURITY-RELATED THINGS. USE
+    tgbox.crypto.get_rnd_bytes() INSTEAD !!!
+    """
     random = Random()
     return bytes([random.randrange(256) for _ in range(size)])
 
