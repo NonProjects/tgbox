@@ -810,22 +810,34 @@ class EncryptedLocalBox:
             raise ValueError('fetch_count must be > 0')
 
         if ids:
-            ids = str(tuple(ids)) if len(ids) > 1 else f'({ids[0]})'
-            sql_query = f'SELECT ID FROM FILES WHERE ID IN {ids}'
+            q, args = ('?,' * len(ids)).strip(','), ids
+            sql_query = f'SELECT ID FROM FILES WHERE ID IN ({q})'
         else:
-            min_id = f'ID >= {min_id}' if min_id else ''
-            max_id = f'ID <= {max_id}' if max_id else ''
+            args, sql_parts = [], []
 
-            min_id = min_id + ' AND' if all((min_id, max_id)) else min_id
-            where = 'WHERE' if any((min_id, max_id)) else ''
+            if min_id:
+                args.append(min_id)
+                sql_parts.append('ID >= ?')
 
-            sql_query = f'SELECT ID FROM FILES {where} {min_id} {max_id} '
+            if max_id:
+                args.append(max_id)
+                sql_parts.append('ID <= ?')
+
+            sql_query = 'SELECT ID FROM FILES '
+
+            if args:
+                sql_query += 'WHERE '
+                sql_query += sql_parts[0]
+
+                if len(args) == 2:
+                    sql_query += ' AND '
+                    sql_query += sql_parts[1]
 
         order = 'DESC' if reverse else 'ASC'
-        sql_query += f'ORDER BY ID {order}'
+        sql_query += f' ORDER BY ID {order}'
 
         logger.debug(sql_query)
-        cursor = await self._tgbox_db.FILES.execute((sql_query ,()))
+        cursor = await self._tgbox_db.FILES.execute((sql_query, args))
 
         while True:
             logger.debug(f'Trying to fetch new portion of local files ({fetch_count})...')
