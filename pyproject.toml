@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tgbox"
+dynamic = ["version"]
+description = "Encrypted cloud storage Protocol based on a Telegram API"
+readme = "README.rst"
+
+license = "LGPL-2.1"
+authors = [{ name = "NonProjects", email = "thenonproton@pm.me" }]
+requires-python = ">=3.9"
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Software Development :: Libraries",
+    "Programming Language :: Python :: 3.9",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "aiosqlite==0.22.1",
+    "telethon==1.45.0",
+    "ecdsa==0.19.2",
+    "filetype==1.2.0",
+    "pysocks==1.7.1"
+]
+
+[project.optional-dependencies]
+fast = [
+    "uvloop>=0.19; sys_platform == 'linux'",
+    "cryptography<51.0.0",
+    "cryptg==0.6.0"
+]
+doc = [
+    "sphinx-book-theme==1.4.0",
+    "sphinx-togglebutton==0.4.5"
+]
+
+[project.urls]
+Homepage = "https://github.com/NonProjects/tgbox"
+Issues = "https://github.com/NonProjects/tgbox/issues"
+
+
+[tool.setuptools]
+packages = ["tgbox"]
+
+[tool.setuptools.package-data]
+tgbox = ["tgbox/other"]
+
+[tool.setuptools.dynamic]
+version = { file = "tgbox/version.txt" }

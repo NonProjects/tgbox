@@ -17,7 +17,6 @@ __all__ = [
     'errors',
     'keys',
     'tools',
-    'version',
     'sync'
 ]
 import logging
@@ -58,9 +57,8 @@ from . import crypto
 from . import errors
 from . import keys
 from . import tools
-from . import version
 
-__version__ = version.VERSION
+__version__ = defaults.VERSION
 
 
 def sync(coroutine: Coroutine):
