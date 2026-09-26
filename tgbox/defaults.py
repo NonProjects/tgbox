@@ -5,15 +5,9 @@ import logging
 from os import getenv
 from enum import IntEnum
 from pathlib import Path
-try:
-    from sys import _MEIPASS
-except ImportError:
-    _MEIPASS = None
 
 
-ABSPATH: Path = Path(_MEIPASS) if _MEIPASS is not None \
-    else Path(__file__).parent
-
+ABSPATH = Path(__file__).parent
 VERSION = open(ABSPATH / 'version.txt').read().strip()
 
 # Is used to check minor protocol version
