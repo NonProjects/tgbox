@@ -362,6 +362,17 @@ class EncryptedRemoteBox:
         """
         return self._is_encrypted
 
+    @staticmethod
+    def __get_OpenPretender(pf: 'PreparedFile') -> OpenPretender:
+        # Last 16 bytes of metadata is File IV
+        aes_state = AES(pf.filekey, pf.metadata[-16:])
+        # The hmac_state will be used to make a HMAC of File
+        hmac_state = HMAC(pf.hmackey.key, digestmod='sha256')
+
+        op = OpenPretender(pf.file, aes_state, hmac_state, pf.filesize)
+        op.concat_metadata(pf.metadata)
+        return op
+
     async def sign_files(self, toggle: bool) -> bool:
         """
         This function will enable or disable (by
@@ -1048,22 +1059,18 @@ class EncryptedRemoteBox:
                 f'Max allowed filesize for you is {defaults.UploadLimits.DEFAULT} '
                 f'bytes, your file is {pf.filesize} bytes in size.'
             )
-        # Last 16 bytes of metadata is File IV
-        aes_state = AES(pf.filekey, pf.metadata[-16:])
-        # The hmac_state will be used to make a HMAC of File
-        hmac_state = HMAC(pf.hmackey.key, digestmod='sha256')
 
-        oe = OpenPretender(pf.file, aes_state, hmac_state, pf.filesize)
-        oe.concat_metadata(pf.metadata)
         try:
             if use_slow_upload:
                 raise AssertionError # force switch to slow upload
 
+            op = self.__get_OpenPretender(pf)
+
             # Here we will use fast upload function
             ifile = await upload_file(
-                self._tc, oe,
+                self._tc, op,
                 file_name=urlsafe_b64encode(pf.filesalt.salt).decode(),
-                part_size_kb=512, file_size=oe.get_expected_size(),
+                part_size_kb=512, file_size=op.get_expected_size(),
                 progress_callback=progress_callback
             )
         except Exception as e:
@@ -1074,10 +1081,13 @@ class EncryptedRemoteBox:
             if not isinstance(e, AssertionError): # We raise it if use_slow_upload
                 logger.warning(f'Fast upload FAILED, trying with SLOW!\n{format_exc()}')
 
+            op = self.__get_OpenPretender(pf)
+
             ifile = await self._tc.upload_file(
-                oe, file_name=urlsafe_b64encode(pf.filesalt.salt).decode(),
-                part_size_kb=512, file_size=oe.get_expected_size(),
+                op, file_name=urlsafe_b64encode(pf.filesalt.salt).decode(),
+                part_size_kb=512, file_size=op.get_expected_size(),
                 progress_callback=progress_callback)
+
         try:
             if message_to_edit:
                 # This variable will be changed if Message has
