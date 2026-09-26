@@ -111,7 +111,7 @@ class _TypeList:
                     return type_(value,'utf-8')
                 else:
                     return type_(value)
-            except:
+            except Exception:
                 pass
 
         raise TypeError(f'Invalid type! Expected {self.type}, got {type(value)}')
