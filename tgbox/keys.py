@@ -109,8 +109,14 @@ class Key:
             and self._key_type == other.key_type\
             and compare_digest(self._key, other.key)
         )
+
     def __repr__(self) -> str:
-        return f'{self._key_types[self._key_type]}({self._key}) # at {hex(id(self))}'
+        key_part = self._key[:4].hex()
+
+        return (
+            f'{self._key_types[self._key_type]} @ '
+            f'{key_part}.. # at {hex(id(self))}'
+        )
 
     def __add__(self, other) -> bytes:
         if isinstance(other, Salt):
