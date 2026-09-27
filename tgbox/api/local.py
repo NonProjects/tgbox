@@ -1299,19 +1299,21 @@ class DecryptedLocalBox(EncryptedLocalBox):
             )
         except ChatAdminRequiredError as e:
             err_msg = (
-                """You don't have enough rights (access to Admin Log) """
-                """to make a fast box synchronization. Ask a RemoteBox """
-                """owner to make You (at least) Admin with 0 rights or """
-                """use a deep syncing by specifying "deep" flag. Specify """
-                """"start_from" ID to fasten deep syncing."""
+                'You don\'t have enough rights (access to Admin Log) '
+                'to make a fast box synchronization. Ask a RemoteBox '
+                'owner to make You (at least) Admin with 0 rights or '
+                'use a deep syncing by specifying "deep" flag. Specify '
+                '"start_from" ID to speed up deep syncing.'
             )
             raise NotEnoughRights(err_msg) from e
 
         box_admins = [admin.id for admin in box_admins]
-        box_admins.remove((await drb.tc.get_entity('me')).id)
+
+        if (me_id := (await drb.tc.get_entity('me')).id) in box_admins:
+            box_admins.remove(me_id)
 
         if not box_admins:
-            logger.debug('No Admins except You found. Fast sync ignored.')
+            logger.debug('No other Admins found. Fast sync ignored')
             return
 
         last_event_id = None
