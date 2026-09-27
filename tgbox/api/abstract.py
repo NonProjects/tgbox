@@ -378,7 +378,7 @@ class Box(DecryptedLocalBox):
         except InvalidFile:
             return
 
-    async def delete_files(self, remote: Optional[bool] = False, *args, **kwargs):
+    async def delete_files(self, *args, remote: Optional[bool] = False, **kwargs):
         """
         See ``help(DecryptedLocalBox.delete_files)`` &
         see ``help(DecryptedRemoteBox.delete_files)``.
@@ -403,8 +403,9 @@ class Box(DecryptedLocalBox):
         return await self.dlb.sync(*args, **kwargs, drb=self.drb)
 
     async def push(self, file: Union[str, BinaryIO, bytes, TelegramVirtualFile, list],
+            *args, file_path: Optional[Union[str, tuple, list]] = None,
             progress_callback: Optional[Callable[[int, int], None]] = None,
-            use_slow_upload: Optional[bool] = False, *args, **kwargs
+            use_slow_upload: Optional[bool] = False, **kwargs
             ) -> Union['BoxFile', List['BoxFile']]:
         """
         This is a wrapper around ``DecryptedRemoteBox.push_file``. Will
@@ -439,6 +440,34 @@ class Box(DecryptedLocalBox):
                 .. note::
                     This argument will be auto passed to ``prepare_file()``
 
+            file_path (``str``, ``tuple``, ``list``):
+                If you wish to specify a custom path(s) for your file(s),
+                you should provide either ``list`` or ``tuple`` with
+                ``str`` paths for EACH file in your ``file`` list.
+
+                .. note::
+                    You can provide ``str`` if you're pushing only one file.
+
+                .. warning::
+                    Your paths MUST include the file name!
+
+                For example, if you wish to push multiple files at the
+                same time, and wish to change their paths, you should
+                provide the next arguments:
+
+                .. code-block:: python
+
+                    ...
+                    paths = [
+                        '/home/user/Files/file1.txt',
+                        '/home/user/Files/file2.txt',
+                        '/home/user/Files/file3.txt'
+                    ]
+                    files = box.push(
+                        file = [file1, file2, file2],
+                        file_path = paths
+                    )
+
             progress_callback (``Callable[[int, int], None]``, optional):
                 A callback function accepting two parameters:
                 (downloaded_bytes, total). A ``push_file`` kwarg.
@@ -461,30 +490,62 @@ class Box(DecryptedLocalBox):
         file = [file,] if not isinstance(file, list) else file
         file = [(open(f,'rb') if isinstance(f, str) else f) for f in file]
 
-        file_ = []
-        while file:
-            file_.append( # Make a PreparedFile objects
-                self.dlb.prepare_file(
-                    file=file.pop(0), *args, **kwargs)
-            )
-        file = await gather(*file_)
+        if len(file) > 1:
+            if file_path is not None:
+                if not isinstance(file_path, (tuple, list))\
+                    or len(file) != len(file_path):
+                        raise ValueError(
+                            'file_path must be list or tuple with file paths (file '
+                            'names included!) for each file you wish to upload'
+                        )
+        else:
+            if file_path and not isinstance(file_path, (tuple, list)):
+                file_path = (file_path,)
 
-        file_ = []
-        while file:
-            file_.append( # Get a DecryptedRemoteBoxFile objects
-                self.drb.push_file(
-                    pf=file.pop(0),
-                    progress_callback=progress_callback,
-                    use_slow_upload=use_slow_upload
+            if file_path and len(file) != len(file_path):
+                raise ValueError(
+                    'Please provide only one path (file '
+                    'name included!) for your file')
+
+        if file_path:
+            paths = dict(zip(file, file_path))
+        else:
+            paths = {}
+        try:
+            prepared_files = []
+            for f in file:
+                cycle_file = f
+                cycle_path = paths.get(cycle_file, None)
+
+                prepared_files.append( # Make a PreparedFile objects
+                    self.dlb.prepare_file(file=cycle_file,
+                        file_path=cycle_path, *args, **kwargs)
                 )
-            )
-        file_drbf = await gather(*file_)
+            prepared_files = await gather(*prepared_files)
 
-        file_dlbf = [ # Get a DecryptedLocalBoxFile objects from DRBF
-            self.dlb.get_file(drbf.id, erase_encrypted_metadata=False)
-            for drbf in file_drbf
-        ]
-        file_dlbf = await gather(*file_dlbf)
+            push_files = []
+            for f in prepared_files:
+                push_files.append( # Get a DecryptedRemoteBoxFile objects
+                    self.drb.push_file(
+                        pf=f,
+                        progress_callback=progress_callback,
+                        use_slow_upload=use_slow_upload
+                    )
+                )
+            file_drbf = await gather(*push_files)
+
+            file_dlbf = [ # Get a DecryptedLocalBoxFile objects from DRBF
+                self.dlb.get_file(drbf.id, erase_encrypted_metadata=False)
+                for drbf in file_drbf
+            ]
+            file_dlbf = await gather(*file_dlbf)
+
+        except Exception as e:
+            raise e
+        finally:
+            for f in file:
+                if hasattr(f, 'close'):
+                    f.close()
 
         abbf_list = [] # Union DLBF & DRBF into BoxFile
         for drbf, dlbf in zip(file_drbf, file_dlbf):
@@ -496,7 +557,7 @@ class Box(DecryptedLocalBox):
 
         return abbf_list
 
-    async def delete(self, remote: Optional[bool] = False, *args, **kwargs):
+    async def delete(self, *args, remote: Optional[bool] = False, **kwargs):
         """
         This method **WILL DELETE** *Box*!
 
@@ -598,7 +659,7 @@ class BoxFile(DecryptedLocalBoxFile):
             ``dlbf`` and ``drbf``. Otherwise ``ValueError``.
         """
         _check = (
-            all((id, dlb, drb)),
+            all((id is not None, dlb, drb)),
             all((dlbf, drbf))
         )
         if not any(_check):
@@ -790,7 +851,7 @@ class BoxFile(DecryptedLocalBoxFile):
         # pylint: disable=unreachable
         return await self.drb.file_exists(*args, **kwargs, id=self.dlbf.id)
 
-    async def delete(self, remote: Optional[bool] = False, *args, **kwargs):
+    async def delete(self, *args, remote: Optional[bool] = False, **kwargs):
         """
         See ``help(DecryptedLocalBoxFile.delete)`` &
         see ``help(DecryptedRemoteBoxFile.delete)``.
