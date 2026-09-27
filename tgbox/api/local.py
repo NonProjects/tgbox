@@ -2532,24 +2532,43 @@ class EncryptedLocalBoxDirectory:
 
         return total_files + total_folders
 
-    async def delete(self) -> None:
+    async def delete(
+            self,
+
+            rb: Optional[
+                Union[
+                    'tgbox.api.remote.EncryptedRemoteBox',
+                    'tgbox.api.remote.DecryptedRemoteBox'
+                ]
+            ] = None) -> None:
         """
         Will delete this directory with all sub-dirs and files
         from your LocalBox. All of them will stay in ``RemoteBox``,
         so you can restore all your data by syncing Box.
+
+        If ``rb`` specified, will also remove all files from this
+        Directory in your RemoteBox.
         """
-        logger.debug(f'DELETE FROM FILES WHERE PPATH_HEAD={self._part_id}')
-        await self._tgbox_db.FILES.execute(
-            ('DELETE FROM FILES WHERE PPATH_HEAD=?',(self._part_id,))
-        )
+        file_ids = []
+        async for content in self.iterdir(cache_preview=False):
+            if isinstance(content, (EncryptedLocalBoxFile, DecryptedLocalBoxFile)):
+                file_ids.append(content.id)
+            else:
+                await content.delete(rb=rb)
+
+            if len(file_ids) == 100:
+                await self._lb.delete_files(lbf_ids=file_ids, rb=rb)
+                file_ids.clear()
+
+        if file_ids:
+            await self._lb.delete_files(lbf_ids=file_ids, rb=rb)
+            file_ids.clear()
+
         logger.debug(f'DELETE FROM PATH_PARTS WHERE PART_ID={self._part_id}')
         await self._tgbox_db.PATH_PARTS.execute(
             ('DELETE FROM PATH_PARTS WHERE PART_ID=?',(self._part_id,))
         )
-        logger.debug(f'DELETE FROM PATH_PARTS WHERE PARENT_PART_ID={self._part_id}')
-        await self._tgbox_db.PATH_PARTS.execute(
-            ('DELETE FROM PATH_PARTS WHERE PARENT_PART_ID=?',(self._part_id,))
-        )
+
     async def decrypt(
             self, key: Optional[Union[BaseKey, MainKey]] = None,
             dlb: Optional[DecryptedLocalBox] = None):
