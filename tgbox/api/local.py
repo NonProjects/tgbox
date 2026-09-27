@@ -904,6 +904,9 @@ class EncryptedLocalBox:
         lbf_ids = lbf_ids.copy() if lbf_ids else []
         lbf_ids.extend(lbf_.id for lbf_ in lbf)
 
+        if not lbf_ids:
+            raise ValueError('You should specify lbf or lbf_ids')
+
         logger.info(f'Removing {len(lbf_ids)} local files...')
 
         q = '(' + ('?,' * len(lbf_ids))[:-1] + ')'

@@ -1305,6 +1305,9 @@ class EncryptedRemoteBox:
         rbf_ids = rbf_ids.copy() if rbf_ids else []
         rbf_ids.extend(rbf_.id for rbf_ in rbf)
 
+        if not rbf_ids:
+            raise ValueError('You should specify rbf or rbf_ids')
+
         logger.info(f'Removing {len(rbf_ids)} remote files...')
 
         rm_result = await self._tc.delete_messages(
