@@ -404,7 +404,7 @@ class Box(DecryptedLocalBox):
 
     async def push(self, file: Union[str, BinaryIO, bytes, TelegramVirtualFile, list],
             *args, file_path: Optional[Union[str, tuple, list]] = None,
-            progress_callback: Optional[Callable[[int, int], None]] = None,
+            progress_callback: Optional[list[Callable[[int, int], None]]] = None,
             use_slow_upload: Optional[bool] = False, **kwargs
             ) -> Union['BoxFile', List['BoxFile']]:
         """
@@ -468,9 +468,13 @@ class Box(DecryptedLocalBox):
                         file_path = paths
                     )
 
-            progress_callback (``Callable[[int, int], None]``, optional):
+            progress_callback (``list[Callable[[int, int], None]]``, optional):
                 A callback function accepting two parameters:
                 (downloaded_bytes, total). A ``push_file`` kwarg.
+
+                If you wish to push multiple files with progress callbacks,
+                you MUST provide either tuple or list with callback funcs,
+                one for each file (as with ``file_path`` kwarg)
 
             use_slow_upload (``bool``, optional):
                 Will use default upload function from the Telethon
@@ -498,6 +502,14 @@ class Box(DecryptedLocalBox):
                             'file_path must be list or tuple with file paths (file '
                             'names included!) for each file you wish to upload'
                         )
+
+            if progress_callback is not None:
+                if not isinstance(progress_callback, (tuple, list))\
+                    or len(file) != len(progress_callback):
+                        raise ValueError(
+                            'progress_callback must be list or tuple with callback '
+                            'functions for each file you wish to upload'
+                        )
         else:
             if file_path and not isinstance(file_path, (tuple, list)):
                 file_path = (file_path,)
@@ -507,19 +519,38 @@ class Box(DecryptedLocalBox):
                     'Please provide only one path (file '
                     'name included!) for your file')
 
+            if progress_callback and not isinstance(progress_callback, (tuple, list)):
+                progress_callback = (progress_callback,)
+
+            if progress_callback and len(file) != len(progress_callback):
+                raise ValueError(
+                    'Please provide only one progress_callback for your file'
+                )
+
         if file_path:
             paths = dict(zip(file, file_path))
         else:
             paths = {}
+
+        if progress_callback:
+            p_callbacks = dict(zip(file, progress_callback))
+        else:
+            p_callbacks = {}
+
         try:
             prepared_files = []
             for f in file:
                 cycle_file = f
                 cycle_path = paths.get(cycle_file, None)
+                cycle_callback = p_callbacks.get(cycle_file, None)
 
                 prepared_files.append( # Make a PreparedFile objects
-                    self.dlb.prepare_file(file=cycle_file,
-                        file_path=cycle_path, *args, **kwargs)
+                    self.dlb.prepare_file(
+                        file = cycle_file,
+                        file_path = cycle_path,
+                        progress_callback = cycle_callback,
+                        *args, **kwargs
+                    )
                 )
             prepared_files = await gather(*prepared_files)
 
