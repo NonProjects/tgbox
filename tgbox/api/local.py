@@ -13,7 +13,6 @@ from pathlib import Path
 from os import PathLike
 from io import BytesIO
 from time import time
-from traceback import format_exc
 
 from inspect import isasyncgen
 from asyncio import iscoroutinefunction, gather
@@ -1227,7 +1226,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             rbf_um = urlsafe_b64decode(drbf._message.message)
             rbf_um = AES(drbf._filekey).decrypt(rbf_um)
             rbf_um = PackedAttributes.unpack(rbf_um)
-        except Exception as e:
+        except Exception:
             logger.exception(
                 'Can not store Metadata Updates from RemoteBox '
                f'file ID{dlbf.id}'); return
@@ -1632,8 +1631,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
             for r in g:
                 if isinstance(r, Exception):
                     logger.warning(
-                         'Can\'t update Metadata of Local file '
-                        f'due to the exception!', exc_info=r)
+                        'Can\'t update Metadata of Local file '
+                        'due to the exception!', exc_info=r)
 
     async def sync(
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
@@ -2065,7 +2064,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             dlb = self,
             file = file,
             filekey = filekey,
-            filesize = total_file_size,
+            filesize = file_size,
             filepath = Path(file_path_no_name.decode()),
             filesalt = file_salt,
             hmackey = hmackey,
@@ -3281,8 +3280,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                     self._elbf._updated_metadata
                 )
                 updates = PackedAttributes.unpack(updates)
-            except Exception as e:
-                logger.exception(f'Failed to unpack updated metadata. Ignoring..')
+            except Exception:
+                logger.exception('Failed to unpack updated metadata. Ignoring..')
             else:
                 for k,v in tuple(updates.items()):
                     if k in (*self.__required_metadata, 'efile_path'):

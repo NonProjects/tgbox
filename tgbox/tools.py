@@ -407,9 +407,7 @@ class OpenPretender:
 
         self._buffered_bytes = b''
         self._stop_iteration = False
-
-        self._hmac_returned = False
-        self._padding_added = False
+        self._hmac_added = False
 
         self._concated_metadata_size = None
         self._position = 0
@@ -439,13 +437,9 @@ class OpenPretender:
         """
         if not self._concated_metadata_size:
             raise Exception('You need to concat metadata firstly')
-        # self._file_size already include size of Metadata, but
-        # we need to calculate size of encrypted File *with*
-        # padding, so firstly we are required to subtract
-        # self._concated_metadata_size from self._file_size
-        # for correct calculation. 32 here is HMAC blob
-        expected = self._file_size - self._concated_metadata_size
-        expected = (expected + (16 - expected % 16)) + 32
+
+        # 32 here is HMAC, (16 - self._file_size % 16) is size of padding
+        expected = (self._file_size + (16 - self._file_size % 16)) + 32
         return expected + self._concated_metadata_size
 
     async def read(self, size: int=-1) -> bytes:
@@ -479,66 +473,57 @@ class OpenPretender:
         if size < 0 or self._current_size < 0:
             self._current_size = 0
 
-        if (self._current_size == 0 and self._padding_added)\
-            or (size <= len(self._buffered_bytes) and size != -1):
-                if self._hmac_returned:
-                    return b''
-
-                elif self._current_size == 0:
-                    if len(self._buffered_bytes) + 32 < size: # + 32 is HMAC
-                        block = self._buffered_bytes + self._hmac_state.digest()
-                        self._buffered_bytes = b''
-                        self._hmac_returned = True
-                    else:
-                        block = self._buffered_bytes[:size]
-                        self._buffered_bytes = self._buffered_bytes[size:]
-                else:
-                    block = self._buffered_bytes[:size]
-                    self._buffered_bytes = self._buffered_bytes[size:]
-        else:
-            buffered = self._buffered_bytes
+        if self._buffered_bytes and self._hmac_added:
+            leftover = self._buffered_bytes
             self._buffered_bytes = b''
+            return leftover
 
-            if size == -1:
-                chunk = self._flo.read()
-                chunk = await chunk if iscoroutine(chunk) else chunk
+        if self._hmac_added:
+            return b''
 
-                logger.debug(f'Trying to read all bytes, got {len(chunk)=}')
+        buffered = self._buffered_bytes
+        self._buffered_bytes = b''
 
-                self._hmac_state.update(chunk)
+        if size == -1:
+            chunk = self._flo.read()
+            chunk = await chunk if iscoroutine(chunk) else chunk
 
-                block = buffered + self._aes_state.encrypt(
+            logger.debug(f'Trying to read all bytes, got {len(chunk)=}')
+
+            self._hmac_state.update(chunk)
+
+            block = buffered + self._aes_state.encrypt(
+                chunk, pad=True, concat_iv=False)
+
+            block += self._hmac_state.digest()
+            self._hmac_added = True
+        else:
+            chunk = self._flo.read(size)
+            chunk = await chunk if iscoroutine(chunk) else chunk
+
+            logger.debug(f'Trying to read {size=}, got {len(chunk)=}')
+
+            self._hmac_state.update(chunk)
+
+            if len(chunk) < size:
+                chunk = buffered + self._aes_state.encrypt(
                     chunk, pad=True, concat_iv=False)
 
-                block += self._hmac_state.digest()
-                self._hmac_returned = True
-                self._padding_added = True
+                chunk += self._hmac_state.digest()
+                self._hmac_added = True
             else:
-                chunk = self._flo.read(size)
-                chunk = await chunk if iscoroutine(chunk) else chunk
+                chunk = buffered + self._aes_state.encrypt(
+                    chunk, pad=False, concat_iv=False)
 
-                logger.debug(f'Trying to read {size=}, got {len(chunk)=}')
+            if len(chunk) > size:
+                shift = size
+            else:
+                shift = None
 
-                self._hmac_state.update(chunk)
+            if shift is not None:
+                self._buffered_bytes = chunk[shift:]
 
-                if len(chunk) < size:
-                    chunk = buffered + self._aes_state.encrypt(
-                        chunk, pad=True, concat_iv=False)
-
-                    self._padding_added = True
-                else:
-                    chunk = buffered + self._aes_state.encrypt(
-                        chunk, pad=False, concat_iv=False)
-
-                if len(chunk) > size:
-                    shift = size
-                else:
-                    shift = None
-
-                if shift is not None:
-                    self._buffered_bytes = chunk[shift:]
-
-                block = chunk[:shift]
+            block = chunk[:shift]
 
         logger.debug(f'Return {len(block)=}; {self._current_size=}')
 

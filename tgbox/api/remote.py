@@ -42,16 +42,13 @@ from telethon.tl.types import (
     Channel, User, Message, PeerChannel,
     InputMessagesFilterDocument
 )
-from ..crypto import (
-    AESwState as AES,
-    BoxSalt, FileSalt, IV
-)
 from ..keys import (
     make_mainkey, make_sharekey, MainKey, ShareKey,
     ImportKey, FileKey, BaseKey, HMACKey, make_filekey,
     make_requestkey, RequestKey, DirectoryKey, make_dirkey,
     make_hmackey
 )
+from ..crypto import AESwState as AES, BoxSalt, FileSalt, IV
 from ..fastelethon import upload_file, download_file
 from .. import defaults
 
@@ -59,7 +56,7 @@ from ..errors import (
     NotInitializedError, RemoteBoxInaccessible, NotEnoughRights,
     NotATgboxFile, IncorrectKey, LimitExceeded, NotImported, AESError,
     RemoteFileNotFound, NoPlaceLeftForMetadata, SessionUnregistered,
-    InvalidFile, UnpackingError
+    InvalidFile, UnpackingError, UploadFailed
 )
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter, OpenPretender,
@@ -363,7 +360,22 @@ class EncryptedRemoteBox:
         return self._is_encrypted
 
     @staticmethod
-    def __get_OpenPretender(pf: 'PreparedFile') -> OpenPretender:
+    def __get_OpenPretender(pf: 'PreparedFile',
+            seek_to_0: Optional[bool]=False) -> OpenPretender:
+        """
+        This helper func will give out the OpenPretender class. If
+        seek_to_0 is True, we will try to seek to the file start.
+        If pf.file is not seekable, will raise a ValueError
+        """
+        if seek_to_0:
+            if not (m_seekable := getattr(pf.file, 'seekable', None)):
+                raise ValueError(f'{pf.file=} doesn\' have .seekable()')
+
+            if not m_seekable():
+                raise ValueError(f'{pf.file=} is not seekable')
+
+            pf.file.seek(0,0)
+
         # Last 16 bytes of metadata is File IV
         aes_state = AES(pf.filekey, pf.metadata[-16:])
         # The hmac_state will be used to make a HMAC of File
@@ -1081,7 +1093,15 @@ class EncryptedRemoteBox:
             if not isinstance(e, AssertionError): # We raise it if use_slow_upload
                 logger.warning(f'Fast upload FAILED, trying with SLOW!\n{format_exc()}')
 
-            op = self.__get_OpenPretender(pf)
+            try:
+                # We need to seek pf.file to 0 after upload attempt with the
+                # fast 'upload_file()' coroutine, as we already did read some
+                # bytes from it. If user forced skipping Fast Upload with the
+                # 'use_slow_upload=True', we don't need to seek at all
+                seek_to_0 = False if use_slow_upload else True
+                op = self.__get_OpenPretender(pf, seek_to_0=seek_to_0)
+            except ValueError as e:
+                raise UploadFailed('Both fast and slow uploads failed') from e
 
             ifile = await self._tc.upload_file(
                 op, file_name=urlsafe_b64encode(pf.filesalt.salt).decode(),
@@ -2827,7 +2847,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
 
             except Exception as e:
                 if isinstance(e, InvalidFile):
-                    raise e from e
+                    raise e
 
                 if download_error_switch == 0:
                     download_error_switch = 1
@@ -2837,7 +2857,7 @@ class DecryptedRemoteBoxFile(EncryptedRemoteBoxFile):
                     continue
                 else:
                     logger.error('Both fast and slow download methods failed')
-                    raise e from e
+                    raise e
 
         return outfile
 

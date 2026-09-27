@@ -76,6 +76,9 @@ class NoPlaceLeftForMetadata(TgboxException):
 class FastSyncDisabled(TgboxException):
     """Fast sync was disabled in Box defaults"""
 
+class UploadFailed(TgboxException):
+    """Upload to RemoteBox failed"""
+
 # LocalBox Exceptions
 
 class AlreadyImported(TgboxException):
