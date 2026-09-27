@@ -1147,7 +1147,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             await self._tgbox_db.FILES.select_once(
                 sql_tuple=('SELECT ID FROM FILES WHERE ID=?', (pf.file_id,))
             )
-        except InvalidFile:
+        except StopAsyncIteration:
             pass
         else:
             if update:
@@ -1795,7 +1795,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
     async def prepare_file(
             self, file: Union[BinaryIO, bytes, TelegramVirtualFile],
             file_size: Optional[int] = None,
-            file_path: Optional[str, Path] = None,
+            file_path: Optional[Union[str, Path]] = None,
             cattrs: Optional[Dict[str, Union[bytes]]] = None,
             make_preview: bool=True,
             skip_fingerprint_check: bool=False) -> 'PreparedFile':
