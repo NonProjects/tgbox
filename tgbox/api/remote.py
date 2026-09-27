@@ -1135,11 +1135,11 @@ class EncryptedRemoteBox:
                             dec_updated_metadata = AES(dlbf._filekey).decrypt(
                                 decoded_ue_metadata # Decrypt with original FileKey
                             )
-                        except ValueError: # Invalid padding byte (AES Error)
-                            logger.info(
+                        except ValueError as e: # Invalid padding byte (AES Error)
+                            logger.warning(
                                 'It seems that file you want to update have '
                                 'Updated Metadata, but we can\'t decrypt. '
-                                'Updates to Metadata will be ignored. {e}')
+                               f'Updates to Metadata will be ignored. {e}')
                         else:
                             reenc_updated_metadata = AES(pf.filekey).encrypt(
                                 dec_updated_metadata # Re-encrypt with new FileKey
