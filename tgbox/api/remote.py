@@ -619,7 +619,7 @@ class EncryptedRemoteBox:
             return await anext(file_iter)
         # If there is no file by ``id``.
         except StopAsyncIteration:
-            return None
+            return
 
     async def files(
             self, key: Optional[Union[MainKey, FileKey]] = None,
@@ -1816,7 +1816,7 @@ class EncryptedRemoteBoxFile:
         self.__raise_initialized()
 
         if not self._message.from_id: # pylint: disable=unreachable
-            return None
+            return
 
         if not self._sender_entity:
             self._sender_entity = await self._rb._tc.get_entity(
@@ -1834,7 +1834,7 @@ class EncryptedRemoteBoxFile:
         self.__raise_initialized()
 
         if not self._imported: # pylint: disable=unreachable
-            return None
+            return
 
         if not self._imported_from_entity:
             self._imported_from_entity = await self._rb._tc.get_entity(

@@ -40,7 +40,8 @@ from ..errors import (
     IncorrectKey, FingerprintExists, NotInitializedError,
     AlreadyImported, RemoteFileNotFound, InUseException,
     AESError, PreviewImpossible, RemoteBoxInaccessible,
-    InvalidFile, FastSyncDisabled, UnpackingError
+    InvalidFile, FastSyncDisabled, UnpackingError,
+    InvalidDirectory
 )
 from ..tools import (
     int_to_bytes, bytes_to_int, SearchFilter,
@@ -634,7 +635,7 @@ class EncryptedLocalBox:
                     )
                 id = id[0]
             except StopAsyncIteration:
-                return None
+                return
         try:
             self.__raise_initialized()
             # pylint: disable=unreachable
@@ -662,9 +663,9 @@ class EncryptedLocalBox:
                     cache_preview=cache_preview)
                 return await elbf.init()
 
-        except StopAsyncIteration: # There is no file by "id" in the *LocalBox.
+        except InvalidFile: # There is no file by "id" in the *LocalBox.
             logger.debug(f'LocalBox doesn\'t have a file with ID{id}: return None.')
-            return None
+            return
 
     async def contents(
             self, sfpid: Optional[bytes] = None,
@@ -1146,7 +1147,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             await self._tgbox_db.FILES.select_once(
                 sql_tuple=('SELECT ID FROM FILES WHERE ID=?', (pf.file_id,))
             )
-        except StopAsyncIteration:
+        except InvalidFile:
             pass
         else:
             if update:
@@ -2183,10 +2184,10 @@ class DecryptedLocalBox(EncryptedLocalBox):
         try:
             return await EncryptedLocalBoxDirectory(
                 self._elb, part_id).decrypt(dlb=self)
-        except StopAsyncIteration:
-            # StopAsyncIteration will be raised on parsing the SELECT
+        except InvalidDirectory:
+            # InvalidDirectory will be raised on parsing the SELECT
             # results if specified dir is not presented in LocalBox
-            return None
+            return
 
     def get_sharekey(self, reqkey: Optional[RequestKey] = None) -> ShareKey:
         """
@@ -2349,11 +2350,16 @@ class EncryptedLocalBoxDirectory:
             'Init ELBD |  SELECT * FROM PATH_PARTS '
            f'WHERE PART_ID={self._part_id}'
         )
-        folder_row = await self._tgbox_db.PATH_PARTS.select_once((
-            'SELECT ENC_PART, PART_ID, PARENT_PART_ID '
-            'FROM PATH_PARTS WHERE PART_ID=?',
-            (self._part_id,)
-        ))
+        try:
+            folder_row = await self._tgbox_db.PATH_PARTS.select_once((
+                'SELECT ENC_PART, PART_ID, PARENT_PART_ID '
+                'FROM PATH_PARTS WHERE PART_ID=?',
+                (self._part_id,)
+            ))
+        except StopAsyncIteration as e:
+            raise InvalidDirectory(
+                f'Directory with part_id={self._part_id} does not exist') from e
+
         self._part = folder_row[0]
         self._part_id = folder_row[1]
         self._parent_part_id = folder_row[2]
@@ -2857,9 +2863,13 @@ class EncryptedLocalBoxFile:
             'SELECT ID, UPLOAD_TIME, PPATH_HEAD, FILEKEY, '
             'FINGERPRINT, METADATA, UPDATED_METADATA FROM FILES WHERE ID=?'
         )
-        file_row = list(await self._lb._tgbox_db.FILES.select_once(
-            sql_tuple = (query, (self._id,))
-        ))
+        try:
+            file_row = list(await self._lb._tgbox_db.FILES.select_once(
+                sql_tuple = (query, (self._id,))
+            ))
+        except StopAsyncIteration as e:
+            raise InvalidFile(f'File with ID{self._id} doesn\'t exist') from e
+
         self._id = file_row[0]
         self._upload_time = file_row[1]
         self._ppath_head = file_row[2]

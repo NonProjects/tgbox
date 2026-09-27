@@ -337,11 +337,13 @@ class Box(DecryptedLocalBox):
             self, id: int, cache_preview: bool=True,
             erase_encrypted_metadata: bool=True,
             decrypt: Optional[None] = None,
-            lazy: Optional[bool] = None) -> 'BoxFile':
+            lazy: Optional[bool] = None) -> Optional['BoxFile']:
         """
         This method returns ``BoxFile`` object, which
         class contains the methods from the both of
         ``DecryptedLocalBoxFile`` and ``DecryptedRemoteBoxFile``.
+
+        If file doesn't exists, will return ``None``.
 
         .. tip::
             You may want to get file information **only**. For
@@ -371,7 +373,10 @@ class Box(DecryptedLocalBox):
             erase_encrypted_metadata=erase_encrypted_metadata,
             lazy=(lazy if lazy is not None else self.lazy_files)
         )
-        return await bf.init()
+        try:
+            return await bf.init()
+        except InvalidFile:
+            return
 
     async def delete_files(self, remote: Optional[bool] = False, *args, **kwargs):
         """

@@ -89,3 +89,6 @@ class NotImported(TgboxException):
 
 class FingerprintExists(TgboxException):
     """File with the same file path already uploaded to the Box"""
+
+class InvalidDirectory(TgboxException):
+    """Directory is invalid or does not exist"""
