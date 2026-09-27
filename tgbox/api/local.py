@@ -901,7 +901,7 @@ class EncryptedLocalBox:
             use the same coroutine on *RemoteBox* or
             specify ``(Encrypted|Decrypted)RemoteBox``.
         """
-        lbf_ids = lbf_ids if lbf_ids else []
+        lbf_ids = lbf_ids.copy() if lbf_ids else []
         lbf_ids.extend(lbf_.id for lbf_ in lbf)
 
         logger.info(f'Removing {len(lbf_ids)} local files...')

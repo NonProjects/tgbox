@@ -1302,7 +1302,7 @@ class EncryptedRemoteBox:
             your LocalBox then you can use the
             same method on your LocalBoxFile.
         """
-        rbf_ids = rbf_ids if rbf_ids else []
+        rbf_ids = rbf_ids.copy() if rbf_ids else []
         rbf_ids.extend(rbf_.id for rbf_ in rbf)
 
         logger.info(f'Removing {len(rbf_ids)} remote files...')
