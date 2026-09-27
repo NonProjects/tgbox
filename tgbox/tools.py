@@ -474,8 +474,13 @@ class OpenPretender:
             self._current_size = 0
 
         if self._buffered_bytes and self._hmac_added:
-            leftover = self._buffered_bytes
-            self._buffered_bytes = b''
+            if size == -1:
+                leftover = self._buffered_bytes
+                self._buffered_bytes = b''
+            else:
+                leftover = self._buffered_bytes[:size]
+                self._buffered_bytes = self._buffered_bytes[size:]
+
             return leftover
 
         if self._hmac_added:
