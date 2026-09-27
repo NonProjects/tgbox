@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.abspath('..'))
 
 # -- Project information -----------------------------------------------------
 
-from tgbox.version import VERSION
+from tgbox import __version__ as VERSION
 
 project = 'tgbox'
 copyright = '2024, NonProjects'
