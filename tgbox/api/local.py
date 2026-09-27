@@ -815,11 +815,11 @@ class EncryptedLocalBox:
         else:
             args, sql_parts = [], []
 
-            if min_id:
+            if min_id is not None:
                 args.append(min_id)
                 sql_parts.append('ID >= ?')
 
-            if max_id:
+            if max_id is not None:
                 args.append(max_id)
                 sql_parts.append('ID <= ?')
 
