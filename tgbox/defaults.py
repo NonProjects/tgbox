@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ABSPATH = Path(__file__).parent
-VERSION = open(ABSPATH / 'version.txt').read().strip()
+VERSION = open(ABSPATH / 'version.txt', encoding='utf-8').read().strip()
 
 # Is used to check minor protocol version
 # for the available features in TGBOX
