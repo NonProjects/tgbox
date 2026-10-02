@@ -751,11 +751,7 @@ class DefaultsTableWrapper:
             asyncio_run(main())
         """
         getattr(self, key) # Vetrify that Key exist
-
-        logger.info(f'Changing defaults | UPDATE DEFAULTS SET {key}={value}')
-        await self._tgbox_db.DEFAULTS.execute((
-            f'UPDATE DEFAULTS SET {key}=?', (value,)
-        ))
+        await self._tgbox_db.DEFAULTS.update(**{key: value})
         setattr(self, key, value)
 
 @dataclass

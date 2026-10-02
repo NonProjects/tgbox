@@ -108,37 +108,81 @@ class SqlTableWrapper:
         """
         return await anext(self.select(sql_tuple=sql_tuple))
 
-    async def insert(
-            self, sql_statement: Optional[str] = None, commit: bool=True,
-            or_ignore: bool=False, **kwargs) -> None:
+    async def insert(self, or_ignore: bool=False, commit: bool=True, **kwargs) -> None:
         """
+        Proxy to INSERT INTO sqlite statement
+
         You should specify kwargs, where kwarg is name of a column,
         and it's value is a value you wish to INSERT.
-
-        If ``sql_statement`` isn't specified, then will be used
-        ``INSERT INTO TABLE_NAME values (...)``.
 
         If ``or_ignore`` is ``True``, will issue ``INSERT OR IGNORE``
         instead of plain ``INSERT INTO``
         """
-        if not sql_statement:
-            sql_statement = 'INSERT{0}INTO {1} ({2}) VALUES ({3})'
-            kwargs = tuple(i[0] for i in zip(kwargs.items()))
+        sql_statement = 'INSERT{0}INTO {1} ({2}) VALUES ({3})'
+        kwargs = tuple(i[0] for i in zip(kwargs.items()))
 
-            c = ''
-            for k in kwargs:
-                c += f'{k[0]},'
+        c = ''
+        for column, _ in kwargs:
+            c += f'{column},'
 
-            c = c.rstrip(',')
+        c = c.rstrip(',')
 
-            q = ('?,' * len(kwargs)).rstrip(',')
-            ignore = ' OR IGNORE ' if or_ignore else ' '
+        q = ('?,' * len(kwargs)).rstrip(',')
+        ignore = ' OR IGNORE ' if or_ignore else ' '
 
-            sql_statement = sql_statement.format(ignore, self._table_name, c, q)
+        sql_statement = sql_statement.format(ignore, self._table_name, c, q)
 
         args = tuple(i[1] for i in kwargs)
 
-        logger.debug('self._aiosql_conn.execute(%s, %s)', sql_statement, args)
+        logger.debug('self._aiosql_conn.execute("%s", %s)', sql_statement, args)
+        await self._aiosql_conn.execute(sql_statement, args)
+
+        if commit:
+            logger.debug('self._aiosql_conn.commit()')
+            await self._aiosql_conn.commit()
+
+    async def update(self, where: Optional[dict] = None,
+            commit: bool=True, **kwargs) -> None:
+        """
+        Proxy to UPDATE sqlite statement
+
+        You can use this coroutine for easier ``UPDATE`` usage. You
+        should provide kwargs, where kwarg is name of a column,
+        and its value is value. For example:
+
+        ``await db.BOX_DATA.insert(BOX_CHANNEL_ID=box_channel_id)``
+
+        If you need ``WHERE`` clause, you can provide a ``where``
+        dict(). In ``where`` dict, keys must be column names,
+        and values must be values. E.g this:
+
+            ``PATH_PARTS.insert(PART_ID=b'updated', where={'PART_ID': b'old'})``
+
+        Will transform into the next SQLite statement:
+
+            ``UPDATE PATH_PARTS SET PART_ID=b'updated' WHERE PART_ID=b'old'``
+        """
+        sql_statement = 'UPDATE {0} SET {1} {2}'
+        kwargs = tuple(i[0] for i in zip(kwargs.items()))
+
+        v = ''
+        for column, value in kwargs:
+            v += f'{column}=?,'
+
+        v = v.rstrip(',')
+
+        w = ''
+        if where:
+            w += 'WHERE '
+            for column, value in where.items():
+                w += f'{column}=? AND'
+
+            w = w.removesuffix('AND')
+
+        sql_statement = sql_statement.format(self._table_name, v, w)
+        args = (*(i[1] for i in kwargs), *(i for i in where.values()))
+
+        logger.debug('self._aiosql_conn.execute("%s", %s)', sql_statement, args)
         await self._aiosql_conn.execute(sql_statement, args)
 
         if commit:

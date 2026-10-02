@@ -1422,14 +1422,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
             last_event_id = AES(self._mainkey).encrypt(
                 int_to_bytes(last_event_id)
             )
-            logger.debug(
-                'UPDATE BOX_DATA SET FAST_SYNC_'
-               f'LAST_EVENT_ID={last_event_id}'
+            await self._tgbox_db.BOX_DATA.update(
+                FAST_SYNC_LAST_EVENT_ID = last_event_id
             )
-            await self._tgbox_db.BOX_DATA.execute((
-                'UPDATE BOX_DATA SET FAST_SYNC_LAST_EVENT_ID=?',
-                (last_event_id,)
-            ))
 
     async def _deep_sync(
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
@@ -1746,11 +1741,9 @@ class DecryptedLocalBox(EncryptedLocalBox):
             api_id = AES(mainkey).encrypt(int_to_bytes(tc._api_id))
             api_hash = AES(mainkey).encrypt(bytes.fromhex(tc._api_hash))
 
-            sql_tuple = (
-                'UPDATE BOX_DATA SET SESSION=?, API_ID=?, API_HASH=?',
-                (session, api_id, api_hash)
+            await self._tgbox_db.BOX_DATA.update(
+                SESSION = session, API_ID=api_id, API_HASH=api_hash
             )
-            await self._tgbox_db.BOX_DATA.execute(sql_tuple)
 
     async def search_file(
             self, sf: SearchFilter,
@@ -3465,14 +3458,14 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             self._file_path = file_path
             self._directory = await dlb._make_local_path(file_path)
 
-            await dlb._tgbox_db.FILES.execute((
-                'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
-                (self._directory.part_id, self._id)
-            ))
-            await dlb._tgbox_db.FILES.execute((
-                'UPDATE FILES SET FINGERPRINT=? WHERE ID=?',
-                (fingerprint, self._id)
-            ))
+            await dlb._tgbox_db.FILES.update(
+                PPATH_HEAD = self._directory.part_id,
+                where = {'ID': self._id}
+            )
+            await dlb._tgbox_db.FILES.update(
+                FINGERPRINT = fingerprint,
+                where = {'ID': self._id}
+            )
 
     async def _refresh_metadata(
             self, drb: Optional['tgbox.api.remote.DecryptedRemoteBox'] = None,
@@ -3537,10 +3530,9 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             if isinstance(self._lb, DecryptedLocalBox):
                 self._directory = await self._lb._make_local_path(self._file_path)
 
-                await self._lb._tgbox_db.FILES.execute((
-                    'UPDATE FILES SET PPATH_HEAD=? WHERE ID=?',
-                    (self._directory.part_id, self._id)
-                ))
+                await self._lb._tgbox_db.FILES.update(
+                    PPATH_HEAD = self._directory.part_id,
+                    where = {'ID': self._id})
             else:
                 logger.warning(
                    f'We can not restore the original PPATH_HEAD of the ID{self._id} '
@@ -3627,15 +3619,10 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
             else:
                 self._residual_metadata[k] = v
 
-        logger.debug(
-            'Updating metadata | UPDATE FILES SET '
-           f'UPDATED_METADATA={_updated_metadata} '
-           f'WHERE ID={self._id}'
+        await self._lb._tgbox_db.FILES.update(
+            UPDATED_METADATA = _updated_metadata,
+            where = {'ID': self._id}
         )
-        await self._lb._tgbox_db.FILES.execute((
-            'UPDATE FILES SET UPDATED_METADATA=? WHERE ID=?',
-            (_updated_metadata, self._id)
-        ))
 
     def set_download_path(self, path: Path):
         """Will set download path to specified."""
