@@ -1402,8 +1402,11 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 id_to_update.append(import_update_file(event))
 
 
-        id_to_update.append(self.delete_files(lbf_ids=id_to_remove))
-        await gather(*id_to_update) # Gather reminder + id_to_remove
+        if id_to_remove:
+            id_to_update.append(self.delete_files(lbf_ids=id_to_remove))
+
+        if id_to_update:
+            await gather(*id_to_update) # Gather reminder + id_to_remove
 
         if progress_callback:
             pc_list = []
