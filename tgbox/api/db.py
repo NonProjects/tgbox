@@ -164,6 +164,7 @@ class SqlTableWrapper:
         """
         sql_statement = 'UPDATE {0} SET {1} {2}'
         kwargs = tuple(i[0] for i in zip(kwargs.items()))
+        where = where if where else {}
 
         v = ''
         for column, value in kwargs:
