@@ -289,7 +289,7 @@ class Box(DecryptedLocalBox):
         self.file_exists = self.drb.file_exists
         self.push_file = self.drb.push_file
         self.update_file = self.drb.update_file
-        self.left = self.drb.left
+        self.abandon = self.drb.abandon
 
         self.get_box_description = self.drb.get_box_description
         self.get_box_name = self.drb.get_box_name
@@ -599,7 +599,7 @@ class Box(DecryptedLocalBox):
         method on the ``DecryptedRemoteBox``, completely
         deleting **ALL OF YOUR FILES AND BOX INFORMATION!**
 
-        Use ``left()`` if you **only want to left**
+        Use ``abandon()`` if you **only want to leave**
         your *Box* ``Channel``, not destroy it.
         """
         await self.dlb.delete(*args, **kwargs)

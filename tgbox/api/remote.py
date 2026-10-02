@@ -1337,10 +1337,10 @@ class EncryptedRemoteBox:
         box_salt = await self.get_box_salt()
         return make_requestkey(basekey, box_salt)
 
-    async def left(self) -> None:
+    async def abandon(self) -> None:
         """
-        With calling this method you will left
-        *RemoteBox* ``Channel``.
+        With calling this method you will abandon (leave)
+        the *RemoteBox* ``Channel``.
         """
         await self._tc.delete_dialog(self._box_channel)
 
@@ -1348,7 +1348,7 @@ class EncryptedRemoteBox:
         """
         This method **WILL DELETE** *RemoteBox*!
 
-        Use ``left()`` if you **only want to left**
+        Use ``abandon()`` if you **only want to left**
         your *Box* ``Channel``, not delete it.
 
         You need to have admin rights for this.
