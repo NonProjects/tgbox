@@ -117,14 +117,14 @@ async def make_localbox(
     logger.debug('tgbox_db.BOX_DATA.insert(...)')
 
     await tgbox_db.BOX_DATA.insert(
-        AES(mainkey).encrypt(int_to_bytes(erb._box_channel_id)),
-        AES(mainkey).encrypt(int_to_bytes(int(time()))),
-        box_salt.salt,
-        None, # We didn't cloned box, so eMainkey is empty
-        AES(basekey).encrypt(erb._tc.session.save().encode()),
-        AES(mainkey).encrypt(int_to_bytes(erb._tc._api_id)),
-        AES(mainkey).encrypt(bytes.fromhex(erb._tc._api_hash)),
-        None # FAST_SYNC_LAST_EVENT_ID
+        BOX_CHANNEL_ID = AES(mainkey).encrypt(int_to_bytes(erb._box_channel_id)),
+        BOX_CR_TIME = AES(mainkey).encrypt(int_to_bytes(int(time()))),
+        BOX_SALT = box_salt.salt,
+        MAINKEY = None, # We didn't cloned box, so eMainkey is empty
+        SESSION = AES(basekey).encrypt(erb._tc.session.save().encode()),
+        API_ID = AES(mainkey).encrypt(int_to_bytes(erb._tc._api_id)),
+        API_HASH = AES(mainkey).encrypt(bytes.fromhex(erb._tc._api_hash)),
+        FAST_SYNC_LAST_EVENT_ID = None
     )
     return await EncryptedLocalBox(tgbox_db).decrypt(basekey)
 
@@ -249,14 +249,14 @@ async def clone_remotebox(
         emainkey = AES(basekey).encrypt(drb._mainkey.key)
 
     await tgbox_db.BOX_DATA.insert(
-        AES(drb._mainkey).encrypt(int_to_bytes(drb._box_channel_id)),
-        AES(drb._mainkey).encrypt(int_to_bytes(int(time()))),
-        box_salt.salt,
-        emainkey,
-        AES(basekey).encrypt(drb._tc.session.save().encode()),
-        AES(drb._mainkey).encrypt(int_to_bytes(drb._tc._api_id)),
-        AES(drb._mainkey).encrypt(bytes.fromhex(drb._tc._api_hash)),
-        None # FAST_SYNC_LAST_EVENT_ID
+        BOX_CHANNEL_ID = AES(drb._mainkey).encrypt(int_to_bytes(drb._box_channel_id)),
+        BOX_CR_TIME = AES(drb._mainkey).encrypt(int_to_bytes(int(time()))),
+        BOX_SALT = box_salt.salt,
+        MAINKEY = emainkey,
+        SESSION = AES(basekey).encrypt(drb._tc.session.save().encode()),
+        API_ID = AES(drb._mainkey).encrypt(int_to_bytes(drb._tc._api_id)),
+        API_HASH = AES(drb._mainkey).encrypt(bytes.fromhex(drb._tc._api_hash)),
+        FAST_SYNC_LAST_EVENT_ID = None
     )
     dlb = await EncryptedLocalBox(tgbox_db).decrypt(basekey)
 
@@ -1088,14 +1088,14 @@ class DecryptedLocalBox(EncryptedLocalBox):
     @staticmethod
     async def init() -> NoReturn:
         raise AttributeError(
-            """This function was inherited from ``EncryptedLocalBox`` """
-            """and cannot be used on ``DecryptedLocalBox``."""
+            "This function was inherited from ``EncryptedLocalBox`` "
+            "and cannot be used on ``DecryptedLocalBox``."
         )
     @staticmethod
     async def decrypt() -> NoReturn:
         raise AttributeError(
-            """This function was inherited from ``EncryptedLocalBox`` """
-            """and cannot be used on ``DecryptedLocalBox``."""
+            "This function was inherited from ``EncryptedLocalBox`` "
+            "and cannot be used on ``DecryptedLocalBox``."
         )
     async def _make_local_path(self, file_path: Path) -> 'DecryptedLocalBoxDirectory':
         """
@@ -1116,12 +1116,12 @@ class DecryptedLocalBox(EncryptedLocalBox):
                f'Adding ({part}, {parent_part_id}, {part_id}) '
                 'to the PATH_PARTS if it\'s not already in'
             )
-            sql_query = (
-                'INSERT OR IGNORE INTO PATH_PARTS VALUES (?,?,?)',
-                (AES(self._mainkey).encrypt(part.encode()),
-                part_id, parent_part_id)
+            await self._tgbox_db.PATH_PARTS.insert(
+                ENC_PART = AES(self._mainkey).encrypt(part.encode()),
+                PART_ID = part_id,
+                PARENT_PART_ID = parent_part_id,
+                or_ignore = True
             )
-            await self._tgbox_db.PATH_PARTS.execute(sql_query)
 
         elbd = EncryptedLocalBoxDirectory(self._elb, part_id)
         return await elbd.decrypt(dlb=self)
@@ -1181,9 +1181,13 @@ class DecryptedLocalBox(EncryptedLocalBox):
         updated_metadata = getattr(pf, 'updated_enc_metadata', None)
         try:
             await self._tgbox_db.FILES.insert(
-                pf.file_id, eupload_time,
-                part_id, efilekey, pf.fingerprint,
-                pf.metadata, updated_metadata
+                ID = pf.file_id,
+                UPLOAD_TIME = eupload_time,
+                PPATH_HEAD = part_id,
+                FILEKEY = efilekey,
+                FINGERPRINT = pf.fingerprint,
+                METADATA = pf.metadata,
+                UPDATED_METADATA = updated_metadata
             )
         except Exception as e:
             raise AlreadyImported(

@@ -109,21 +109,36 @@ class SqlTableWrapper:
         return await anext(self.select(sql_tuple=sql_tuple))
 
     async def insert(
-            self, *args, sql_statement: Optional[str] = None,
-            commit: bool=True) -> None:
+            self, sql_statement: Optional[str] = None, commit: bool=True,
+            or_ignore: bool=False, **kwargs) -> None:
         """
+        You should specify kwargs, where kwarg is name of a column,
+        and it's value is a value you wish to INSERT.
+
         If ``sql_statement`` isn't specified, then will be used
         ``INSERT INTO TABLE_NAME values (...)``.
 
-        This method doesn't check if you insert correct data
-        or correct amount of it, you should know DB structure.
+        If ``or_ignore`` is ``True``, will issue ``INSERT OR IGNORE``
+        instead of plain ``INSERT INTO``
         """
         if not sql_statement:
-            sql_statement = (
-                f'INSERT INTO {self._table_name} values ('
-                + ('?,' * len(args))[:-1] + ')'
-            )
-        logger.debug(f'self._aiosql_conn.execute({sql_statement}, {args})')
+            sql_statement = 'INSERT{0}INTO {1} ({2}) VALUES ({3})'
+            kwargs = tuple(i[0] for i in zip(kwargs.items()))
+
+            c = ''
+            for k in kwargs:
+                c += f'{k[0]},'
+
+            c = c.rstrip(',')
+
+            q = ('?,' * len(kwargs)).rstrip(',')
+            ignore = ' OR IGNORE ' if or_ignore else ' '
+
+            sql_statement = sql_statement.format(ignore, self._table_name, c, q)
+
+        args = tuple(i[1] for i in kwargs)
+
+        logger.debug('self._aiosql_conn.execute(%s, %s)', sql_statement, args)
         await self._aiosql_conn.execute(sql_statement, args)
 
         if commit:
