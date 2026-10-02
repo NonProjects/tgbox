@@ -1459,7 +1459,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         first_drbf = await anext(drb.files(), None)
 
         if not first_drbf:
-            logging.debug(f'RemoteBox {drb_box_name} is empty. Clearing local...')
+            logger.debug(f'RemoteBox {drb_box_name} is empty. Clearing local...')
 
             await self._tgbox_db.FILES.execute(
                 sql_tuple=('DELETE FROM FILES', ()))
