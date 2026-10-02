@@ -2,13 +2,14 @@
 
 import logging
 
+from asyncio import Lock
 from pathlib import Path
+
 from functools import wraps
 from dataclasses import dataclass
 from base64 import urlsafe_b64encode
 
 from typing import BinaryIO, Optional, Union, AsyncGenerator
-from asyncio import get_event_loop_policy, get_running_loop, Lock
 from inspect import iscoroutinefunction, isasyncgenfunction, isasyncgen
 try:
     # Try to use Third-party Regex if installed
@@ -776,16 +777,23 @@ def _syncify_wrap_func(t, method_name):
 
     @wraps(method)
     def syncified(*args, **kwargs):
-        coro = method(*args, **kwargs)
-        try:
-            loop = get_running_loop()
-        except RuntimeError:
-            loop = get_event_loop_policy().get_event_loop()
+        if not defaults._LOOP:
+            from .. import sync as sync_coro
 
-        if loop.is_running():
+            async def t():
+                return
+
+            # For this wrapper to work, we need active event loop. To
+            # create one, we can use our tgbox.sync() helper func. It
+            # will place event loop to the tgbox.defaults._LOOP
+            sync_coro(t()) # Fire an empty coro
+
+        coro = method(*args, **kwargs)
+
+        if defaults._LOOP.is_running():
             return coro
         else:
-            return loop.run_until_complete(coro)
+            return defaults._LOOP.run_until_complete(coro)
 
     # Save an accessible reference to the original method
     setattr(syncified, '__tb.sync', method)
@@ -797,16 +805,23 @@ def _syncify_wrap_agen(t, method_name):
     @wraps(method)
     def syncified(*args, **kwargs):
         coro = method(*args, **kwargs)
-        try:
-            loop = get_running_loop()
-        except RuntimeError:
-            loop = get_event_loop_policy().get_event_loop()
+
+        if not defaults._LOOP:
+            from .. import sync as sync_coro
+
+            async def t():
+                return
+
+            # For this wrapper to work, we need active event loop. To
+            # create one, we can use our tgbox.sync() helper func. It
+            # will place event loop to the tgbox.defaults._LOOP
+            sync_coro(t()) # Fire an empty coro
         try:
             while True:
-                if loop.is_running():
+                if defaults._LOOP.is_running():
                     yield anext(coro)
                 else:
-                    yield loop.run_until_complete(anext(coro))
+                    yield defaults._LOOP.run_until_complete(anext(coro))
         except StopAsyncIteration:
             return
 

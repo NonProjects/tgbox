@@ -1,8 +1,8 @@
 """
 This (slightly changed module & its features) was taken from the Telethon
-library made by Lonami under MIT License: github.com/LonamiWebs/Telethon
+library made by Lonami under MIT License: codeberg.org/Lonami/Telethon
 
-Parts of this file i moved to the tgbox.api.utils package module, check
+Parts of this file I moved to the tgbox.api.utils package module, check
 the out _syncify_wrap_func() and syncify functions. They are NOT mine.
 
 Thanks to the Lonami. See part of the original description:

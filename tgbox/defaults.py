@@ -99,3 +99,10 @@ PREFIX: bytes=b'\x00TGBOX'
 
 BOX_IMAGE_PATH = ABSPATH / 'other' / 'tgbox_logo.png'
 FFMPEG = 'ffmpeg' # Name of ffmpeg executable
+
+# In case User calls 'tgbox.sync()', or User imports the magic
+# module 'tgbox.api.sync', we create asyncio event loop. Either
+# native Python, or Uvloop one (if installed). This loop will
+# be used only for the "async->sync" tricks. You should NOT
+# interact with it directly.
+_LOOP = None
