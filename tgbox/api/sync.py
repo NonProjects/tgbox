@@ -87,7 +87,7 @@ BoxFile._needs_syncify = True # pylint: disable=W0212
 # from tgbox.api import get_box <-- Will stay Async
 # from tgbox.api.abstract import get_box <-- Will become Sync
 #
-# This is a strange behaviour and below we fix it by
+# This is a strange behavior and below we fix it by
 # updating __dict__ of the __init__.py with synced
 # versions of classes/functions. A bit quirky way,
 # but will resolve our issue.

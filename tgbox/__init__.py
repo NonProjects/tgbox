@@ -58,8 +58,10 @@ def sync(coroutine: Coroutine, create_task: bool=False):
             from asyncio import new_event_loop
             defaults._LOOP = new_event_loop()
             logger.debug('Uvloop is not installed or not supported')
-
-    if create_task:
-        return defaults._LOOP.create_task(coroutine)
-    else:
-        return defaults._LOOP.run_until_complete(coroutine)
+    try:
+        if create_task:
+            return defaults._LOOP.create_task(coroutine)
+        else:
+            return defaults._LOOP.run_until_complete(coroutine)
+    except RuntimeError as e:
+        raise errors.SyncInsideAsync from e

@@ -2,7 +2,7 @@
 
 import logging
 
-from asyncio import Lock
+from asyncio import Lock, get_running_loop
 from pathlib import Path
 
 from functools import wraps
@@ -29,6 +29,7 @@ from telethon.tl.functions.auth import ResendCodeRequest
 
 from ..fastelethon import download_file
 from ..tools import anext, SearchFilter, _TypeList
+from ..errors import SyncInsideAsync
 from .. import defaults
 
 from .db import TABLES, TgboxDB
@@ -769,10 +770,45 @@ class RemoteBoxDefaults:
 
 
 def _syncify_wrap_func(t, method_name):
+    """
+    This wrapper will turn async coroutines into the sync
+    functions. Such functions can be executed ONLY without
+    event loop, or ONLY within the event loop that we create
+    internally (in the tgbox.sync() helper function).
+
+    Inside 'our' event loop (that we create in ``tgbox.sync()``)
+    we just return the source coroutine back as-is, without
+    changing anything. We assume that it's internal usage in
+    library, e.g calling some methods of the syncified
+    ``TelegramClient`` inside async coroutines of e.g
+    ``DecryptedRemoteBox``.
+
+    For example, if you will try to execute syncified async
+    coroutine inside the other async coroutine (any 'async
+    def'), and then run this coroutine with the `asyncio.run()`,
+    you will get an ``tgbox.errors.SyncInsideAsync`` error.
+
+    Inside the 'async def', just use the async methods. You
+    don't need to import the ``tgbox.api.sync`` module.
+    """
     method = getattr(t, method_name)
 
     @wraps(method)
     def syncified(*args, **kwargs):
+        coro = method(*args, **kwargs)
+        try:
+            current_loop = get_running_loop()
+        except RuntimeError: # No running loop
+            current_loop = None
+
+        if current_loop and current_loop == defaults._LOOP:
+            # Internal usage, we assume it's within API methods
+            return coro
+
+        elif current_loop and current_loop != defaults._LOOP:
+            coro.close()
+            raise SyncInsideAsync
+
         if not defaults._LOOP:
             from .. import sync as sync_coro
 
@@ -784,23 +820,33 @@ def _syncify_wrap_func(t, method_name):
             # will place event loop to the tgbox.defaults._LOOP
             sync_coro(t()) # Fire an empty coro
 
-        coro = method(*args, **kwargs)
-
-        if defaults._LOOP.is_running():
-            return coro
-        else:
-            return defaults._LOOP.run_until_complete(coro)
+        return defaults._LOOP.run_until_complete(coro)
 
     # Save an accessible reference to the original method
     setattr(syncified, '__tb.sync', method)
     setattr(t, method_name, syncified)
 
 def _syncify_wrap_agen(t, method_name):
+    """
+    See ``help(tgbox.api.utils._syncify_wrap_func)``.
+    """
     method = getattr(t, method_name)
 
     @wraps(method)
     def syncified(*args, **kwargs):
         coro = method(*args, **kwargs)
+        try:
+            current_loop = get_running_loop()
+        except RuntimeError: # No running loop
+            current_loop = None
+
+        if current_loop and current_loop == defaults._LOOP:
+            # Internal usage, we assume it's within API methods
+            return coro
+
+        elif current_loop and current_loop != defaults._LOOP:
+            coro.close()
+            raise SyncInsideAsync
 
         if not defaults._LOOP:
             from .. import sync as sync_coro
@@ -814,10 +860,7 @@ def _syncify_wrap_agen(t, method_name):
             sync_coro(t()) # Fire an empty coro
         try:
             while True:
-                if defaults._LOOP.is_running():
-                    yield anext(coro)
-                else:
-                    yield defaults._LOOP.run_until_complete(anext(coro))
+                yield defaults._LOOP.run_until_complete(anext(coro))
         except StopAsyncIteration:
             return
 

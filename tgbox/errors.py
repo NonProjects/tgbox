@@ -23,6 +23,12 @@ class NotATgboxFile(TgboxException):
 class InvalidFile(TgboxException):
     """Specified file is invalid"""
 
+class SyncInsideAsync(TgboxException):
+    """
+    You're running syncified methods within existing event loop.
+    Consider ditching sync methods and just awaiting coroutines
+    """
+
 # Crypto Exceptions
 
 class IncorrectKey(TgboxException):
