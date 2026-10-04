@@ -167,7 +167,7 @@ class SqlTableWrapper:
         where = where if where else {}
 
         v = ''
-        for column, value in kwargs:
+        for column, _ in kwargs:
             v += f'{column}=?,'
 
         v = v.rstrip(',')
@@ -175,7 +175,7 @@ class SqlTableWrapper:
         w = ''
         if where:
             w += 'WHERE '
-            for column, value in where.items():
+            for column, _ in where.items():
                 w += f'{column}=? AND'
 
             w = w.removesuffix('AND')
