@@ -1568,7 +1568,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
         while True:
             if len(drbf_to_import) >= IMPORT_WHEN:
                 await import_stack(drbf_to_import)
-                await self._tgbox_db.commit())
 
             drbf1 = await anext(drbf_generator, None)
             drbf2 = await anext(drbf_generator, None)
