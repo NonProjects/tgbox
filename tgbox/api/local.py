@@ -1142,6 +1142,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         """
         if not hasattr(pf,'file_id') or not hasattr(pf,'upload_time'):
             raise AssertionError('Push to RemoteBox firstly')
+
         try:
             # Verify that there is no file with the same ID
             await self._tgbox_db.FILES.select_once(
@@ -1154,7 +1155,8 @@ class DecryptedLocalBox(EncryptedLocalBox):
                 logger.info(f'Updating LocalBox file ID{pf.file_id}...')
                 await self.delete_files(lbf_ids=[pf.file_id])
             else:
-                raise AlreadyImported('There is already file with same ID') from None
+                raise AlreadyImported(
+                    'There is already file with the same ID') from None
 
         eupload_time = AES(pf.filekey).encrypt(int_to_bytes(pf.upload_time))
 
@@ -1175,27 +1177,44 @@ class DecryptedLocalBox(EncryptedLocalBox):
             logger.info(f'Adding PreparedFile ID{pf.file_id} to LocalBox')
             efilekey = None
 
-        logger.debug('Making LocalBox path parts from PreparedFile file path...')
-        part_id = (await self._make_local_path(pf.filepath)).part_id
+        async with AsyncLock:
+            try:
+                await self._tgbox_db.FILES.select_once(
+                    sql_tuple=(
+                        'SELECT ID FROM FILES WHERE FINGERPRINT=?',
+                        (pf.fingerprint,))
+                )
+            except StopAsyncIteration:
+                pass
+            else:
+                if not update:
+                    raise AlreadyImported(
+                       f'Can not import File ID{pf.file_id}. Already '
+                        'exist in LocalBox. Consider removing it firstly.')
 
-        updated_metadata = getattr(pf, 'updated_enc_metadata', None)
-        try:
-            await self._tgbox_db.FILES.insert(
-                ID = pf.file_id,
-                UPLOAD_TIME = eupload_time,
-                PPATH_HEAD = part_id,
-                FILEKEY = efilekey,
-                FINGERPRINT = pf.fingerprint,
-                METADATA = pf.metadata,
-                UPDATED_METADATA = updated_metadata
+            logger.debug(
+                'Making LocalBox path parts from PreparedFile file path...'
             )
-        except Exception as e:
-            raise AlreadyImported(
-               f'Can not import File ID{pf.file_id}. Already '
-                'exist in LocalBox. Consider remove firstly.') from e
+            part_id = (await self._make_local_path(pf.filepath)).part_id
 
-        elbf = EncryptedLocalBoxFile(pf.file_id, self._elb)
-        return await elbf.decrypt(dlb=self)
+            updated_metadata = getattr(pf, 'updated_enc_metadata', None)
+            try:
+                await self._tgbox_db.FILES.insert(
+                    ID = pf.file_id,
+                    UPLOAD_TIME = eupload_time,
+                    PPATH_HEAD = part_id,
+                    FILEKEY = efilekey,
+                    FINGERPRINT = pf.fingerprint,
+                    METADATA = pf.metadata,
+                    UPDATED_METADATA = updated_metadata
+                )
+            except Exception as e:
+                raise AlreadyImported(
+                   f'Can not import File ID{pf.file_id}. Already '
+                    'exist in LocalBox. Consider removing it firstly.') from e
+
+            elbf = EncryptedLocalBoxFile(pf.file_id, self._elb)
+            return await elbf.decrypt(dlb=self)
 
     async def _check_fingerprint(self, fingerprint: bytes) -> NoReturn:
         """
@@ -1509,11 +1528,13 @@ class DecryptedLocalBox(EncryptedLocalBox):
             from Remote on same fingerprint. So this will
             just ignore duplicates on import.
             """
-            await self._tgbox_db.FILES.execute(sql_tuple=(
-                'DELETE FROM FILES WHERE FINGERPRINT = ?',
-                (drbf.fingerprint,)
-            ))
-            await self.import_file(drbf)
+            try:
+                await self.import_file(drbf)
+                print('imported ', drbf.fingerprint.hex())
+            except AlreadyImported as e:
+                logger.info(
+                    'You have duplicate in your RemoteBox, which '
+                   f'was ignored. Info: {e.args[0]}')
 
         async def import_stack(stack: list):
             logger.debug(f'Importing new stack of files [{len(stack)}]')
@@ -1529,6 +1550,15 @@ class DecryptedLocalBox(EncryptedLocalBox):
             # Will update Metadata Updates of LocalBox
             # file (if any) with Metadata Updates of
             # RemoteBox file (if any presented)
+            try:
+                await self._tgbox_db.FILES.select_once(
+                    sql_tuple=(
+                        'SELECT ID FROM FILES WHERE ID=?',
+                        (drbfx.id,))
+                )
+            except StopAsyncIteration:
+                return # This ID wasn't imported. Ignore it.
+
             if elbfx:
                 dlbf = await elbfx.decrypt(dlb=dlb)
             else:
