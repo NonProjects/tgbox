@@ -1452,7 +1452,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
             start_from: Optional[int] = None,
             progress_callback: Optional[Callable[[int, int], None]] = None,
-            timeout: Optional[int] = 15):
+            timeout: Optional[int] = 8):
         """
         This method will make a deep synchronization of
         your LocalBox with the RemoteBox. See help on
@@ -1568,6 +1568,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
         while True:
             if len(drbf_to_import) >= IMPORT_WHEN:
                 await import_stack(drbf_to_import)
+                await self._tgbox_db.commit())
 
             drbf1 = await anext(drbf_generator, None)
             drbf2 = await anext(drbf_generator, None)
