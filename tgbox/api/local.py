@@ -3355,7 +3355,13 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                             setattr(self, f'_{k}', bytes_to_int(v))
 
                         elif k == 'efile_path' and self._mainkey:
-                            self._file_path = AES(self._mainkey).decrypt(v)
+                            try:
+                                self._file_path = AES(self._mainkey).decrypt(v)
+                            except ValueError: # Invalid Padding
+                                logger.warning(
+                                    f'Couldn\'t restore modified path of file '
+                                    'ID {self._id} due to the padding error!')
+
                             self._file_path = make_general_path(
                                 self._file_path.decode())
                         else:
