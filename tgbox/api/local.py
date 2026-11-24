@@ -14,8 +14,8 @@ from os import PathLike
 from io import BytesIO
 from time import time
 
-from inspect import isasyncgen
-from asyncio import iscoroutinefunction, gather
+from asyncio import gather
+from inspect import isasyncgen, iscoroutinefunction
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 
 from telethon.tl.types import ChannelParticipantsAdmins

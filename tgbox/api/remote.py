@@ -16,7 +16,7 @@ from base64 import (
     urlsafe_b64encode,
     urlsafe_b64decode
 )
-from asyncio import iscoroutinefunction
+from inspect import iscoroutinefunction
 from hmac import HMAC, compare_digest as hmac_compare_digest
 
 from telethon.utils import resolve_id
