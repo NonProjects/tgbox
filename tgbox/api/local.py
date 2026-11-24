@@ -1530,7 +1530,6 @@ class DecryptedLocalBox(EncryptedLocalBox):
             """
             try:
                 await self.import_file(drbf)
-                print('imported ', drbf.fingerprint.hex())
             except AlreadyImported as e:
                 logger.info(
                     'You have duplicate in your RemoteBox, which '
