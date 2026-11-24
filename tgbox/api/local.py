@@ -171,7 +171,7 @@ async def clone_remotebox(
         progress_callback: Optional[Callable[[int, int], None]] = None,
         box_name: Optional[str] = None,
         box_path: Optional[Union[PathLike, str]] = None,
-        timeout: Optional[int] = 15) -> 'DecryptedLocalBox':
+        timeout: Optional[int] = 10) -> 'DecryptedLocalBox':
     """
     This method makes ``LocalBox`` from ``RemoteBox`` and
     imports all RemoteBoxFiles to it.
@@ -1452,7 +1452,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
             start_from: Optional[int] = None,
             progress_callback: Optional[Callable[[int, int], None]] = None,
-            timeout: Optional[int] = 8):
+            timeout: Optional[int] = 10):
         """
         This method will make a deep synchronization of
         your LocalBox with the RemoteBox. See help on
@@ -1675,7 +1675,7 @@ class DecryptedLocalBox(EncryptedLocalBox):
             self, drb: 'tgbox.api.remote.DecryptedRemoteBox',
             deep: Optional[bool] = False,
             start_from: Optional[int] = 0,
-            timeout: Optional[int] = 15,
+            timeout: Optional[int] = 10,
             deep_progress_callback: Optional[Callable[[int, int], None]] = None,
             fast_progress_callback: Optional[Callable[[int, str], None]] = None):
         """
@@ -3362,8 +3362,8 @@ class DecryptedLocalBoxFile(EncryptedLocalBoxFile):
                                     self._file_path.decode())
                             except ValueError: # Invalid Padding
                                 logger.warning(
-                                    f'Couldn\'t restore modified path of file '
-                                    'ID {self._id} due to the padding error!')
+                                    'Couldn\'t restore modified path of file '
+                                    f'ID {self._id} due to the padding error!')
                         else:
                             # str attributes
                             if k in ('mime', 'file_name'):
