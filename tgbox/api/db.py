@@ -2,12 +2,10 @@
 
 import logging
 
-from typing import (
-    Optional, Union,
-    AsyncGenerator
-)
 from os import PathLike
 from pathlib import Path
+from collections import namedtuple
+from typing import Optional, Union, AsyncGenerator
 
 import aiosqlite
 
@@ -20,6 +18,23 @@ __all__ = ['SqlTableWrapper', 'TgboxDB', 'TABLES']
 
 logger = logging.getLogger(__name__)
 
+# TABLES is a dictionary that describes the structure of Sqlite database.
+# Here, key is Table name, and elements of value tuple (other tuples) are
+# individual columns with their respective types. Columns can contain 2 to
+# 3 elements, with third being the "autofill" value. If "autofill" (third)
+# value is present in at least one column tuple, then IT MUST BE PRESENT
+# IN ALL COLUMNS OF THIS TABLE.
+#
+# The main difficulty in designing the table migration is NOT NULL columns
+# in the new schema. If we were stupidly add the "NOT NULL" column e.g
+# to the *existing* FILES table, then migration will fail miserably
+# because of lack of the value for this new column in our old rows. We
+# can't use "autofill" values here, because it will break the Table
+# creation for the new users. So the only correct way will be either
+# dropping "NOT NULL" from new column Type, or just adding the DEFAULT
+# to it. E.g: ('ID2', 'INTEGER NOT NULL DEFAULT -1'). Here, -1 in Type
+# definition is the default value. Of course, we will need to make
+# API in-code checks for this value and process accordingly.
 TABLES = {
     'BOX_DATA': (
         ('BOX_CHANNEL_ID', 'BLOB NOT NULL'),
@@ -45,11 +60,11 @@ TABLES = {
         ('PART_ID', 'BLOB NOT NULL PRIMARY KEY'),
         ('PARENT_PART_ID', 'BLOB')
     ),
-    # If you add any values to DEFAULTS, then update the
+    # If you add any values to DEFAULTS, update the
     # tgbox.utils.RemoteBoxDefaults, as well as all
     # RemoteBoxDefaults() in remote.py, because they
     # are not automatic
-    'DEFAULTS': (                            # Default value
+    'DEFAULTS': (                            # Autofill value. See comment higher
         ('METADATA_MAX', 'INTEGER NOT NULL', int(defaults.Limits.METADATA_MAX)),
         ('FILE_PATH_MAX', 'INTEGER NOT NULL', int(defaults.Limits.FILE_PATH_MAX)),
 
@@ -174,11 +189,7 @@ class SqlTableWrapper:
 
         w = ''
         if where:
-            w += 'WHERE '
-            for column, _ in where.items():
-                w += f'{column}=? AND'
-
-            w = w.removesuffix('AND')
+            w = 'WHERE ' + ' AND '.join(f'{column}=?' for column in where)
 
         sql_statement = sql_statement.format(self._table_name, v, w)
         args = (*(i[1] for i in kwargs), *(i for i in where.values()))
@@ -228,7 +239,7 @@ class TgboxDB:
     def __str__(self) -> str:
         return (
            f'{self.__class__.__name__}("{str(self._db_path)}") '
-            '# {self._initialized=}')
+           f'# {self._initialized=}')
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}("{str(self._db_path)}")'
@@ -254,7 +265,7 @@ class TgboxDB:
         This method will return ``None`` if DB wasn't opened,
         False if it's still opened, True if it's was closed.
         """
-        return self._aiosql_db_is_closed
+        return bool(self._aiosql_db_is_closed)
 
     @staticmethod
     async def create(db_path: Union[str, PathLike]) -> 'TgboxDB':
@@ -264,97 +275,166 @@ class TgboxDB:
     async def close(self) -> None:
         """Will close TgboxDB"""
         logger.info(f'{self._db_path} @ self._aiosql_db.close()')
-        await self._aiosql_db.close()
+        try:
+            await self._aiosql_db.close()
+        except BaseException as e:
+            raise ValueError('Database can not be closed') from e
+
         self._aiosql_db_is_closed = True
 
-    async def init(self) -> 'TgboxDB':
+    async def _init(self) -> 'TgboxDB':
         logger.debug(f'tgbox.api.db.TgboxDB.init("{self._db_path}")')
 
         logger.info(f'Opening SQLite connection to {self._db_path}')
         self._aiosql_db = await aiosqlite.connect(self._db_path)
 
+        available_tables = await self._aiosql_db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+        available_tables = await available_tables.fetchall()
+        available_tables = set(i[0] for i in available_tables)\
+            if available_tables else set()
+
+        # DEFAULTS is special case. If DEFAULTS is presented in LocalBox,
+        # we want to be sure that it contains data row. Otherwise user
+        # won't be able to use this Box at all. Here we do this check
+        if 'DEFAULTS' in available_tables:
+            defaults_row = await self._aiosql_db.execute(
+                'SELECT 1 FROM DEFAULTS LIMIT 1'
+            )
+            if not await defaults_row.fetchone():
+                logger.info('DEFAULTS table exists, but no data on it. Fixing..')
+                await self._aiosql_db.execute('DROP TABLE DEFAULTS')
+                available_tables.remove('DEFAULTS')
+
+        column_pragma = namedtuple('ColumnPragma',
+            ('cid', 'name', 'type', 'notnull', 'dflt_value', 'pk')
+        )
+
         for table, data in TABLES.items():
-            try:
+            if table not in available_tables:
+                logger.info('Table %s is not presented in database. '
+                    'We will create it', table)
+
                 columns = ', '.join((f'{i[0]} {i[1]}' for i in data))
+
+                autofill_exists = False
+                autofill_correct = True
+                for c in data:
+                    if autofill_correct and len(c) < 3:
+                        autofill_correct = False
+
+                    elif not autofill_exists and len(c) > 2:
+                        autofill_exists = True
+
+                    if autofill_exists and not autofill_correct:
+                        raise ValueError(
+                            f'At least one of your db.TABLES {table=} columns '
+                            'include autofill value, but NOT ALL. All columns '
+                            'MUST have autofill values if at least one includes it!'
+                        )
+
                 await self._aiosql_db.execute(
-                    f'CREATE TABLE {table} ({columns})'
+                    f'CREATE TABLE IF NOT EXISTS {table} ({columns})'
                 )
-                if table == 'DEFAULTS':
-                    sql_statement = (
-                        f'INSERT INTO {table} VALUES ('
-                        + ('?,' * len(data))[:-1] + ')'
-                    )
-                    await self._aiosql_db.execute(
-                        sql_statement, [i[2] for i in data]
-                    )
-            except aiosqlite.OperationalError: # Table exists
-                # The code below will update TgboxDB schema if it's outdated
-                table_columns_ = await self._aiosql_db.execute(
-                    f'PRAGMA table_info({table})'
+                if autofill_exists:
+                    table_w = SqlTableWrapper(self._aiosql_db, table)
+                    default_columns = {c[0]: c[-1] for c in data}
+                    await table_w.insert(**default_columns)
+            else:
+                # This will update TgboxDB schema if it's outdated
+
+                # This query will get all unique columns for the current
+                # TABLE, e.g FILES (will change in loop).
+                unique_columns = await self._aiosql_db.execute(
+                    "SELECT ii.name AS column_name "
+                   f"FROM pragma_index_list('{table}') AS il "
+                    "JOIN pragma_index_info(il.name) AS ii "
+                    "WHERE il.\"unique\" = 1 "
+                    "AND il.origin = 'u' "
+                    "AND (SELECT COUNT(*) FROM pragma_index_info(il.name)) = 1;"
                 )
-                old_table_columns = set()
-                for i in await table_columns_.fetchall():
-                    column = ( # Does not currently respect UNIQUE and will constantly
-                        i[1],  # re-generate Table on startup. TODO.
-                        i[2] + (' NOT NULL' if i[3] else '')\
-                             + (' PRIMARY KEY' if i[5] else '')
+                unique_columns = await unique_columns.fetchall()
+                unique_columns = set(c[0] for c in unique_columns)\
+                    if unique_columns else ()
+
+                table_info = await self._aiosql_db.execute(
+                    f'PRAGMA table_info({table})')
+
+                old_columns_data = set()
+                pragmas = []
+
+                for c_pragma in await table_info.fetchall():
+                    c_pragma = column_pragma(*c_pragma)
+                    pragmas.append(c_pragma)
+
+                    c_properties = (
+                        ('name', c_pragma.name),
+                        ('type', c_pragma.type.upper()),
+                        ('notnull', bool(c_pragma.notnull)),
+                        ('pk', bool(c_pragma.pk)),
+                        ('unique', c_pragma.name in unique_columns),
+                        ('dflt_exist', bool(c_pragma.dflt_value))
                     )
-                    old_table_columns.add(column)
+                    old_columns_data.add(frozenset(c_properties))
 
-                required_columns = set((i[0:2] for i in data))
+                current_columns_data = set()
+                for c in data:
+                    c_1 = ' '.join(c[1].upper().split())
 
-                if old_table_columns == required_columns:
-                    continue # Schemas are about same
+                    c_properties = (
+                        ('name', c[0].strip(' ')),
+                        ('type', c_1.split()[0]),
+                        ('notnull', ' NOT NULL' in c_1),
+                        ('pk', ' PRIMARY KEY' in c_1),
+                        ('unique', ' UNIQUE' in c_1),
+                        ('dflt_exist', ' DEFAULT' in c_1)
+                    )
+                    current_columns_data.add(frozenset(c_properties))
 
-                logger.info(f'TgboxDB {self._db_path} seems outdated. Updating...')
+                if old_columns_data == current_columns_data:
+                    logger.debug('Table schema for Table "%s" is up to date', table)
+                    continue
+
+                logger.info(f'TgboxDB {self._db_path} is outdated. Updating...')
 
                 table_columns = [i[:2] for i in data]
-                old_table_columns = set(i[0] for i in old_table_columns)
-
-                old_table_columns_str = ', '.join(
-                    i[0] for i in table_columns
-                    if i[0] in old_table_columns
-                )
-                new_table_columns = table_columns[len(old_table_columns):]
-
-                old_rows = await self._aiosql_db.execute(
-                   f'SELECT {old_table_columns_str} from {table}')
+                updated_table_name = f'updated___{table}'
 
                 columns_schema = [' '.join(i) for i in table_columns]
-                columns_schema = ','.join(columns_schema).rstrip(',')
-
-                logger.debug(f'CREATE TABLE "updated!{table}" ({columns})')
+                columns_schema = ', '.join(columns_schema).rstrip(', ')
 
                 await self._aiosql_db.execute(
-                    'CREATE TABLE IF NOT EXISTS '
-                   f'"updated!{table}" ({columns_schema})'
+                    f'DROP TABLE IF EXISTS "{updated_table_name}"'
                 )
-                new_values = []
-                for column in new_table_columns:
-                    for default_data in data:
-                        if default_data[0] == column[0]:
-                            if len(default_data) > 2:
-                                new_values.append(default_data[2])
-                            else:
-                                new_values.append(None)
+                await self._aiosql_db.execute(
+                    f'CREATE TABLE "{updated_table_name}" ({columns_schema})'
+                )
+                current_table_columns = [i[0] for i in TABLES[table]]
 
-                q = ('?,'*len(table_columns)).rstrip(',')
+                available_columns = []
+                for c in pragmas:
+                    if c.name not in current_table_columns:
+                        logger.info(
+                            'Column %s (table %s) is not presented in '
+                            'updated database schema, thus, will be '
+                            'dropped.', c.name, table)
+                        continue
 
-                columns_insert = (i[0] for i in table_columns)
-                columns_insert = ','.join(columns_insert).rstrip(',')
+                    available_columns.append(c.name)
 
-                while (fetch := await old_rows.fetchone()):
+                if (available_columns_str := ','.join(available_columns)):
                     await self._aiosql_db.execute(
-                       f'INSERT INTO "updated!{table}" '
-                       f'({columns_insert}) VALUES ({q})',
-                        (*fetch, *new_values)
+                        f'INSERT INTO "{updated_table_name}" '
+                        f'({available_columns_str}) '
+                        f'SELECT {available_columns_str} FROM {table}'
                     )
                 logger.debug(f'DROP TABLE {table}')
                 await self._aiosql_db.execute(f'DROP TABLE {table}')
 
-                logger.debug(f'ALTER TABLE "updated!{table}" RENAME TO {table}')
+                logger.debug(f'ALTER TABLE "{updated_table_name}" RENAME TO {table}')
                 await self._aiosql_db.execute(
-                    f'ALTER TABLE "updated!{table}" RENAME TO {table}'
+                    f'ALTER TABLE "{updated_table_name}" RENAME TO {table}'
                 )
 
         logger.info('TgboxDB._aiosql_conn.commit()')
@@ -362,10 +442,19 @@ class TgboxDB:
         self._aiosql_db_is_closed = False
 
         tables = await self._aiosql_db.execute(
-            'SELECT name FROM sqlite_master WHERE type="table"'
+            "SELECT name FROM sqlite_master WHERE type='table'"
         )
         for table in (await tables.fetchall()):
             setattr(self, table[0], SqlTableWrapper(self._aiosql_db, table[0]))
 
         self._initialized = True
         return self
+
+    async def init(self) -> 'TgboxDB':
+        """This method will initialize and prepare Database"""
+        try:
+            return await self._init()
+        except BaseException as e:
+            if self._aiosql_db:
+                await self.close()
+            raise e
